@@ -378,6 +378,33 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('teacher');
   ok((await page.evaluate(() => opinionTSV())).includes('ホームベースは どこに あるの？'), '先生の 一覧に コメントが 入る');
   }
+  {
+  // ？のたね：付箋を 書く 画面の 上の ボタン → 上から カード → 押すと 言葉が 入る／自分で つくれる
+  await who('A01'); await page.click('.face[data-face=front]');
+  await page.click('.fab');
+  await page.fill('#w-text', 'ホタルは ');
+  await page.click('[data-act=tanes]');
+  ok(await page.isVisible('.seeds') && await page.locator('.seeds .seedcard[data-act=tane]').count() >= 8, '「？のたね」を 押すと カードが 出る（8まい）');
+  const sb = await page.locator('.seeds').boundingBox();
+  ok(sb.y <= 2, 'カードは 画面の 上から 出る');
+  await page.click('.seedcard[data-w="いつ"]');
+  ok(await page.inputValue('#w-text') === 'ホタルは いつ', '「いつ」を 押すと 付箋に「いつ」が 入る');
+  await page.click('.seedcard[data-w="どうして"]');
+  ok(await page.inputValue('#w-text') === 'ホタルは いつどうして', 'つづけて 押すと うしろに 足される');
+  await page.fill('#seed-new', 'なんさい'); await page.click('[data-act=tane-add]');
+  ok(await page.isVisible('.seedcard[data-w="なんさい"]'), '自分の たねを つくれる');
+  await page.click('[data-act=close]', { force: true }).catch(() => {});
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await page.click('.fab'); await page.click('[data-act=tanes]');
+  ok(await page.isVisible('.seedcard[data-w="なんさい"]'), 'つくった たねは のこる（その子の 端末）');
+  await page.screenshot({ path: SHOTS + '/12-seeds.png' });
+  await page.click('[data-act=tane-del]');
+  ok(!(await page.isVisible('.seedcard[data-w="なんさい"]')), '自分の たねは けせる');
+  await who('A02'); await page.click('.fab'); await page.click('[data-act=tanes]');
+  ok(await page.locator('.seedcard[data-act=tane]').count() === 8, 'ほかの子の たねは 出ない');
+  await page.keyboard.press('Escape');
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

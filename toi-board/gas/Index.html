@@ -112,6 +112,18 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .peel{position:absolute;right:-30px;top:-30px;min-height:40px;padding:0 10px;border:2px solid var(--ink);border-radius:99px;background:#fff;font-size:14px;font-weight:700;white-space:nowrap;z-index:5}
 @keyframes stick{0%{transform:scale(1.5) rotate(var(--r))}60%{transform:scale(.9) rotate(var(--r))}100%{transform:scale(1) rotate(var(--r))}}
 .seal.new{animation:stick .28s ease-out}
+/* ？のたね：画面の 上から カードが ひょっこり 出る */
+.seedbtn{min-height:48px;padding:0 16px;border:2px solid var(--cat-2);border-radius:99px;background:#FFF4D6;font-weight:700;font-size:17px}
+.seedbtn.on{background:var(--cat-2);color:#fff}
+.seeds{position:fixed;left:50%;top:0;transform:translateX(-50%);width:min(760px,100%);z-index:120;background:#FFF9EA;border:2px solid var(--cat-2);border-top:0;border-radius:0 0 18px 18px;padding:12px 14px 14px;box-shadow:0 8px 20px rgba(0,0,0,.2);animation:peek .32s cubic-bezier(.2,1.4,.4,1)}
+@keyframes peek{0%{transform:translate(-50%,-110%)}100%{transform:translate(-50%,0)}}
+.seeds .cards{display:flex;flex-wrap:wrap;gap:10px}
+.seedcard{position:relative;min-width:84px;min-height:60px;padding:6px 14px;border:2px solid #D9B56A;border-radius:12px;background:#fff;font-size:20px;font-weight:700;box-shadow:0 3px 0 #E8CF95}
+.seedcard:active{transform:translateY(2px);box-shadow:0 1px 0 #E8CF95}
+.seedcard.mine{border-style:dashed}
+.seedcard .x{position:absolute;right:-8px;top:-8px;width:24px;height:24px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:13px;line-height:24px;padding:0}
+.seeds .add{display:flex;gap:8px;margin-top:10px}
+.seeds .add input{flex:1;font:inherit;font-size:18px;padding:6px 10px;border:2px solid var(--line);border-radius:10px}
 .gteam .left{display:inline-flex;gap:10px;align-items:center;margin-left:14px;font-size:14px;font-weight:700;color:var(--sub)}
 .gteam .lk{display:inline-flex;align-items:center;gap:2px}
 .gteam .lk.none{opacity:.3}
@@ -584,6 +596,7 @@ function render(){
   }
   h += isTeacher() ? viewTeacher() : viewChild();
   if(ui.sheet) h += viewSheet();
+  if(ui.sheet && ui.sheet.type === 'write' && ui.sheet.seeds) h += seedsHTML();
   if(ui.toast) h += '<div class="toast">' + esc(ui.toast) + '</div>';
   var sc = document.querySelector('.wrap'), pos = sc ? [sc.scrollLeft, sc.scrollTop] : null;
   var tt = document.querySelector('.ttable'), tpos = tt ? tt.scrollTop : null;
@@ -705,7 +718,8 @@ function viewChild(){
 function viewSheet(){
   var s = ui.sheet, h = '<div class="sheet-bg" data-act="close"><div class="sheet">';
   if(s.type === 'write'){
-    h += '<h2>' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
+    h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
+      + '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes" style="margin-left:auto">？のたね</button></div>'
       + '<textarea id="w-text" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
       + '<div class="row"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
@@ -775,6 +789,26 @@ function viewSheet(){
     h += '<h2>矢印</h2><div class="row"><button class="btn" data-act="del" data-id="' + s.id + '">矢印を けす</button><button class="btn" data-act="close">やめる</button></div>';
   }
   return h + '</div></div>';
+}
+
+/* ===== ？のたね ===== */
+var SEEDS = ['いつ', 'どこ', 'だれ', 'なに', 'どうして', 'どうやって', 'どんな関係', 'そもそも'];
+function seedKey(){ return 'toiboard.seeds.' + me; }
+function mySeeds(){ try{ var a = JSON.parse(localStorage.getItem(seedKey()) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function saveSeeds(a){ try{ localStorage.setItem(seedKey(), JSON.stringify(a)); }catch(e){} }
+function seedsHTML(){
+  return '<div class="seeds" role="dialog" aria-label="？のたね"><div style="font-weight:700;margin-bottom:8px">？のたね　<span class="hint">おすと 付箋に 入るよ</span></div><div class="cards">'
+    + SEEDS.map(function(w){ return '<button class="seedcard" data-act="tane" data-w="' + esc(w) + '">' + esc(w) + '</button>'; }).join('')
+    + mySeeds().map(function(w, i){ return '<span class="seedcard mine" style="display:inline-flex;align-items:center;padding:0"><button class="seedcard" style="border:0;box-shadow:none" data-act="tane" data-w="' + esc(w) + '">' + esc(w) + '</button><button class="x" data-act="tane-del" data-i="' + i + '" aria-label="けす">×</button></span>'; }).join('')
+    + '</div><div class="add"><input id="seed-new" maxlength="12" placeholder="じぶんの たねを つくる（例：なんさい）"><button class="btn" data-act="tane-add">＋ つくる</button><button class="btn" data-act="tanes">とじる</button></div></div>';
+}
+/* 付箋の 文の カーソルの ところに 言葉を 入れる */
+function insertSeed(w){
+  var s = ui.sheet; if(!s || s.type !== 'write') return;
+  var t = s.text || '', at = s.caret == null ? t.length : s.caret;
+  s.text = t.slice(0, at) + w + t.slice(at); s.caret = at + w.length;
+  render();
+  var ta = document.getElementById('w-text'); if(ta){ ta.focus(); try{ ta.setSelectionRange(s.caret, s.caret); }catch(e){} }
 }
 
 /* ===== 先生 ===== */
@@ -962,6 +996,14 @@ document.addEventListener('click', function(e){
   if(b.hasAttribute('data-face')){ ui.face = b.getAttribute('data-face'); ui.arrowFrom = null; render(); return; }
   var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
   if(act === 'close'){ if(e.target !== b) return; ui.sheet = null; render(); return; }
+  if(act === 'tanes'){ ui.sheet.seeds = !ui.sheet.seeds; render(); return; }
+  if(act === 'tane'){ insertSeed(b.getAttribute('data-w')); return; }
+  if(act === 'tane-add'){
+    var nw = document.getElementById('seed-new').value.trim().slice(0, 12); if(!nw) return;
+    var ms = mySeeds(); if(ms.indexOf(nw) < 0 && SEEDS.indexOf(nw) < 0){ ms.push(nw); saveSeeds(ms); }
+    render(); toast('「' + nw + '」の たねを つくりました'); return;
+  }
+  if(act === 'tane-del'){ var md = mySeeds(); md.splice(+b.getAttribute('data-i'), 1); saveSeeds(md); render(); return; }
   if(act === 'add'){ ui.sheet = {type:'write', gift:!isMine()}; render(); setTimeout(function(){ var t = document.getElementById('w-text'); if(t) t.focus(); }, 0); return; }
   if(act === 'edit'){ ui.sheet = {type:'write', id:id, text:item(id).text}; render(); return; }
   if(act === 'w-save'){
@@ -1093,10 +1135,12 @@ document.addEventListener('change', function(e){
 });
 /* 文字で さがす：変換中は 描き直さない（日本語入力が こわれるため） */
 function onSearchInput(el){
+  if(el.id === 'w-text' && ui.sheet && ui.sheet.type === 'write'){ ui.sheet.text = el.value; ui.sheet.caret = el.selectionStart; return; }
   if(el.id === 's-text' && ui.sheet && ui.sheet.type === 'search'){ ui.sheet.q = el.value; render(); }
   if(el.id === 't-q'){ ui.fQ = el.value; render(); }
 }
-document.addEventListener('input', function(e){ if(!e.isComposing) onSearchInput(e.target); });
+document.addEventListener('input', function(e){ if(e.target.id === 'w-text' && ui.sheet){ ui.sheet.text = e.target.value; ui.sheet.caret = e.target.selectionStart; return; } if(!e.isComposing) onSearchInput(e.target); });
+document.addEventListener('selectionchange', function(){ var a = document.activeElement; if(a && a.id === 'w-text' && ui.sheet && ui.sheet.type === 'write') ui.sheet.caret = a.selectionStart; });
 document.addEventListener('compositionend', function(e){ onSearchInput(e.target); });
 /* ショートカット：Ctrl+Z もどす／Ctrl+Y・Ctrl+Shift+Z やり直す／Ctrl+F さがす／Esc とじる。
    文字を 打っている 欄では Ctrl+Z などは その欄の ふつうの 動きに まかせる */
