@@ -523,8 +523,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const textTop = await page.$eval(`#board .note[data-id="${ln}"]`, el => { const r = document.createRange(); const tn = [...el.childNodes].find(n => n.nodeType === 3); r.selectNodeContents(tn); return r.getBoundingClientRect().top; });
   const nbx = await box(ln), lks2 = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }));
   const midY = (lks2[0][2] + lks2[lks2.length - 1][3]) / 2;
-  ok(lks2.length === 2 && Math.round(lkb.width) === 15 && nbx.x + nbx.width - lks2[0][1] <= 4 && Math.abs(lks2[0][0] - lks2[1][0]) < 1 && lks2[1][2] > lks2[0][3] - 1 && Math.abs(midY - (nbx.y + nbx.height / 2)) < 3, 'いいねは 半分の 大きさで、付箋の 右の 辺 ぎりぎりに 縦に ならび、高さの 中央に そろう');
+  ok(lks2.length === 2 && lkb.width >= 15 && lkb.width <= 20 && nbx.x + nbx.width - lks2[0][1] <= 6 && Math.abs(lks2[0][0] - lks2[1][0]) < 5 && lks2[1][2] > lks2[0][2] + 8 && Math.abs(midY - (nbx.y + nbx.height / 2)) < 5, 'いいねは 半分の 大きさで、付箋の 右の 辺 ぎりぎりに 縦に ならび、高さの 中央に そろう（シール感の 小さな ずれは ゆるす）');
   ok(await page.$eval(`#board .note[data-id="${ln}"] .likes`, el => +getComputedStyle(el).zIndex >= 2), '文字と 重なっても シールが 上に くる');
+  const tf1 = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => e.style.transform));
+  await page.evaluate(() => render());
+  const tf2 = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => e.style.transform));
+  ok(tf1.every(x => /rotate\(-?\d+deg\)/.test(x)) && tf1[0] !== tf1[1] && JSON.stringify(tf1) === JSON.stringify(tf2), 'シールは 1まいずつ 少し ずれて 傾き、描き直しても 動かない');
   const lks = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => [e.dataset.m, e.title, !!e.querySelector('img')]));
   ok(lks[0][0] === 'thumb1' && lks[1][0] === 'thumb2' && lks[0][1] === '1ばん' && lks[1][1] === '2ばん' && lks.every(x => x[2]), 'いいねは 元の シールの 絵のまま、メンバーごとに グラデーションの ちがう シール（1ばん・2ばん）');
   ok(await page.isVisible('.mates:has-text("1ばん")') && await page.isVisible('.mates:has-text("2ばん（じぶん）")') && await page.locator('.mates img').count() >= 2, '班の ボードに メンバーごとの いいねの 見本が 出る');

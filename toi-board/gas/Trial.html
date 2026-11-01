@@ -516,6 +516,13 @@ function usedIn(team, k){ var r = curRound(team); return S.stars.filter(function
 function leftIn(team, k){ return Math.max(0, STAR_PER_TEAM - usedIn(team, k)); }
 /* シール貼り画面で 選べるのは use の 4種類だけ（ほかは 予備。データは 読める） */
 var USE_KINDS = KINDS.filter(function(K){ return K.use; });
+/* シール感：付箋と シールの 組ごとに 決まった 小さな ずれ（位置 ±2px・角度 ±9°）。乱数ではないので 描き直しても 動かない */
+function jit(key, px, deg){
+  var h = 2166136261; for(var i = 0; i < key.length; i++){ h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  px = px == null ? 2 : px; deg = deg == null ? 9 : deg;
+  return {x:((h & 255) / 255 * 2 - 1) * px, y:(((h >>> 8) & 255) / 255 * 2 - 1) * px, r:Math.round((((h >>> 16) & 255) / 255 * 2 - 1) * deg)};
+}
+function jitStyle(key, px, deg){ var j = jit(key, px, deg); return 'transform:translate(' + j.x.toFixed(1) + 'px,' + j.y.toFixed(1) + 'px) rotate(' + j.r + 'deg)'; }
 function slotStyle(K){ var cols = K.row ? 3 : 4, w = 100 / cols; return 'left:' + (w * K.col + w / 2).toFixed(2) + '%;bottom:' + (K.row ? 36 : 4) + 'px'; }
 function sealImg(k, size){ return '<img src="' + SEAL_IMG[k] + '" alt="" width="' + (size || 28) + '" height="' + (size || 28) + '" draggable="false">'; }
 var ICON = {
@@ -530,7 +537,7 @@ function noteHTML(n, opt){
   var layers = '', kids = stackOf(n.id).length;
   for(var i = Math.min(kids, 4); i >= 1; i--) layers += '<div class="layer" style="transform:translate(' + (i*3) + 'px,' + (i*3) + 'px) rotate(' + (i % 2 ? 1.2 : -0.8) + 'deg)"></div>';
   var cm = commentsOf(n.id); if(!isTeacher() && n.team !== myTeam()) cm = cm.filter(function(c){ return c.viewer === me; });
-  var lk = likesOf(n.id).slice().sort(function(a, b){ return slotOf(a, n.team) - slotOf(b, n.team); }), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes" data-likes="' + n.id + '">' + lk.map(function(x){ var m = MEMBER[slotOf(x, n.team) % MEMBER.length]; return '<span class="lk" data-m="' + m + '" title="' + esc(mateLabel(x, n.team)) + '">' + sealImg(m, 15) + '</span>'; }).join('') + '</div>' : '';
+  var lk = likesOf(n.id).slice().sort(function(a, b){ return slotOf(a, n.team) - slotOf(b, n.team); }), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes" data-likes="' + n.id + '">' + lk.map(function(x){ var m = MEMBER[slotOf(x, n.team) % MEMBER.length]; return '<span class="lk" data-m="' + m + '" title="' + esc(mateLabel(x, n.team)) + '" style="' + jitStyle(n.id + x.viewer, 1.5, 12) + '">' + sealImg(m, 15) + '</span>'; }).join('') + '</div>' : '';
   var cicon = cm.length && !opt.inline ? '<div class="cicon" data-cmts="' + n.id + '" title="コメントを 見る">💬' + (cm.length >= 2 ? cm.length : '') + '</div>' : '';
   /* 自分の班（と先生）は 種類ごとに「×N」。ほかの班では 自分が 貼った 種類だけ（数は 出さない） */
   var st = starsOf(n.id), all = showCount(n), stars = '';
@@ -538,8 +545,8 @@ function noteHTML(n, opt){
   var used = KINDS.filter(function(K){ return K.k !== 'thumb' && st.some(function(x){ return kindOf(x) === K.k; }); });
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
-      var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, r = ((K.row * 4 + K.col) * 37 % 13) - 6;
-      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
+      var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, j = jit(n.id + K.k), r = j.r;
+      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = shownNow(n) ? '<div class="show">見てほしい</div>' : shownBefore(n) ? '<div class="show old">第' + showRound(n) + '回</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
