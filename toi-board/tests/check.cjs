@@ -221,7 +221,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 17 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 18 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -255,7 +255,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[9])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -308,6 +308,22 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('#s-text'), 'Ctrl+F で さがす');
   await page.keyboard.press('Escape');
   await page.screenshot({ path: SHOTS + '/9-trash.png' });
+
+  // 調査済み → 緑／いただきもの → 茶色の テープに「頂き物」
+  await who('A01'); await page.click('.face[data-face=front]');
+  const dn = (await st()).items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf);
+  const colOf = id => page.$eval(`#board .note[data-id="${id}"]`, el => getComputedStyle(el).backgroundColor);
+  const c0 = await colOf(dn.id);
+  await page.click(`#board .note[data-id="${dn.id}"]`); await page.click(`[data-act=done][data-id="${dn.id}"]`);
+  await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
+  const c1 = await colOf(dn.id), g1 = c1.match(/\d+/g).map(Number);
+  ok((await st()).items.find(x => x.id === dn.id).done && c1 !== c0 && g1[1] > g1[0] + 20 && g1[1] > g1[2] + 20, '「調査済み」を 選ぶと 付箋が 緑に なる');
+  await page.click('.face[data-face=gift]');
+  const tape = await page.$eval('#board .note.gift', el => { const cs = getComputedStyle(el, '::before'); return [cs.content, cs.backgroundColor, getComputedStyle(el).backgroundColor]; });
+  const tpb = tape[1].match(/\d+/g).map(Number), body = tape[2];
+  ok(tape[0].includes('頂き物') && tpb[0] > tpb[2] + 40 && body !== c1, 'いただきものの 付箋は テープが 茶色で「頂き物」、緑（調査済み）とは 別の 色');
+  await page.screenshot({ path: SHOTS + '/10-done-gift.png' });
+  await page.click('.face[data-face=front]');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

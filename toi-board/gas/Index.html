@@ -8,7 +8,7 @@
 :root{
   --ink:#1A1A1A; --sub:#55585E; --line:#D5D8DD; --paper:#F7F7F4; --white:#fff;
   --cat-1:#0F5EA8; --cat-2:#C86A00; --cat-3:#6E4310;
-  --fill-a:#D7E8F8; --fill-b:#FBE3B4; --gift:#E6F2DD; --gold:#E0A43A;
+  --fill-a:#D7E8F8; --fill-b:#FBE3B4; --gift:#E6F2DD; --done:#BFE3AE; --gold:#E0A43A;
   --grid:24px;
   --font:"BIZ UDPGothic","Yu Gothic UI","Yu Gothic","Meiryo","Noto Sans CJK JP","Noto Sans JP",sans-serif;
 }
@@ -60,12 +60,13 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .note.has-seal.one{padding-bottom:44px}
 .note{width:168px;min-height:120px;padding:14px 12px 22px;background:var(--fill-b);box-shadow:0 2px 4px rgba(0,0,0,.15);font-size:18px;font-weight:700;line-height:1.45;word-break:break-all;border-radius:2px}
 .note::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:16px;margin-left:-35px;background:rgba(255,255,255,.65);box-shadow:0 0 1px rgba(0,0,0,.2)}
-.note.gift{background:var(--gift)}
+.note.gift::before{content:"頂き物";background:#9C6B3C;color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;letter-spacing:.1em}
+.note.done{background:var(--done)}
+.note.done .layer{background:var(--done)}
 .note.dragging{box-shadow:0 10px 20px rgba(0,0,0,.25);z-index:50;transform:rotate(-2deg)}
 .note.target{outline:4px solid var(--cat-1);outline-offset:4px}
 .note.sel{outline:4px dashed var(--cat-2);outline-offset:4px}
 .layer{position:absolute;inset:0;background:var(--fill-b);border:1px solid rgba(0,0,0,.18);border-radius:2px;z-index:-1}
-.note.gift .layer{background:var(--gift)}
 .from{display:block;margin-top:4px;font-size:12px;color:var(--cat-3)}
 .mark{position:absolute;right:6px;top:4px;display:flex;gap:4px;align-items:center}
 .mark svg{width:22px;height:22px}
@@ -498,7 +499,7 @@ function noteHTML(n, opt){
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
   var pick = n.pick ? '<div class="pick">' + n.pick + '</div>' : '';
   var at = opt.pos || n, pos = opt.inline ? '' : 'left:' + (at.x*GRID) + 'px;top:' + (at.y*GRID) + 'px;';
-  return '<div class="item note' + (n.mark ? ' has-mark' : '') + (stars ? ' has-seal' + (oneRow ? ' one' : '') : '') + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
+  return '<div class="item note' + (n.done ? ' done' : '') + (n.mark ? ' has-mark' : '') + (stars ? ' has-seal' + (oneRow ? ' one' : '') : '') + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
     + layers + esc(n.text) + from + pick + mark + show + stars + '</div>';
 }
 function frameHTML(f){
@@ -688,7 +689,7 @@ function viewSheet(){
     }
     if(ed){
       h += '<div class="row"><button class="btn" data-act="edit" data-id="' + n.id + '">文字を 直す</button></div>';
-      h += '<div class="row">' + [1,2].map(function(m){ return '<button class="btn' + (n.mark === m ? ' on' : '') + '" data-act="mark" data-m="' + m + '" data-id="' + n.id + '">' + ICON['m'+m].replace('<svg', '<svg width="24" height="24" style="vertical-align:middle"') + ' ' + MARKS[m] + '</button>'; }).join('') + '</div>';
+      h += '<div class="row">' + [1,2].map(function(m){ return '<button class="btn' + (n.mark === m ? ' on' : '') + '" data-act="mark" data-m="' + m + '" data-id="' + n.id + '">' + ICON['m'+m].replace('<svg', '<svg width="24" height="24" style="vertical-align:middle"') + ' ' + MARKS[m] + '</button>'; }).join('') + '<button class="btn' + (n.done ? ' on' : '') + '" data-act="done" data-id="' + n.id + '">' + (n.done ? '✓ 調査済み（はずす）' : '調査済み') + '</button></div>';
       h += '<div class="row"><button class="btn' + (n.showcase ? ' on' : '') + '" data-act="showcase" data-id="' + n.id + '">' + (n.showcase ? '★ 見てほしい付箋（はずす）' : '見てほしい付箋に する') + '</button></div>';
       h += '<div class="row">えらぶ：' + [1,2,3].map(function(r){ return '<button class="btn' + (n.pick === r ? ' on' : '') + '" data-act="pick" data-r="' + r + '" data-id="' + n.id + '">' + r + 'ばん</button>'; }).join('') + '</div>';
     }
@@ -725,10 +726,10 @@ function opinionRows(){
   rows.sort(function(a, b){ return (order[a.team] - order[b.team]) || ((a.pick || 9) - (b.pick || 9)) || (a.y - b.y) || (a.x - b.x); });
   return rows.map(function(n){
     var s = spot(n.team), p = n.stackOf ? item(n.stackOf) : null;
-    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, MARKS[n.mark || 0], n.pick ? n.pick + 'ばん' : '', n.showcase ? '○' : ''].concat(kindCounts(n).map(function(c){ return c || ''; })).concat([p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : '']);
+    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, MARKS[n.mark || 0], n.done ? '○' : '', n.pick ? n.pick + 'ばん' : '', n.showcase ? '○' : ''].concat(kindCounts(n).map(function(c){ return c || ''; })).concat([p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : '']);
   });
 }
-var OP_HEAD = ['組','班','スポット','面','付箋','印','えらんだ順','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元']);
+var OP_HEAD = ['組','班','スポット','面','付箋','印','調査済み','えらんだ順','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元']);
 function kindCounts(n){ var st = starsOf(n.id); return KINDS.map(function(K){ return st.filter(function(x){ return kindOf(x) === K.k; }).length; }); }
 function opinionTSV(){
   return [OP_HEAD].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
@@ -941,6 +942,7 @@ document.addEventListener('click', function(e){
     commit(function(){ S.stars.push({noteId:id, viewer:me, k:kind, x:+sx.toFixed(1), y:+sy.toFixed(1), r:Math.round(Math.random()*30 - 15)}); });
     return;
   }
+  if(act === 'done'){ commit(function(){ var x = item(id); x.done = !x.done; }); return; }
   if(act === 'mark'){ var m = +b.getAttribute('data-m'); commit(function(){ var x = item(id); x.mark = x.mark === m ? 0 : m; }); return; }
   if(act === 'pick'){
     var r = +b.getAttribute('data-r');
@@ -1038,10 +1040,10 @@ function seed(){
   toast('見本の 付箋を 入れました');
 }
 function csv(){
-  var rows = [['組','班','面','付箋','書いた人','おくり元','印','えらんだ順','重ねた先','見てほしい'].concat(KINDS.map(function(K){ return K.name; }))];
+  var rows = [['組','班','面','付箋','書いた人','おくり元','印','調査済み','えらんだ順','重ねた先','見てほしい'].concat(KINDS.map(function(K){ return K.name; }))];
   S.items.filter(function(x){ return x.kind === 'note'; }).forEach(function(n){
     var c = child(n.author), p = n.stackOf ? item(n.stackOf) : null, s = spot(n.team);
-    rows.push([s.cls, s.no, faceLabel(n.face), n.text, c ? c.no : '', n.fromTeam ? teamLabel(n.fromTeam) : '', MARKS[n.mark || 0], n.pick || '', p ? p.text : '', n.showcase ? '○' : ''].concat(kindCounts(n)));
+    rows.push([s.cls, s.no, faceLabel(n.face), n.text, c ? c.no : '', n.fromTeam ? teamLabel(n.fromTeam) : '', MARKS[n.mark || 0], n.done ? '○' : '', n.pick || '', p ? p.text : '', n.showcase ? '○' : ''].concat(kindCounts(n)));
   });
   var body = '﻿' + rows.map(function(r){ return r.map(function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], {type:'text/csv'})); a.download = 'toiboard.csv'; a.click();
