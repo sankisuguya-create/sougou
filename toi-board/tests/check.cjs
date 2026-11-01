@@ -54,10 +54,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
 
   // 印・えらぶ
   await page.click(`#board .note[data-id="${a}"]`);
-  await page.click(`[data-act=mark][data-m="2"][data-id="${a}"]`);
   await page.click(`[data-act=pick][data-r="1"][data-id="${a}"]`);
   s = await st();
-  ok(s.items.find(x => x.id === a).mark === 2 && s.items.find(x => x.id === a).pick === 1, '印と えらんだ順が 付箋に つく');
+  ok(s.items.find(x => x.id === a).pick === 1 && !(await page.isVisible('[data-act=mark]')), 'えらんだ順が 付箋に つく（印の ボタンは ない）');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
   await page.click(`#board .note[data-id="${d}"]`);
   await page.click(`[data-act=pick][data-r="1"][data-id="${d}"]`);
@@ -255,7 +254,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[9])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -318,13 +317,67 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#d-text', 'たろう・はなこ'); await page.press('#d-text', 'Enter');
   const c1 = await colOf(dn.id), g1 = c1.match(/\d+/g).map(Number);
   ok((await st()).items.find(x => x.id === dn.id).done && c1 !== c0 && g1[1] > g1[0] + 20 && g1[1] > g1[2] + 20, '「調査済み」を 選ぶと 付箋が 緑に なる');
-  ok((await st()).items.find(x => x.id === dn.id).doneBy === 'たろう・はなこ' && await page.isVisible(`#board .note[data-id="${dn.id}"] .by:has-text("しらべた人：たろう・はなこ")`), '調査済みに する時に しらべた人を 書き、付箋に 出る');
+  ok((await st()).items.find(x => x.id === dn.id).doneBy === 'たろう・はなこ' && (await page.getAttribute(`#board .note[data-id="${dn.id}"]`, 'title')).includes('しらべた人：たろう・はなこ') && !(await page.textContent(`#board .note[data-id="${dn.id}"]`)).includes('たろう'), 'しらべた人は 付箋には 書かず、カーソルを 合わせると 出る');
   await page.click('.face[data-face=gift]');
   const tape = await page.$eval('#board .note.gift', el => { const cs = getComputedStyle(el, '::before'); return [cs.content, cs.backgroundColor, getComputedStyle(el).backgroundColor]; });
   const tpb = tape[1].match(/\d+/g).map(Number), body = tape[2];
   ok(tape[0].includes('頂き物') && tpb[0] > tpb[2] + 40 && body !== c1, 'いただきものの 付箋は テープが 茶色で「頂き物」、緑（調査済み）とは 別の 色');
   await page.screenshot({ path: SHOTS + '/10-done-gift.png' });
   await page.click('.face[data-face=front]');
+  {
+  // 画面のつくり：右上の モード表示は ない／＋は 左下／横スクロール なし（児童用PC 1366・拡大時 1093 も）
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(!(await page.isVisible('.modes')) && !(await page.isVisible('.head >> text=シール（班の外）')), '右上の モード表示は 出ない');
+  const fab = await page.locator('.fab').boundingBox();
+  ok(fab && fab.x < 40 && fab.y + fab.height > 768 - 40 && (await page.textContent('.fab')).trim() === '＋', '＋ボタンは 左下に 固定（＋だけ）');
+  for (const w of [1366, 1093]) {
+    await page.setViewportSize({ width: w, height: 768 });
+    await page.waitForTimeout(100);
+    const sc = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth, document.querySelector('.wrap').scrollWidth, document.querySelector('.wrap').clientWidth, Math.max(...[...document.querySelectorAll('#board .note')].map(n => n.getBoundingClientRect().right))]);
+    ok(sc[0] <= sc[1] && sc[2] <= sc[3] && sc[4] <= sc[1], `幅 ${w}px で 横スクロールが ない（付箋も はみ出ない）`);
+  }
+  await page.setViewportSize({ width: 1366, height: 768 });
+
+  // 重なり：下の付箋は 斜めに ずらして 厚みに 見せる／どれを いちばん上に するか 選べる
+  const tops = await page.evaluate(() => { const ns = S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); return [ns[0].id, ns[1].id]; });
+  await page.waitForTimeout(200);
+  for (const id of tops) await page.locator(`#board .note[data-id="${id}"]`).scrollIntoViewIfNeeded();
+  const sk1 = await box(tops[1]); const sk0 = await box(tops[0]);
+  await page.mouse.move(sk1.x + 30, sk1.y + 30); await page.mouse.down(); await page.mouse.move(sk1.x + 60, sk1.y + 60, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
+  const lay = await page.$eval(`#board .note[data-id="${tops[0]}"] .layer`, el => el.style.transform);
+  ok(/translate\(\d+px,\s?\d+px\)\s?rotate/.test(lay), '下の 付箋は 斜めに 少し ずれて 見える');
+  await page.click(`#board .note[data-id="${tops[0]}"]`);
+  await page.click(`[data-act=totop][data-id="${tops[1]}"]`);
+  s = await st();
+  const nt = s.items.find(x => x.id === tops[1]), ot = s.items.find(x => x.id === tops[0]);
+  ok(!nt.stackOf && ot.stackOf === tops[1] && await page.isVisible(`#board .note[data-id="${tops[1]}"]`) && !(await page.isVisible(`#board .note[data-id="${tops[0]}"]`)), '重なりの 中から「いちばん 上に する」を 選べる');
+  await page.keyboard.press('Escape');
+
+  // コメント：シール貼りの 時に ほかの班の 付箋へ（付箋の 右下）。ふだんの 画面では 右上の しるしから 見る
+  await page.evaluate(id => commit(() => { item(id).showcase = true; }), tops[1]);
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=class]');
+  await who('A05');
+  const cb = page.locator(`.big[data-id="${tops[1]}"] .cbtn`);
+  await page.waitForTimeout(1800);
+  await cb.scrollIntoViewIfNeeded();
+  const cbb = await cb.boundingBox(), bgb = await page.locator(`.big[data-id="${tops[1]}"]`).boundingBox();
+  ok(cbb.x > bgb.x + bgb.width / 2 && cbb.y > bgb.y + bgb.height / 2, 'コメントの ボタンは 付箋の 右下');
+  await cb.click();
+  await page.fill('#c-text', 'ホームベースは どこに あるの？');
+  await page.click('[data-act=c-save]');
+  s = await st();
+  ok(s.comments.some(c => c.noteId === tops[1] && c.viewer === 'A05' && c.text.includes('ホームベース')) && !s.stars.some(x => x.viewer === 'A05' && x.noteId === tops[1] && x.k === 'pick'), 'コメントを 書ける（シールは 貼られない）');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('A01'); await page.click('.face[data-face=front]');
+  const ci = await page.locator(`#board .note[data-id="${tops[1]}"] .cicon`).boundingBox(), nb2 = await box(tops[1]);
+  ok(ci && ci.x > nb2.x + nb2.width / 2 && ci.y < nb2.y + 20, 'ふだんの 画面では 付箋の 右上に コメントの しるし');
+  await page.click(`#board .note[data-id="${tops[1]}"] .cicon`);
+  ok(await page.isVisible('.clist .c:has-text("ホームベースは どこに あるの？")') && !(await page.isVisible('.clist small:has-text("A05")')), 'しるしを 押すと コメントが 見える（だれが 書いたかは 出ない）');
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: SHOTS + '/11-new-ui.png' });
+  await who('teacher');
+  ok((await page.evaluate(() => opinionTSV())).includes('ホームベースは どこに あるの？'), '先生の 一覧に コメントが 入る');
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

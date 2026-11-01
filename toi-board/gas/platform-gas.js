@@ -10,8 +10,8 @@ var Platform = (function(){
   var POLL = window.TOI_POLL_MS || 10000, JIT = window.TOI_POLL_JIT == null ? 3000 : window.TOI_POLL_JIT;
   var role = '', own = '', watching = null, tv = {}, all = 0, got = {};
   var pend = {}, q = blank(), timer = null, busy = false, pollT = null, errs = 0, polling = false, again = false;
-  function blank(){ return {up:{}, del:{}, star:{}, modes:null}; }
-  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !x.modes; }
+  function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, modes:null}; }
+  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !x.modes; }
   function net(t){ var el = document.getElementById('net'); if(el) el.textContent = t; }
   function run(name, args, ok, ng){
     var r = google.script.run
@@ -28,12 +28,14 @@ var Platform = (function(){
       up:Object.keys(sent.up).map(function(k){ return sent.up[k]; }),
       del:Object.keys(sent.del),
       star:Object.keys(sent.star).map(function(k){ return sent.star[k]; }),
+      cmt:Object.keys(sent.cmt).map(function(k){ return sent.cmt[k]; }),
       modes:sent.modes
     };
     run('apply', [ops], function(r){
       busy = false;
       Object.keys(sent.up).concat(Object.keys(sent.del)).forEach(function(id){ if(!q.up[id] && !q.del[id]) delete pend[id]; });
       Object.keys(sent.star).forEach(function(id){ if(!(id in q.star)) delete pend['*' + id]; });
+      Object.keys(sent.cmt).forEach(function(id){ if(!(id in q.cmt)) delete pend['#' + id]; });
       if(r && r.rejected && r.rejected.length){
         toast('先生の モードが かわりました。ページを 更新してね');
         if(own) tv[own] = 0; if(watching) tv[watching] = 0; all = 0;
@@ -46,6 +48,7 @@ var Platform = (function(){
       Object.keys(sent.up).forEach(function(k){ if(!q.up[k] && !q.del[k]) q.up[k] = sent.up[k]; });
       Object.keys(sent.del).forEach(function(k){ if(!q.up[k]) q.del[k] = 1; });
       Object.keys(sent.star).forEach(function(k){ if(!(k in q.star)) q.star[k] = sent.star[k]; });
+      Object.keys(sent.cmt).forEach(function(k){ if(!(k in q.cmt)) q.cmt[k] = sent.cmt[k]; });
       if(!q.modes) q.modes = sent.modes;
       schedule(Math.min(30000, 2000 * errs));
     });
@@ -80,7 +83,7 @@ var Platform = (function(){
       run('boot', [], function(r){
         if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
         role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all;
-        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
         loop();
       }, function(e){
         document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + String(e && e.message || e).replace(/[<>&]/g, '') + '</p>';
@@ -91,6 +94,7 @@ var Platform = (function(){
       ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
       ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
       ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k; q.star[key] = s; pend['*' + key] = 1; });
+      (ops.cmt || []).forEach(function(c){ q.cmt[c.noteId] = c; pend['#' + c.noteId] = 1; });
       if(ops.modes) q.modes = ops.modes;
       schedule();
     },

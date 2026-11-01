@@ -2,14 +2,15 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 3;
-var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', modes:'modes'};
+var API_VER = 4;
+var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
   '先生':['メール', '組（空なら最初の組）'],
   'スポット':['組', '班', 'スポット名'],
   'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
   'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos'],
+  'comments':['key', 'noteId', 'noteTeam', 'viewer', 'text', 'on', 'ver'],
   'modes':['組', 'json', 'ver']
 };
 var TEACHER_DOMAIN = '@edu.nishi.or.jp';
@@ -171,7 +172,14 @@ function pull_(u, spec){
     if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
     stars.push(o);
   });
-  return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars};
+  var comments = [];
+  rows_(SH.comments).forEach(function(r){
+    var ver = Number(r[6]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
+    if(!r[0] || since === null || ver <= since) return;
+    if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
+    comments.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), text:String(r[4] || ''), on:!!r[5]});
+  });
+  return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars, comments:comments};
 }
 
 /* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
@@ -250,6 +258,22 @@ function apply(ops){
         touched = true; teams[t.team] = 1;
       });
       if(sapp.length) ssh.getRange(ssh.getLastRow() + 1, 1, sapp.length, sapp[0].length).setValues(sapp);
+    }
+
+    if(ops.cmt && ops.cmt.length){
+      var csh = sheet_(SH.comments), crows = rows_(SH.comments), cidx = {}, capp = [], cteam = {};
+      crows.forEach(function(r, i){ cidx[String(r[0])] = i; });
+      rows_(SH.items).forEach(function(r){ if(!r[5]) cteam[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
+      ops.cmt.forEach(function(c){
+        var nId = String(c.noteId), t = cteam[nId];
+        var ok = u.role === 'child' && t && t.team !== u.team && t.face !== 'trash' && reach_(u, modes, 'starOut', t.team);
+        if(!ok){ rejected.push('#' + nId); return; }
+        var key = nId + '|' + u.id, row = [key, nId, t.team, u.id, String(c.text || '').slice(0, 100), !!c.on && !!String(c.text || '').trim(), v];
+        if(cidx[key] !== undefined && cidx[key] >= 0) csh.getRange(cidx[key] + 2, 1, 1, row.length).setValues([row]);
+        else { capp.push(row); cidx[key] = -1; }
+        touched = true; teams[t.team] = 1;
+      });
+      if(capp.length) csh.getRange(csh.getLastRow() + 1, 1, capp.length, capp[0].length).setValues(capp);
     }
 
     if(ops.modes){

@@ -183,6 +183,19 @@ function makeGas() {
   r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
   ok(r.rejected.length === 0, 'はがせば また 貼れる');
 
+  // コメント（サーバー）：シール（班の外）が 届く 班の 付箋にだけ。相手の 班には だれが 書いたか 届かない
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ホームは いくつ？', on: true }] }]);
+  ok(r.rejected.length === 0, 'ほかの班の 付箋に コメントを 書ける');
+  r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: '自分の 班', on: true }] }]);
+  ok(r.rejected.length === 1, '自分の班の 付箋には（シール貼りの 範囲の外なので）書けない');
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.comments.length === 1 && r.comments[0].text === 'ホームは いくつ？' && /^o[0-9a-f]+$/.test(r.comments[0].viewer), '書かれた 班には コメントが 届き、書いた人は 記号');
+  await reload(a01); await a01.click('.face[data-face=front]');
+  ok(await a01.isVisible(`#board .note[data-id="${ids[0]}"] .cicon`), '児童の 画面に コメントの しるしが 出る');
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], on: false }] }]);
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.comments.every(c => !c.on), 'コメントを けせる');
+
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());
