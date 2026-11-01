@@ -32,7 +32,7 @@ var STICKER_COLORS = {
   '#FF8FB5':['#FFC2D6', '#FF7AAE'],  // 円（予備）：さくら → ピンク
   '#7CC4FF':['#B2F0FF', '#7FA8FF'],  // 稲妻（予備）：水色 → そら色
   '#8EDB8A':['#DDF8A8', '#6CCB8E'],  // いいね（分かった）：ライム → ミント
-  '#7FB8FF':['#B2F0FF', '#7FA8FF'],  // つるはし（もっと知りたい）：水色 → そら色（稲妻の色を引き継ぐ）
+  '#7FB8FF':['#D9A06A', '#8A5530'],  // つるはし（もっと知りたい）：柄は 茶色（刃は PARTS で メタリックな黒）
   '#FFB38A':['#FFE6CC', '#FF9A6B'],  // 豆電球（参考になった）：ピーチ → コーラル（星の黄と分ける）
   '#C9A8FF':['#EEDCFF', '#B38BFF']   // !?（その発想はなかった）：うすむらさき → ラベンダー
 };
@@ -44,6 +44,13 @@ GLINT.wow = '<path d="M7.6 11.2L9.6 8.6" />';
 SHAPES.bulb = 'M16 3Q26.2 3 26.2 13Q26.2 18.2 21.6 21.6L21.6 24L10.4 24L10.4 21.6Q5.8 18.2 5.8 13Q5.8 3 16 3ZM11 25.4L21 25.4L21 28Q21 30.8 16 30.8Q11 30.8 11 28Z';
 GLINT.bulb = '<path d="M9.4 11.6Q10.2 7.6 13.8 6.4" />';
 DETAIL.bulb = '<path d="M14 20.4L14 16.4Q16 12.4 18 16.4L18 20.4" stroke="#1A1A1A" stroke-width="1.1" stroke-linecap="round" fill="none"/><path d="M11.4 27.6H20.6" stroke="#1A1A1A" stroke-width="1" stroke-linecap="round"/>';
+/* 1つの形の中で 色を塗り分ける部分（形で切り抜いて 上に重ねる）。stops は [位置, 色] */
+var PARTS = {
+  // つるはしの刃：メタリックな黒（明暗の帯で 金属らしく）。柄は 下地の茶色
+  pick:[{ d: rot('M1 13.6Q16 -6 31 13.6L31 12.2Q23 10.6 19 11.9L13 11.9Q9 10.6 1 12.2Z', 40, 16, 16.5),
+          x1:0, y1:0, x2:1, y2:1,
+          stops:[[0,'#8C939E'],[0.35,'#3A3F47'],[0.55,'#A9B0BA'],[0.75,'#2E3238'],[1,'#5C636D']] }]
+};
 function sticker(shape, color, size){
   var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
@@ -51,6 +58,13 @@ function sticker(shape, color, size){
     + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
     + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
+    + (PARTS[shape] || []).map(function(pt, j){
+        var pid = gid + 'p' + j;
+        return '<defs><linearGradient id="' + pid + '" x1="' + pt.x1 + '" y1="' + pt.y1 + '" x2="' + pt.x2 + '" y2="' + pt.y2 + '">'
+          + pt.stops.map(function(st){ return '<stop offset="' + st[0] + '" stop-color="' + st[1] + '"/>'; }).join('') + '</linearGradient>'
+          + '<clipPath id="k' + pid + '"><path d="' + d + '"/></clipPath></defs>'
+          + '<path d="' + pt.d + '" fill="url(#' + pid + ')" clip-path="url(#k' + pid + ')"/>';
+      }).join('')
     // 白と固有色の境目をぼかす：形の内側だけに、ぼかした白をにじませる（外側の黒との境はくっきり保つ）
     + '<defs><clipPath id="c' + gid + '"><path d="' + d + '"/></clipPath><filter id="f' + gid + '" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.3"/></filter></defs>'
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
