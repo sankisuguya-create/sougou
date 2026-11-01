@@ -43,7 +43,7 @@ GLINT.wow = '<path d="M7.6 11.2L9.6 8.6" />';
 // 豆電球（自分の問い出しの参考になった！）：ガラス球＋口金（口金のすき間は黒の輪郭で埋まり、ねじ山に見える）
 SHAPES.bulb = 'M16 3Q26.2 3 26.2 13Q26.2 18.2 21.6 21.6L21.6 24L10.4 24L10.4 21.6Q5.8 18.2 5.8 13Q5.8 3 16 3ZM11 25.4L21 25.4L21 28Q21 30.8 16 30.8Q11 30.8 11 28Z';
 GLINT.bulb = '<path d="M9.4 11.6Q10.2 7.6 13.8 6.4" />';
-DETAIL.bulb = '<path d="M14 20.4L14 16.4Q16 12.4 18 16.4L18 20.4" stroke="#1A1A1A" stroke-width="1.1" stroke-linecap="round" fill="none"/><path d="M11.4 27.6H20.6" stroke="#1A1A1A" stroke-width="1" stroke-linecap="round"/>';
+DETAIL.bulb = '<path d="M12.4 20.4L12.4 16.8Q13.6 13.6 14.8 16.8Q16 13.6 17.2 16.8Q18.4 13.6 19.6 16.8L19.6 20.4" stroke="#1A1A1A" stroke-width="1.1" stroke-linecap="round" fill="none"/><path d="M11.4 27.6H20.6" stroke="#1A1A1A" stroke-width="1" stroke-linecap="round"/>';
 /* 1つの形の中で 色を塗り分ける部分（形で切り抜いて 上に重ねる）。stops は [位置, 色] */
 var PARTS = {
   // つるはしの刃：メタリックな黒（明暗の帯で 金属らしく）。柄は 下地の茶色
@@ -51,7 +51,7 @@ var PARTS = {
           x1:0, y1:0, x2:1, y2:1,
           stops:[[0,'#8C939E'],[0.35,'#3A3F47'],[0.55,'#A9B0BA'],[0.75,'#2E3238'],[1,'#5C636D']] }]
 };
-/* 手前に重ねる形（外形は 下の形と ひとつながりになり、重なった所の 下の形の輪郭は 隠れる） */
+/* 後ろに置く形（外形は 本体と ひとつながりの 1枚の シール。本体の 刃先は その手前に 来る） */
 var FRONT = {
   // つるはしの刃の 左上の先に 黄色い 衝撃のギザギザ
   pick:{ d:(function(){ var p = []; for(var i = 0; i < 16; i++){ var r = i % 2 ? 3.7 : 6.1, a = -Math.PI/2 + i*Math.PI/8; p.push((7.6 + r*Math.cos(a)).toFixed(2) + " " + (7.2 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
@@ -61,8 +61,7 @@ var FRONT = {
 GLINT.pick += rot('<path d="M14.5 15.5L14.5 25.5" />', 40, 16, 16.5);
 function frontLayer(F, gid){
   var fid = gid + 'f';
-  return '<path d="' + F.d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
-    + '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + F.colors[0] + '"/><stop offset="1" stop-color="' + F.colors[1] + '"/></linearGradient>'
+  return '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + F.colors[0] + '"/><stop offset="1" stop-color="' + F.colors[1] + '"/></linearGradient>'
     + '<clipPath id="c' + fid + '"><path d="' + F.d + '"/></clipPath></defs>'
     + '<path d="' + F.d + '" fill="url(#' + fid + ')"/>'
     + '<g clip-path="url(#c' + fid + ')"><path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
@@ -75,6 +74,7 @@ function sticker(shape, color, size){
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
+    + (F ? frontLayer(F, gid) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
     + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + (PARTS[shape] || []).map(function(pt, j){
@@ -89,7 +89,8 @@ function sticker(shape, color, size){
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + (DETAIL[shape] || '')
-    + (F ? frontLayer(F, gid) : '')
+    // 後ろの形（ギザギザ）に重なった所だけ、手前の形（刃先）の縁を 細い黒線で区切る
+    + (F ? '<defs><clipPath id="o' + gid + '"><path d="' + F.d + '"/></clipPath></defs><path d="' + d + '" fill="none" stroke="#1A1A1A" stroke-width="1" stroke-linejoin="round" clip-path="url(#o' + gid + ')"/>' : '')
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
 }
