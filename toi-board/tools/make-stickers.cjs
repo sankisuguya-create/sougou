@@ -38,7 +38,7 @@ var STICKER_COLORS = {
 };
 SHAPES.pick = rot('M2.6 13.2Q16 -4.4 29.4 13.2Q23 10.6 19 11.6L19 29Q19 31.4 16 31.4Q13 31.4 13 29L13 11.6Q9 10.6 2.6 13.2Z', 40, 16, 16.5);
 SHAPES.wow = (function(){ var p = []; for(var i = 0; i < 24; i++){ var r = i % 2 ? 11.2 : 14.6, a = -Math.PI/2 + i*Math.PI/12; p.push((16 + r*Math.cos(a)).toFixed(2) + ' ' + (16.5 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })();
-GLINT.pick = '';  // 刃（鉄）には ツヤを 入れない
+GLINT.pick = rot('<path d="M7.6 8.4Q10 6.2 13 5.2" />', 40, 16, 16.5);
 GLINT.wow = '<path d="M7.6 11.2L9.6 8.6" />';
 // 豆電球（自分の問い出しの参考になった！）：ガラス球＋口金（口金のすき間は黒の輪郭で埋まり、ねじ山に見える）
 SHAPES.bulb = 'M16 3Q26.2 3 26.2 13Q26.2 18.2 21.6 21.6L21.6 24L10.4 24L10.4 21.6Q5.8 18.2 5.8 13Q5.8 3 16 3ZM11 25.4L21 25.4L21 28Q21 30.8 16 30.8Q11 30.8 11 28Z';
@@ -47,7 +47,7 @@ DETAIL.bulb = '<path d="M12.4 20.4L12.4 16.8Q13.6 13.6 14.8 16.8Q16 13.6 17.2 16
 /* 1つの形の中で 色を塗り分ける部分（形で切り抜いて 上に重ねる）。stops は [位置, 色] */
 var PARTS = {
   // つるはしの刃：メタリックな黒（明暗の帯で 金属らしく）。柄は 下地の茶色
-  pick:[{ d: rot('M0 14Q16 -7 32 14L32 15Q23 12.2 19 12.8L13 12.8Q9 12.2 0 15Z', 40, 16, 16.5),
+  pick:[{ d: rot('M1 13.6Q16 -6 31 13.6L31 12.2Q23 10.6 19 11.9L13 11.9Q9 10.6 1 12.2Z', 40, 16, 16.5),
           x1:0, y1:0, x2:1, y2:1,
           stops:[[0,'#8C939E'],[0.35,'#3A3F47'],[0.55,'#A9B0BA'],[0.75,'#2E3238'],[1,'#5C636D']] }]
 };
@@ -58,16 +58,14 @@ var FRONT = {
          colors:['#FFF27A', '#FFC23A'], glint:'<path d="M5.2 6.2L6.4 4.8" />' }
 };
 // 柄の ツヤ（柄の 左上がわの 輪郭に 平行）
-GLINT.pick += rot('<path d="M15.3 18.2L15.3 24" />', 40, 16, 16.5).replace('<path', '<path stroke-width="0.8"');
-function frontLayer(F, gid, body){
+GLINT.pick += rot('<path d="M14.5 15.5L14.5 25.5" />', 40, 16, 16.5);
+function frontLayer(F, gid){
   var fid = gid + 'f';
   return '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + F.colors[0] + '"/><stop offset="1" stop-color="' + F.colors[1] + '"/></linearGradient>'
     + '<clipPath id="c' + fid + '"><path d="' + F.d + '"/></clipPath></defs>'
     + '<path d="' + F.d + '" fill="url(#' + fid + ')"/>'
-    // 本体（刃）の近くでは ギザギザの白い縁を 描かない（刃との境目に 縁の影響を 出さない）
-    + '<defs><mask id="n' + fid + '" maskUnits="userSpaceOnUse" x="-5" y="-5" width="43" height="43"><rect x="-5" y="-5" width="43" height="43" fill="#fff"/><path d="' + body + '" fill="#000" stroke="#000" stroke-width="3" stroke-linejoin="round"/></mask></defs><g mask="url(#n' + fid + ')">'
     + '<g clip-path="url(#c' + fid + ')"><path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
-    + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/></g>'
+    + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
 }
 function sticker(shape, color, size){
@@ -76,7 +74,7 @@ function sticker(shape, color, size){
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
-    + (F ? frontLayer(F, gid, d) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
+    + (F ? frontLayer(F, gid) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
     + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + (PARTS[shape] || []).map(function(pt, j){
@@ -88,12 +86,11 @@ function sticker(shape, color, size){
       }).join('')
     // 白と固有色の境目をぼかす：形の内側だけに、ぼかした白をにじませる（外側の黒との境はくっきり保つ）
     + '<defs><clipPath id="c' + gid + '"><path d="' + d + '"/></clipPath><filter id="f' + gid + '" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.3"/></filter></defs>'
-    // 後ろの形（ギザギザ）と重なる所では、本体の白い縁を描かない（刃先は鉄色のまま）
-    + (F ? '<defs><mask id="m' + gid + '" maskUnits="userSpaceOnUse" x="-5" y="-5" width="43" height="43"><rect x="-5" y="-5" width="43" height="43" fill="#fff"/><path d="' + F.d + '" fill="#000"/></mask></defs><g mask="url(#m' + gid + ')">' : '')
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
-    + (F ? '</g>' : '')
     + (DETAIL[shape] || '')
+    // 後ろの形（ギザギザ）に重なった所だけ、手前の形（刃先）の縁を 細い黒線で区切る
+    + (F ? '<defs><clipPath id="o' + gid + '"><path d="' + F.d + '"/></clipPath></defs><path d="' + d + '" fill="none" stroke="#1A1A1A" stroke-width="1" stroke-linejoin="round" clip-path="url(#o' + gid + ')"/>' : '')
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
 }
