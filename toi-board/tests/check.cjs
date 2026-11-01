@@ -521,7 +521,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click(`#board .note[data-id="${ln}"]`); await page.click(`[data-act=like][data-id="${ln}"]`);
   const lkb = await page.locator(`#board .note[data-id="${ln}"] .likes .lk`).first().boundingBox();
   const textTop = await page.$eval(`#board .note[data-id="${ln}"]`, el => { const r = document.createRange(); const tn = [...el.childNodes].find(n => n.nodeType === 3); r.selectNodeContents(tn); return r.getBoundingClientRect().top; });
-  ok(lkb && Math.round(lkb.width) === 15 && lkb.y + lkb.height <= textTop + 1 && (await page.locator(`#board .note[data-id="${ln}"] .likes .lk`).count()) === 2, 'いいねは 半分の 大きさ（15px）で 付箋の 文の 上に 出る（2人分）');
+  const nbx = await box(ln), lks2 = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }));
+  const midY = (lks2[0][2] + lks2[lks2.length - 1][3]) / 2;
+  ok(lks2.length === 2 && Math.round(lkb.width) === 15 && nbx.x + nbx.width - lks2[0][1] <= 4 && Math.abs(lks2[0][0] - lks2[1][0]) < 1 && lks2[1][2] > lks2[0][3] - 1 && Math.abs(midY - (nbx.y + nbx.height / 2)) < 3, 'いいねは 半分の 大きさで、付箋の 右の 辺 ぎりぎりに 縦に ならび、高さの 中央に そろう');
+  ok(await page.$eval(`#board .note[data-id="${ln}"] .likes`, el => +getComputedStyle(el).zIndex >= 2), '文字と 重なっても シールが 上に くる');
   const lks = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => [e.dataset.m, e.title, !!e.querySelector('img')]));
   ok(lks[0][0] === 'thumb1' && lks[1][0] === 'thumb2' && lks[0][1] === '1ばん' && lks[1][1] === '2ばん' && lks.every(x => x[2]), 'いいねは 元の シールの 絵のまま、メンバーごとに グラデーションの ちがう シール（1ばん・2ばん）');
   ok(await page.isVisible('.mates:has-text("1ばん")') && await page.isVisible('.mates:has-text("2ばん（じぶん）")') && await page.locator('.mates img').count() >= 2, '班の ボードに メンバーごとの いいねの 見本が 出る');
