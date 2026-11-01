@@ -16,7 +16,7 @@ var TEACHER_DOMAIN = '@edu.nishi.or.jp';
 var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
 var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
-var STAR_KINDS = ['star', 'circle', 'bolt'];
+var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 
 function doGet(){
   return HtmlService.createHtmlOutputFromFile('Index')

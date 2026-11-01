@@ -138,7 +138,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible(`.big[data-id="${c}"]`) && await page.isVisible(`.big[data-id="${e}"]`), 'ほかの班の 見てほしい付箋が 大きく 出る');
   ok(!(await page.isVisible(`.big[data-id="${own.id}"]`)), '自分の班の 付箋は 出ない');
   ok(!(await page.locator('.gteam:has-text("組）")').count()), '「同じ組」なら ほかの組の 班は 出ない');
-  ok(await page.locator('.kpick img').count() === 3 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
+  ok(await page.locator('.kpick img').count() === 7 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
   await page.waitForTimeout(1800);
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   const bigC = await page.locator(`.big[data-id="${c}"]`).boundingBox();
@@ -173,7 +173,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
   const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
-  ok(sb.y > nb.y + nb.height / 2, 'ボードの シールの まとめは 付箋の 下に 出る');
+  const sStar = await page.locator(`[data-stars="${c}"] [data-kind=star]`).boundingBox(), sCirc = await page.locator(`[data-stars="${c}"] [data-kind=circle]`).boundingBox();
+  ok(sStar.y > sCirc.y + 20 && sStar.x < nb.x + nb.width / 3 && sStar.y + sStar.height <= nb.y + nb.height + 2, 'シールは 種類ごとに 決まった 位置（★は 最下段の 左、まるは その上の段）で 付箋の 中に 貼られる');
+  const textBox = await page.$eval(`#board .note[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild.nodeType === 3 ? el.firstChild : el.childNodes[[...el.childNodes].findIndex(n => n.nodeType === 3)]); return r.getBoundingClientRect().bottom; });
+  ok(sCirc.y >= textBox - 2, 'シールは 文字に かからない');
   const cb = await page.locator(`[data-stars="${c}"] [data-kind=star] .cnt`).boundingBox(), ib = await page.locator(`[data-stars="${c}"] [data-kind=star] img`).boundingBox();
   const cx = cb.x + cb.width / 2, cy = cb.y + cb.height / 2;
   ok(cx > ib.x + ib.width / 2 && cy > ib.y + ib.height / 2 && cb.x < ib.x + ib.width && cb.y < ib.y + ib.height, '「×7」は シールの 右下に 重ねて 出る');
@@ -206,7 +209,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 13 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 17 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
