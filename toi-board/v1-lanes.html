@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>といボード</title>
+<style>
+:root{
+  /* 文字（color-coding スキルの既定トークン） */
+  --ink:#1A1A1A; --ink-sub:#616870; --ink-link:#0F5EA8; --ink-alert:#C0330A;
+  /* 線・小さな印（最大4） */
+  --cat-1:#0F5EA8; --cat-2:#C86A00; --cat-3:#6E4310; --cat-4:#7A7F86;
+  /* 塗り（最大2） */
+  --fill-a:#D7E8F8; --fill-b:#FBE3B4;
+  --solid-on:#0F5EA8; --solid-alert:#C0330A;
+  /* 紙の地（design リポジトリの成長する図形と同じ地色） */
+  --paper:#F7F7F4; --line:#D9DCE0;
+  /* 装飾（意味を運ばない色）：シールの金は design の topaz */
+  --gold:#E0A43A; --gold-edge:#9A6A12; --locked:#C9CDD2;
+  --tap:56px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"BIZ UDPGothic","Yu Gothic UI","Yu Gothic","Meiryo","Noto Sans CJK JP",
+    "Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","IPAexGothic","IPAGothic",sans-serif;
+  background:var(--paper); color:var(--ink); font-size:18px; line-height:1.6;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--cat-1);outline-offset:2px}
+
+/* 見本の切り替え（本番ではGoogleアカウントで自動に決まる） */
+.demo{display:flex;align-items:center;gap:8px;padding:6px 16px;background:#fff;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-sub)}
+.demo select{min-height:36px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:0 8px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px 20px;margin-bottom:12px}
+header.top h1{font-size:24px;margin:0}
+.who{color:var(--ink-sub);font-size:16px}
+.now{margin-left:auto;font-weight:700;font-size:18px}
+.now .step{display:inline-block;min-width:32px;height:32px;line-height:32px;text-align:center;border-radius:50%;background:var(--solid-on);color:#fff;margin-right:6px}
+
+/* ボタン：主操作は画面に1つ */
+.btn{min-height:var(--tap);padding:0 22px;border-radius:12px;border:2px solid var(--solid-on);background:#fff;color:var(--solid-on);font-weight:700}
+.btn.primary{background:var(--solid-on);color:#fff}
+.btn.text{border-color:transparent;background:transparent;text-decoration:underline;min-height:44px;padding:0 10px}
+.btn:disabled{border-color:var(--locked);color:#8B9096;background:#F1F2F3;cursor:not-allowed}
+.btn.danger{border-color:var(--solid-alert);color:var(--solid-alert)}
+.btn.danger.armed{background:var(--solid-alert);color:#fff}
+
+/* 問いの焦点 */
+.focus{display:flex;gap:16px;align-items:stretch;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:14px;margin-bottom:14px}
+.photo{flex:0 0 180px;min-height:120px;border-radius:10px;border:2px dashed var(--cat-4);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--ink-sub);font-size:14px;padding:8px;background:var(--paper)}
+.focus .spot{font-size:15px;color:var(--ink-sub);font-weight:700}
+.focus .ftext{font-size:28px;font-weight:800;line-height:1.4}
+
+/* ルール */
+.rules{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:0;list-style:none}
+.rules li{background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 14px;font-size:15px;font-weight:700}
+.rules li b{color:var(--cat-1);margin-right:4px}
+
+/* 付箋 */
+.board{display:flex;flex-wrap:wrap;gap:16px;align-content:flex-start;min-height:140px;padding:6px 2px 14px}
+.note{position:relative;width:200px;min-height:132px;padding:24px 14px 12px;background:var(--fill-b);
+  box-shadow:0 1px 0 rgba(0,0,0,.08),0 6px 12px -6px rgba(0,0,0,.25);font-size:19px;font-weight:700;line-height:1.45;
+  border:0;text-align:left;word-break:break-all;transform:rotate(var(--tilt,0deg))}
+.note::before{content:"";position:absolute;top:0;left:22%;right:22%;height:12px;background:rgba(255,255,255,.55);border-bottom:1px solid rgba(0,0,0,.06)}
+.note .meta{display:block;margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-sub)}
+.note.mine{outline:2px solid rgba(15,94,168,.35);outline-offset:-2px}
+.note.old{opacity:.6}
+.note .changed{position:absolute;top:2px;right:6px;font-size:12px;color:var(--cat-3);font-weight:800}
+.note.tap{cursor:pointer}
+.note .del{position:absolute;bottom:4px;right:4px;font-size:13px}
+.note .rank{position:absolute;top:-14px;left:-12px;width:46px;height:46px;border-radius:50%;background:var(--solid-on);color:#fff;font-size:24px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.note.picked{outline:4px solid var(--solid-on);outline-offset:2px}
+
+/* 書く欄 */
+.compose{display:flex;gap:12px;align-items:stretch;margin-bottom:8px}
+.compose textarea{flex:1;min-height:var(--tap);max-height:140px;border:2px solid var(--ink);border-radius:12px;padding:12px 14px;font-size:20px;resize:vertical;background:#fff}
+.hint{color:var(--ink-sub);font-size:15px;margin:0 0 8px}
+
+/* 直す：2列 */
+.lanes{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.lane{background:#fff;border:2px solid var(--line);border-radius:14px;padding:10px 12px}
+.lane h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:19px}
+.lane h3 svg{flex:0 0 auto}
+.lane.wait{grid-column:1 / -1}
+
+/* モーダル */
+.veil{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.sheet{background:#fff;border-radius:16px;max-width:760px;width:100%;padding:18px 20px;max-height:92vh;overflow:auto}
+.sheet h2{margin:0 0 8px;font-size:22px}
+.starters{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.starters button{min-height:48px;border:2px solid var(--cat-1);background:var(--fill-a);border-radius:10px;padding:0 12px;font-weight:700}
+.sheet textarea{width:100%;min-height:96px;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;font-size:20px}
+.row{display:flex;gap:12px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+
+/* えらぶ */
+.why{display:grid;gap:10px;margin-top:8px}
+.why label{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.why .no{flex:0 0 36px;height:36px;border-radius:50%;background:var(--solid-on);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center}
+.why .q{flex:0 0 260px;font-weight:700;font-size:16px}
+.why input{flex:1;min-height:48px;border:2px solid var(--ink);border-radius:10px;padding:0 12px;font-size:18px}
+.status{font-weight:800;font-size:19px;margin:6px 0 10px}
+
+/* 見合い会 */
+.bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--paper);padding:8px 0 10px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.left{display:flex;align-items:center;gap:6px;font-weight:800}
+.team{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:16px}
+.team h3{margin:0;font-size:20px}
+.team .tf{color:var(--ink-sub);font-size:15px;margin:0 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.card{display:flex;flex-direction:column;gap:10px}
+.card .note{width:auto}
+.pred{display:flex;flex-direction:column;gap:6px}
+.pred input[type=text]{min-height:52px;border:2px solid var(--ink);border-radius:10px;padding:0 12px;font-size:18px;background:#fff}
+.cant{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:700}
+.cant input{width:26px;height:26px}
+.stick{display:flex;align-items:center;gap:12px;min-height:var(--tap);border-radius:999px;border:2px solid var(--gold-edge);background:#fff;padding:0 20px 0 10px;font-weight:800;color:#5A3D05}
+.stick:disabled{border-color:var(--locked);color:#7E848A;background:#F1F2F3}
+.stick.on{background:#FFF4D6}
+.why-lock{font-size:14px;color:var(--ink-sub);margin:0}
+
+/* キラキラシール */
+.star{width:40px;height:40px;flex:0 0 40px;position:relative}
+.star svg{width:100%;height:100%;display:block}
+.star .glint{position:absolute;inset:-14px;pointer-events:none;opacity:0}
+.pop .star svg{animation:pop .32s ease-out}
+.pop .star .glint{animation:glint .5s ease-out}
+@keyframes pop{0%{transform:scale(.4) rotate(-30deg)}70%{transform:scale(1.18) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes glint{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.pop .star svg,.pop .star .glint{animation:none}}
+
+/* けっか */
+.res{display:grid;grid-template-columns:240px 1fr;gap:16px;background:#fff;border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px}
+.counts{display:flex;gap:18px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.count{display:flex;align-items:center;gap:6px;font-size:22px;font-weight:800}
+.count small{font-size:15px;color:var(--ink-sub);font-weight:700}
+.preds{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px;padding:0;list-style:none}
+.preds li{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:2px 10px;font-size:15px}
+.types{display:flex;gap:10px;flex-wrap:wrap}
+.type{min-height:var(--tap);border-radius:12px;border:2px solid var(--line);background:#fff;padding:0 16px;font-weight:800;display:flex;align-items:center;gap:8px}
+.type .sym{display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;color:#fff;font-size:17px}
+.type[aria-pressed=true]{border-width:4px}
+.t-wakare .sym{background:var(--cat-1)} .t-wakare[aria-pressed=true]{border-color:var(--cat-1)}
+.t-nazo .sym{background:var(--cat-2)}   .t-nazo[aria-pressed=true]{border-color:var(--cat-2)}
+.t-tashika .sym{background:var(--cat-3)} .t-tashika[aria-pressed=true]{border-color:var(--cat-3)}
+.main{background:#fff;border:3px solid var(--ink);border-radius:16px;padding:14px}
+.main h3{margin:0 0 8px}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice{min-height:var(--tap);text-align:left;border:2px solid var(--line);border-radius:12px;background:#fff;padding:8px 14px;font-weight:700}
+.choice[aria-pressed=true]{border:4px solid var(--solid-on);background:var(--fill-a)}
+.main textarea{width:100%;min-height:72px;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:18px}
+
+/* 先生 */
+.phases{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 16px}
+.phases button{min-height:var(--tap);border-radius:12px;border:2px solid var(--solid-on);background:#fff;color:var(--solid-on);font-weight:800;padding:0 14px}
+.phases button[aria-pressed=true]{background:var(--solid-on);color:#fff}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:12px}
+.tabs button{min-height:48px;border:0;background:transparent;padding:0 16px;font-weight:700;border-bottom:4px solid transparent;margin-bottom:-2px}
+.tabs button[aria-selected=true]{border-bottom-color:var(--solid-on);color:var(--solid-on)}
+table{border-collapse:collapse;width:100%;background:#fff}
+th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;font-size:15px;vertical-align:top}
+th{background:#F1F2F3}
+.warn{color:var(--ink-alert);font-weight:800}
+.fedit{display:grid;gap:10px}
+.fedit label{display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}
+.fedit input{min-height:48px;border:2px solid var(--ink);border-radius:10px;padding:0 12px;font-size:17px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:10px 18px;font-weight:700;z-index:20}
+.wait-msg{background:#fff;border:2px solid var(--line);border-radius:16px;padding:32px;text-align:center;font-size:22px;font-weight:700}
+@media (max-width:760px){.lanes{grid-template-columns:1fr}.res{grid-template-columns:1fr}.why label{flex-wrap:wrap}.why .q{flex-basis:100%}.focus{flex-direction:column}.photo{flex-basis:auto}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+document.documentElement.lang = 'ja';
+
+/* ============================================================
+   語彙と設定（単一真実源）
+   ============================================================ */
+var VER = 1;
+var PHASES = [
+  {n:0, label:'まつ',        title:'先生の 合図を まってね'},
+  {n:1, label:'① 問いを出す', title:'問いを 出す'},
+  {n:2, label:'② 問いを直す', title:'問いを 直す'},
+  {n:3, label:'③ えらぶ',     title:'3つ えらぶ'},
+  {n:4, label:'④ 見合い会',   title:'問いの 見合い会'},
+  {n:5, label:'⑤ けっか',     title:'けっかを 見て きめる'}
+];
+var RULES = ['たくさん 出す', '話し合わない・答えない', '言われた とおりに 書く', 'ふつうの 文は 問いに 直す'];
+var LANES = [
+  {n:0, name:'まだ 分けていない'},
+  {n:1, name:'ひとことで 答えられる'},
+  {n:2, name:'せつめいが いる'}
+];
+/* 問い探しカード1〜7の書き出し（問いを直す段階でだけ使う） */
+var STARTERS = [
+  '〇〇と △△は、どこが ちがう？', '〇〇は、なんの なかま？', 'むかしの〇〇は、今と どう ちがう？',
+  '〇〇は、どんな じゅんばん？', '〇〇は、どこに ある？ いくつ ある？', '〇〇は、どうやって うごく？',
+  'どうして 〇〇は △△なの？'
+];
+var TYPES = [
+  {id:'wakare',  sym:'⇆', name:'わかれる問い', hint:'みんなの 予想が ばらばら'},
+  {id:'nazo',    sym:'？', name:'なぞの問い',   hint:'だれも 予想できない'},
+  {id:'tashika', sym:'✓', name:'たしかめ問い', hint:'みんな 同じ 予想'}
+];
+var MAX_STARS = 3;   /* 1人がその回に貼れるシールの数 */
+var PICKS = 3;       /* 班がえらぶ問いの数 */
+var FEW_NOTES = 2;   /* これ以下なら「すくない」と先生に知らせる */
+
+/* 見本の学級（本番は名簿と割り当てシートから読む） */
+var DEMO_SPOTS = [
+  {team:1, name:'阪急西宮北口',  focus:'買い物の たてものの 4かいに、野球場の ホームベースが うまっている。'},
+  {team:2, name:'甲山',          focus:'となりあった 六甲山と 甲山は、石の しゅるいが ちがう。'},
+  {team:3, name:'西宮砲台',      focus:'4年 かけて 作った 砲台は、一ども 使われなかった。'},
+  {team:4, name:'神戸女学院',    focus:'学校の たてもの 12むねが、国の 重要文化財に なっている。'},
+  {team:5, name:'有馬川',        focus:'小学生の ポスターが きっかけで、川ぞいの 街灯が 消された。'},
+  {team:6, name:'えびすかき',    focus:'西宮の 人形あそびが、日本じゅうに 広まった。'},
+  {team:7, name:'今津灯台',      focus:'灯台を 建てたのは、国ではなく お酒屋さん だった。'}
+];
+
+/* ============================================================
+   Platform層：保存先の差し替え口（本番は GAS／スプレッドシート）
+   ============================================================ */
+var Platform = (function(){
+  var KEY = 'toiboard.v' + VER, ME = 'toiboard.me';
+  function safeGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function safeSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } }
+  return {
+    load: function(){ var s = safeGet(KEY); if(!s) return null; try{ return JSON.parse(s); }catch(e){ return null; } },
+    save: function(st){ return safeSet(KEY, JSON.stringify(st)); },
+    clear: function(){ try{ localStorage.removeItem(KEY); }catch(e){} },
+    me: function(){ return safeGet(ME) || 'teacher'; },
+    setMe: function(v){ safeSet(ME, v); },
+    onRemote: function(cb){ window.addEventListener('storage', function(e){ if(e.key === KEY) cb(); }); }
+  };
+})();
+
+function freshState(){
+  var roster = [];
+  for(var i=1;i<=28;i++) roster.push({id:'c'+(i<10?'0':'')+i, no:i, team:Math.ceil(i/4)});
+  return {
+    ver:VER, klass:'3年3組', round:1, phase:0,
+    roster:roster, spots:JSON.parse(JSON.stringify(DEMO_SPOTS)),
+    notes:[], picks:{}, preds:[], stars:[], types:{}, main:{}, seq:0
+  };
+}
+
+var S = Platform.load();
+if(!S || S.ver !== VER) S = freshState();
+var me = Platform.me();
+var ui = {tab:'watch', editing:null, toast:'', toastTimer:0, armed:false, popNote:null};
+
+/* ============================================================
+   不変条件（壊れたら即座に分かるように）
+   ============================================================ */
+function checkInvariants(st){
+  var per = {};
+  st.stars.forEach(function(s){
+    per[s.viewer] = (per[s.viewer]||0) + 1;
+    console.assert(hasPred(st, s.noteId, s.viewer), '予想の無い問いにシールがある', s);
+  });
+  Object.keys(per).forEach(function(v){ console.assert(per[v] <= MAX_STARS, 'シールが上限を超えた', v); });
+  Object.keys(st.picks).forEach(function(t){ console.assert(st.picks[t].length <= PICKS, 'えらんだ問いが多すぎる', t); });
+}
+
+/* ============================================================
+   状態の更新
+   ============================================================ */
+function commit(fn, opt){
+  fn(S);
+  checkInvariants(S);
+  Platform.save(S);
+  if(!opt || opt.render !== false) render();
+}
+Platform.onRemote(function(){
+  var st = Platform.load(); if(!st) return;
+  S = st;
+  if(composing){ pendingRender = true; return; }
+  render();
+});
+
+/* ============================================================
+   ちいさな道具
+   ============================================================ */
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function hash(s){ var h = 0; for(var i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) | 0; } return Math.abs(h); }
+function tilt(id){ return ((hash(id) % 7) - 3) * 0.55; }
+function newId(){ S.seq = (S.seq||0) + 1; return 'n' + S.seq + '-' + Math.random().toString(36).slice(2,6); }
+function child(id){ for(var i=0;i<S.roster.length;i++) if(S.roster[i].id === id) return S.roster[i]; return null; }
+function spot(team){ for(var i=0;i<S.spots.length;i++) if(S.spots[i].team === team) return S.spots[i]; return {team:team, name:'', focus:''}; }
+function note(id){ for(var i=0;i<S.notes.length;i++) if(S.notes[i].id === id) return S.notes[i]; return null; }
+function teamNotes(team){ return S.notes.filter(function(n){ return n.team === team && n.round === S.round; }); }
+function picksOf(team){ return S.picks[team] || []; }
+function predOf(noteId, viewer){ for(var i=0;i<S.preds.length;i++){ var p=S.preds[i]; if(p.noteId===noteId && p.viewer===viewer) return p; } return null; }
+function hasPred(st, noteId, viewer){ return st.preds.some(function(p){ return p.noteId===noteId && p.viewer===viewer && (p.cannot || (p.text||'').trim() !== ''); }); }
+function starred(noteId, viewer){ return S.stars.some(function(s){ return s.noteId===noteId && s.viewer===viewer; }); }
+function starsUsed(viewer){ return S.stars.filter(function(s){ return s.viewer===viewer; }).length; }
+function starCount(noteId){ return S.stars.filter(function(s){ return s.noteId===noteId; }).length; }
+function cannotCount(noteId){ return S.preds.filter(function(p){ return p.noteId===noteId && p.cannot; }).length; }
+function predTexts(noteId){ return S.preds.filter(function(p){ return p.noteId===noteId && !p.cannot && (p.text||'').trim(); }).map(function(p){ return p.text.trim(); }); }
+function shuffleFor(arr, seed){
+  var a = arr.slice(), h = hash(seed) || 1;
+  for(var i=a.length-1;i>0;i--){ h = (h*1103515245 + 12345) & 0x7fffffff; var j = h % (i+1); var t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+function toast(msg){
+  ui.toast = msg; clearTimeout(ui.toastTimer);
+  ui.toastTimer = setTimeout(function(){ ui.toast=''; var el=document.querySelector('.toast'); if(el) el.remove(); }, 2200);
+}
+
+var STAR_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2.5l5.3 11 12 1.6-8.8 8.3 2.2 11.9L20 29.6 9.3 35.3l2.2-11.9-8.8-8.3 12-1.6z" fill="var(--gold)" stroke="var(--gold-edge)" stroke-width="2" stroke-linejoin="round"/><path d="M14 13l3-1" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/></svg>';
+var STAR_OFF = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2.5l5.3 11 12 1.6-8.8 8.3 2.2 11.9L20 29.6 9.3 35.3l2.2-11.9-8.8-8.3 12-1.6z" fill="#fff" stroke="var(--locked)" stroke-width="2" stroke-linejoin="round"/></svg>';
+var LOCK_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="9" y="17" width="22" height="17" rx="3" fill="var(--locked)"/><path d="M14 17v-4a6 6 0 0 1 12 0v4" fill="none" stroke="var(--locked)" stroke-width="3"/></svg>';
+var GLINT = '<svg class="glint" viewBox="0 0 68 68" aria-hidden="true"><g stroke="var(--gold)" stroke-width="3" stroke-linecap="round"><path d="M34 2v9M34 57v9M2 34h9M57 34h9M11 11l6 6M51 51l6 6M57 11l-6 6M11 57l6-6"/></g></svg>';
+var ICON_SHORT = '<svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><rect x="2" y="9" width="12" height="6" rx="3" fill="var(--cat-1)"/><circle cx="24" cy="12" r="3" fill="var(--cat-1)"/></svg>';
+var ICON_LONG = '<svg width="34" height="26" viewBox="0 0 34 26" aria-hidden="true"><path d="M3 3h28v15H14l-6 5v-5H3z" fill="none" stroke="var(--cat-3)" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 8h18M8 13h12" stroke="var(--cat-3)" stroke-width="2.4" stroke-linecap="round"/></svg>';
+
+/* ============================================================
+   描画（入力中の文字と位置を守る）
+   ============================================================ */
+var composing = false, pendingRender = false;
+document.addEventListener('compositionstart', function(){ composing = true; });
+document.addEventListener('compositionend', function(){ composing = false; if(pendingRender){ pendingRender = false; render(); } });
+
+function render(){
+  var a = document.activeElement, keep = null;
+  if(a && a.id && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')){
+    keep = {id:a.id, v:a.value, s:a.selectionStart, e:a.selectionEnd};
+  }
+  var drafts = {};
+  document.querySelectorAll('[data-draft]').forEach(function(el){ drafts[el.id] = el.value; });
+
+  var html = demoBar() + '<div class="wrap">' + (me === 'teacher' ? teacherView() : childView()) + '</div>';
+  if(ui.editing) html += editSheet();
+  if(ui.toast) html += '<div class="toast" role="status">' + esc(ui.toast) + '</div>';
+  document.getElementById('app').innerHTML = html;
+
+  Object.keys(drafts).forEach(function(id){ var el = document.getElementById(id); if(el) el.value = drafts[id]; });
+  if(keep){
+    var el = document.getElementById(keep.id);
+    if(el){ if(el.hasAttribute('data-draft')) el.value = keep.v; el.focus(); try{ el.setSelectionRange(keep.s, keep.e); }catch(e){} }
+  }
+  if(ui.popNote){
+    var b = document.querySelector('[data-star="' + ui.popNote + '"]');
+    if(b){ b.classList.add('pop'); }
+    ui.popNote = null;
+  }
+}
+
+function demoBar(){
+  var opts = '<option value="teacher"' + (me==='teacher'?' selected':'') + '>先生</option>';
+  S.roster.forEach(function(c){
+    opts += '<option value="' + c.id + '"' + (me===c.id?' selected':'') + '>' + c.no + 'ばん（' + c.team + 'はん）</option>';
+  });
+  return '<div class="demo"><span>見本の切り替え</span><select id="who" aria-label="だれの画面を見るか">' + opts + '</select>' +
+    '<span>本番では Google アカウントで自動に決まります</span></div>';
+}
+
+/* ---------------- 児童 ---------------- */
+function childView(){
+  var c = child(me); if(!c) return '<p>名簿に ありません。</p>';
+  var sp = spot(c.team), ph = PHASES[S.phase];
+  var head = '<header class="top"><h1>' + esc(sp.name) + '</h1><span class="who">' + c.team + 'はん・' + c.no + 'ばん</span>' +
+    '<span class="now">' + (S.phase ? '<span class="step">' + S.phase + '</span>' : '') + esc(ph.title) + '</span></header>';
+  var body = '';
+  if(S.phase === 0) body = '<div class="wait-msg">先生の 合図を まってね</div>';
+  if(S.phase === 1) body = viewProduce(c, sp);
+  if(S.phase === 2) body = viewImprove(c);
+  if(S.phase === 3) body = viewPick(c);
+  if(S.phase === 4) body = viewGallery(c);
+  if(S.phase === 5) body = viewResult(c);
+  return head + body;
+}
+
+function focusCard(sp){
+  return '<section class="focus" aria-label="問いの しょうてん"><div class="photo">写真<br>（' + esc(sp.name) + '）</div>' +
+    '<div><div class="spot">しょうてん</div><div class="ftext">' + esc(sp.focus) + '</div></div></section>';
+}
+
+function noteHtml(n, opt){
+  opt = opt || {};
+  var cls = 'note' + (n.author === me ? ' mine' : '') + (n.changedTo ? ' old' : '') + (opt.tap ? ' tap' : '') + (opt.rank ? ' picked' : '');
+  var tag = opt.tap ? 'button' : 'div';
+  var attrs = opt.tap ? ' type="button" data-act="' + opt.tap + '" data-id="' + n.id + '"' : '';
+  if(opt.label) attrs += ' aria-label="' + esc(opt.label) + '"';
+  var inner = esc(n.text);
+  if(n.parent) inner = '<span class="changed">へんしん</span>' + inner;
+  if(n.changedTo) inner += '<span class="meta">↪ へんしんした</span>';
+  if(opt.rank) inner = '<span class="rank" aria-hidden="true">' + opt.rank + '</span>' + inner;
+  return '<' + tag + ' class="' + cls + '" style="--tilt:' + tilt(n.id) + 'deg"' + attrs + '>' + inner + '</' + tag + '>';
+}
+
+function viewProduce(c, sp){
+  var mine = teamNotes(c.team).filter(function(n){ return n.author === me; }).length;
+  var notes = teamNotes(c.team).slice().reverse();
+  var board = notes.map(function(n){
+    var h = noteHtml(n);
+    if(n.author === me) h = h.replace(/<\/div>$/, '<button type="button" class="btn text del" data-act="del" data-id="' + n.id + '">けす</button></div>');
+    return h;
+  }).join('');
+  return focusCard(sp) +
+    '<ul class="rules" aria-label="きまり">' + RULES.map(function(r,i){ return '<li><b>' + (i+1) + '</b>' + esc(r) + '</li>'; }).join('') + '</ul>' +
+    '<div class="compose"><textarea id="draft" data-draft rows="1" placeholder="思いついた 問いを 書こう" aria-label="問いを 書く"></textarea>' +
+    '<button type="button" class="btn primary" data-act="add">はる</button></div>' +
+    '<p class="hint">Enter で はれます。じぶんの 付箋 <b>' + mine + '</b> まい</p>' +
+    '<div class="board" aria-label="はんの 付箋">' + (board || '<p class="hint">まだ 付箋は ありません</p>') + '</div>';
+}
+
+function viewImprove(c){
+  var notes = teamNotes(c.team);
+  function lane(n){
+    var list = notes.filter(function(x){ return (x.lane||0) === n; });
+    return list.map(function(x){
+      return '<div class="card">' + noteHtml(x, {tap:'lane', label: x.text + '。タップで 分ける場所が かわる'}) +
+        (x.changedTo ? '' : '<button type="button" class="btn text" data-act="edit" data-id="' + x.id + '">へんしん させる</button>') + '</div>';
+    }).join('') || '<p class="hint">ここに 来た 付箋は まだ ありません</p>';
+  }
+  return '<p class="hint">付箋を タップすると、分ける場所が じゅんばんに かわります。「へんしん させる」で 問いを 書きかえられます。</p>' +
+    '<div class="lanes">' +
+    '<section class="lane wait"><h3>' + esc(LANES[0].name) + '</h3><div class="board">' + lane(0) + '</div></section>' +
+    '<section class="lane"><h3>' + ICON_SHORT + esc(LANES[1].name) + '</h3><div class="board">' + lane(1) + '</div></section>' +
+    '<section class="lane"><h3>' + ICON_LONG + esc(LANES[2].name) + '</h3><div class="board">' + lane(2) + '</div></section>' +
+    '</div>';
+}
+
+function editSheet(){
+  var n = note(ui.editing); if(!n) return '';
+  return '<div class="veil" role="dialog" aria-modal="true" aria-label="へんしん"><div class="sheet">' +
+    '<h2>へんしん させよう</h2>' +
+    '<p class="hint">もとの 問い</p><div class="note" style="width:auto;transform:none">' + esc(n.text) + '</div>' +
+    '<p class="hint" style="margin-top:12px">書き出しを えらぶと 下に 入ります（〇〇の ところを 書きかえよう）</p>' +
+    '<div class="starters">' + STARTERS.map(function(s,i){ return '<button type="button" data-act="starter" data-i="' + i + '">' + esc(s) + '</button>'; }).join('') + '</div>' +
+    '<textarea id="edit-text" data-draft aria-label="新しい 問い">' + esc(n.text) + '</textarea>' +
+    '<div class="row"><button type="button" class="btn" data-act="edit-cancel">やめる</button>' +
+    '<button type="button" class="btn primary" data-act="edit-save">へんしん した 付箋を はる</button></div>' +
+    '</div></div>';
+}
+
+function viewPick(c){
+  var picks = picksOf(c.team), notes = teamNotes(c.team).filter(function(n){ return !n.changedTo; });
+  function rankOf(id){ for(var i=0;i<picks.length;i++) if(picks[i].noteId===id) return i+1; return 0; }
+  var left = PICKS - picks.length;
+  var status = left > 0 ? 'あと ' + left + 'つ えらぼう' : '3つ えらんだ！ えらんだ わけを 書こう';
+  var why = picks.map(function(p,i){
+    var n = note(p.noteId);
+    return '<label><span class="no">' + (i+1) + '</span><span class="q">' + esc(n ? n.text : '') + '</span>' +
+      '<input type="text" id="why-' + p.noteId + '" data-why="' + p.noteId + '" value="' + esc(p.reason||'') + '" placeholder="えらんだ わけ" aria-label="えらんだ わけ"></label>';
+  }).join('');
+  return '<p class="status">' + status + '</p>' +
+    '<p class="hint">付箋を タップすると えらべます。もう一ど タップすると やめられます。</p>' +
+    '<div class="board">' + notes.map(function(n){ var r = rankOf(n.id); return noteHtml(n, {tap:'pick', rank:r || 0, label:n.text + (r ? '。' + r + 'ばんめに えらんでいる' : '')}); }).join('') + '</div>' +
+    (why ? '<div class="why">' + why + '</div>' : '');
+}
+
+function starButton(n, c){
+  var on = starred(n.id, me), ok = hasPred(S, n.id, me), full = starsUsed(me) >= MAX_STARS;
+  var dis = !on && (!ok || full);
+  var icon = on ? STAR_SVG : (ok && !full ? STAR_OFF : LOCK_SVG);
+  var label = on ? 'シールを はがす' : 'しりたい！ シールを はる';
+  var why = !ok ? 'よそうを 書くと はれるよ' : (!on && full ? 'シールは 3まい つかったよ' : '');
+  return '<button type="button" class="stick' + (on ? ' on' : '') + '" data-act="star" data-star="' + n.id + '"' + (dis ? ' disabled' : '') + ' aria-pressed="' + on + '">' +
+    '<span class="star">' + icon + (on ? GLINT : '') + '</span>' + label + '</button>' +
+    '<p class="why-lock" data-lock="' + n.id + '">' + why + '</p>';
+}
+
+function viewGallery(c){
+  var others = shuffleFor(S.spots.map(function(s){ return s.team; }).filter(function(t){ return t !== c.team && picksOf(t).length; }), me);
+  var used = starsUsed(me), stars = '';
+  for(var i=0;i<MAX_STARS;i++) stars += '<span class="star" style="width:30px;height:30px;flex-basis:30px">' + (i < MAX_STARS - used ? STAR_SVG : STAR_OFF) + '</span>';
+  var seen = others.filter(function(t){ return picksOf(t).every(function(p){ return hasPred(S, p.noteId, me); }); }).length;
+  var teams = others.map(function(t){
+    var sp = spot(t);
+    var cards = picksOf(t).map(function(p){
+      var n = note(p.noteId); if(!n) return '';
+      var pr = predOf(n.id, me) || {};
+      return '<div class="card">' + noteHtml(n) +
+        '<div class="pred"><input type="text" id="pred-' + n.id + '" data-pred="' + n.id + '" value="' + esc(pr.text||'') + '" placeholder="よそう：たぶん……" aria-label="よそう"' + (pr.cannot ? ' disabled' : '') + '>' +
+        '<label class="cant"><input type="checkbox" data-cant="' + n.id + '"' + (pr.cannot ? ' checked' : '') + '>よそうできない！</label></div>' +
+        starButton(n, c) + '</div>';
+    }).join('');
+    return '<section class="team"><h3>' + esc(sp.name) + '</h3><p class="tf">しょうてん：' + esc(sp.focus) + '</p><div class="cards">' + cards + '</div></section>';
+  }).join('');
+  return '<div class="bar"><span class="left" aria-label="のこりの シール ' + (MAX_STARS-used) + 'まい">のこりの シール ' + stars + '</span>' +
+    '<span>' + others.length + 'はんの うち <b>' + seen + '</b>はん 見た</span></div>' +
+    '<p class="hint">よそうを 書いてから、しりたい！と 思った 問いに シールを はろう。</p>' +
+    (teams || '<div class="wait-msg">ほかの はんが まだ えらんでいません</div>');
+}
+
+function viewResult(c){
+  var picks = picksOf(c.team);
+  if(!picks.length) return '<div class="wait-msg">まだ 3つ えらんでいません</div>';
+  var mainSel = S.main[c.team] || {};
+  var rows = picks.map(function(p){
+    var n = note(p.noteId); if(!n) return '';
+    var ty = S.types[n.id] || '';
+    var pl = predTexts(n.id);
+    return '<section class="res"><div>' + noteHtml(n) + '</div><div>' +
+      '<div class="counts"><span class="count"><span class="star" style="width:34px;height:34px;flex-basis:34px">' + STAR_SVG + '</span>' + starCount(n.id) + '<small>まい しりたい！</small></span>' +
+      '<span class="count">？' + cannotCount(n.id) + '<small>人が よそうできない</small></span></div>' +
+      '<div class="hint">みんなの よそう</div><ul class="preds">' + (pl.map(function(t){ return '<li>' + esc(t) + '</li>'; }).join('') || '<li>まだ ありません</li>') + '</ul>' +
+      '<div class="hint">どんな 問いかな？（はんで 話し合って きめよう）</div><div class="types">' +
+      TYPES.map(function(t){ return '<button type="button" class="type t-' + t.id + '" data-act="type" data-id="' + n.id + '" data-t="' + t.id + '" aria-pressed="' + (ty===t.id) + '" title="' + esc(t.hint) + '"><span class="sym" aria-hidden="true">' + t.sym + '</span>' + esc(t.name) + '</button>'; }).join('') +
+      '</div></div></section>';
+  }).join('');
+  var choices = picks.map(function(p){ var n = note(p.noteId); return n ? '<button type="button" class="choice" data-act="main" data-id="' + n.id + '" aria-pressed="' + (mainSel.noteId===n.id) + '">' + esc(n.text) + '</button>' : ''; }).join('');
+  return '<p class="hint">しりたい！（★）が 多い 問いは、おもしろい 問いです。よそうの ようすで、どんな おもしろさかが 分かります。</p>' + rows +
+    '<section class="main"><h3>はんの メインの 問いを きめよう</h3><div class="choices">' + choices + '</div>' +
+    '<textarea id="main-why" data-mainwhy="1" placeholder="この 問いに した わけ" aria-label="メインの 問いに した わけ">' + esc(mainSel.reason||'') + '</textarea></section>';
+}
+
+/* ---------------- 先生 ---------------- */
+function teacherView(){
+  var ph = '<div class="phases" role="group" aria-label="いまの 活動">' + PHASES.map(function(p){
+    return '<button type="button" data-act="phase" data-n="' + p.n + '" aria-pressed="' + (S.phase===p.n) + '">' + esc(p.label) + '</button>';
+  }).join('') + '</div>';
+  var tabs = [['watch','見守り'],['focus','しょうてん'],['export','書き出し'],['demo','見本の データ']];
+  var tb = '<div class="tabs" role="tablist">' + tabs.map(function(t){ return '<button type="button" role="tab" data-act="tab" data-t="' + t[0] + '" aria-selected="' + (ui.tab===t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
+  var body = ui.tab === 'watch' ? tWatch() : ui.tab === 'focus' ? tFocus() : ui.tab === 'export' ? tExport() : tDemo();
+  return '<header class="top"><h1>といボード（先生）</h1><span class="who">' + esc(S.klass) + '</span></header>' +
+    '<p class="hint">押すと、開いている 児童の 画面が その活動に かわります（見本では 同じ ブラウザの 別タブに すぐ届きます。本番は 約10秒）。</p>' + ph + tb + body;
+}
+
+function tWatch(){
+  var rows = S.roster.map(function(c){
+    var nn = S.notes.filter(function(n){ return n.author===c.id && n.round===S.round; }).length;
+    var pp = S.preds.filter(function(p){ return p.viewer===c.id && (p.cannot || (p.text||'').trim()); }).length;
+    var few = S.phase >= 1 && nn <= FEW_NOTES;
+    return '<tr><td>' + c.no + '</td><td>' + c.team + '</td><td>' + nn + (few ? ' <span class="warn">▲ すくない</span>' : '') + '</td><td>' + pp + '</td><td>' + starsUsed(c.id) + ' / ' + MAX_STARS + '</td></tr>';
+  }).join('');
+  var trows = S.spots.map(function(s){
+    var pk = picksOf(s.team), m = S.main[s.team];
+    var mn = m && note(m.noteId);
+    return '<tr><td>' + s.team + '</td><td>' + esc(s.name) + '</td><td>' + teamNotes(s.team).length + '</td><td>' + pk.length + ' / ' + PICKS + '</td><td>' + (mn ? esc(mn.text) : '—') + '</td></tr>';
+  }).join('');
+  return '<h3>はん</h3><table><tr><th>はん</th><th>スポット</th><th>付箋</th><th>えらんだ</th><th>メインの 問い</th></tr>' + trows + '</table>' +
+    '<h3>児童</h3><p class="hint">付箋が ' + FEW_NOTES + 'まい 以下の 児童に ▲ が つきます（しょうてんの 事実が 弱い 合図）。</p>' +
+    '<table><tr><th>番</th><th>はん</th><th>付箋</th><th>よそう</th><th>シール</th></tr>' + rows + '</table>';
+}
+
+function tFocus(){
+  return '<p class="hint">しょうてんは 写真と 1文。<b>問いの 形に しない</b>（「？」で 終わると 注意が 出ます）。</p><div class="fedit">' +
+    S.spots.map(function(s){
+      var bad = /[？?]\s*$/.test(s.focus);
+      return '<label><span><b>' + s.team + 'はん</b><br>' + esc(s.name) + '</span><span><input type="text" id="focus-' + s.team + '" data-focus="' + s.team + '" value="' + esc(s.focus) + '">' +
+        '<span class="warn" data-fwarn="' + s.team + '"' + (bad ? '' : ' hidden') + '>▲ 問いの 形に なっています。ふつうの 文に しましょう</span></span></label>';
+    }).join('') + '</div>';
+}
+
+function exportRows(){
+  var out = [['はん','スポット','えらんだ順','問い','えらんだわけ','しりたい★','よそうできない','よそうの数','問いの種類','メインの問いか','メインにしたわけ','1ばんに選んだ問いから変わったか']];
+  S.spots.forEach(function(s){
+    var pk = picksOf(s.team), m = S.main[s.team] || {};
+    var first = pk[0] && pk[0].noteId;
+    pk.forEach(function(p, i){
+      var n = note(p.noteId); if(!n) return;
+      var ty = (TYPES.filter(function(t){ return t.id === S.types[n.id]; })[0] || {}).name || '';
+      out.push([s.team, s.name, i+1, n.text, p.reason||'', starCount(n.id), cannotCount(n.id), predTexts(n.id).length, ty,
+        m.noteId===n.id ? 'はい' : '', m.noteId===n.id ? (m.reason||'') : '', m.noteId===n.id ? (first===n.id ? '変わらない' : '変わった') : '']);
+    });
+  });
+  return out;
+}
+function tExport(){
+  var rows = exportRows();
+  var t = '<table>' + rows.map(function(r,i){ return '<tr>' + r.map(function(v){ return (i ? '<td>' : '<th>') + esc(v) + (i ? '</td>' : '</th>'); }).join('') + '</tr>'; }).join('') + '</table>';
+  return '<p class="hint">「1ばんに選んだ問いから変わったか」が 全部の はんで「変わらない」なら、見合い会が はたらいていない 合図です。</p>' +
+    '<div class="row" style="justify-content:flex-start;margin:0 0 12px"><button type="button" class="btn" data-act="csv">CSVで 書き出す</button></div>' + t;
+}
+function tDemo(){
+  return '<p class="hint">ほかの 児童の 付箋・よそう・シールを 入れて、見合い会や けっかの 画面を ためせます。</p>' +
+    '<div class="row" style="justify-content:flex-start"><button type="button" class="btn" data-act="seed">見本の データを 入れる</button>' +
+    '<button type="button" class="btn danger' + (ui.armed ? ' armed' : '') + '" data-act="wipe">' + (ui.armed ? 'もう一ど 押すと すべて 消えます' : 'すべて 消す') + '</button></div>';
+}
+
+/* ============================================================
+   見本のデータ
+   ============================================================ */
+var POOL = {
+  1:['どうして ホームベースが うまっているの？','野球場は いつ なくなったの？','どうして 野球場が なくなったの？','ホームベースは 4かいの どこに あるの？','むかしの 野球場は どれくらい 大きかったの？','だれが うめたの？'],
+  2:['どうして 石の しゅるいが ちがうの？','甲山は どうやって できたの？','どうして 甲山という 名前なの？','甲山は 火山なの？','六甲山と どっちが 古いの？'],
+  3:['4年も かけたのに、どうして 使わなかったの？','だれが 作ったの？','どうして 海の そばに あるの？','中には 何が あるの？','今も 中に 入れるの？'],
+  4:['どうして 学校が 重要文化財なの？','だれが 建てたの？','いつから あるの？','今も 授業を しているの？','ほかの 学校と どこが ちがうの？'],
+  5:['どうして ポスターで 街灯が 消えたの？','ほたるは 何びき いるの？','どうして ほたるが へったの？','いつ 光るの？','だれが ポスターを 作ったの？'],
+  6:['どうして 日本じゅうに 広まったの？','人形は どうやって 動かすの？','どうして 一ど なくなったの？','だれが 復活させたの？','今も 見られるの？'],
+  7:['どうして お酒屋さんが 灯台を 建てたの？','いつ 建てたの？','今も 光っているの？','どうして 場所が 動いたの？','高さは どれくらい？']
+};
+var GUESS = ['お金が なかったから','人が 少なかったから','こわれたから','むかしから あったから','みんなが たのんだから','国が きめたから','10ねんくらい','船の ため','あぶないから'];
+function seed(){
+  var meC = child(me), myTeam = meC ? meC.team : 0;
+  commit(function(st){
+    /* じっさいに操作した児童（すでに付箋を書いた児童）の予想・シールは作らない */
+    var actors = {}; st.notes.forEach(function(n){ actors[n.author] = true; });
+    st.spots.forEach(function(s){
+      /* 自分の班と、もう付箋がある班は書きかえない */
+      if(s.team === myTeam || st.notes.some(function(n){ return n.team === s.team && n.round === st.round; })) return;
+      var members = st.roster.filter(function(c){ return c.team === s.team; });
+      var ids = [];
+      (POOL[s.team] || []).forEach(function(q, i){
+        var id = newId(); ids.push(id);
+        st.notes.push({id:id, team:s.team, round:st.round, author:members[i % members.length].id, text:q, lane:(i % 3 === 0 ? 1 : 2), created:Date.now()});
+      });
+      st.picks[s.team] = ids.slice(0, PICKS).map(function(id, i){ return {noteId:id, reason:['いちばん ふしぎだから','みんなが 知らなそうだから','答えが 1つじゃなさそうだから'][i]}; });
+    });
+    st.roster.forEach(function(c){
+      if(c.id === me || actors[c.id]) return;
+      var used = 0;
+      shuffleFor(Object.keys(st.picks).map(Number).filter(function(t){ return t !== c.team; }), c.id).forEach(function(t){
+        st.picks[t].forEach(function(p){
+          if(st.preds.some(function(x){ return x.noteId===p.noteId && x.viewer===c.id; })) return;
+          var h = hash(c.id + p.noteId), cannot = h % 5 === 0;
+          st.preds.push({noteId:p.noteId, viewer:c.id, text:cannot ? '' : GUESS[h % GUESS.length], cannot:cannot});
+          if(used < MAX_STARS && h % 4 === 1){ st.stars.push({noteId:p.noteId, viewer:c.id}); used++; }
+        });
+      });
+    });
+  });
+  toast('見本の データを 入れました');
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+function addNote(){
+  var el = document.getElementById('draft'); var c = child(me);
+  if(!el || !c) return;
+  var t = el.value.trim(); if(!t) { el.focus(); return; }
+  commit(function(st){ st.notes.push({id:newId(), team:c.team, round:st.round, author:me, text:t, lane:0, created:Date.now()}); });
+  var e2 = document.getElementById('draft'); if(e2){ e2.value = ''; e2.focus(); }
+}
+
+document.addEventListener('click', function(e){
+  var b = e.target.closest('[data-act]'); if(!b || b.disabled) return;
+  var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+  var c = child(me);
+  if(act === 'add') return addNote();
+  if(act === 'del') return commit(function(st){ st.notes = st.notes.filter(function(n){ return !(n.id===id && n.author===me); }); });
+  if(act === 'lane') return commit(function(){ var n = note(id); if(n) n.lane = ((n.lane||0) + 1) % 3; });
+  if(act === 'edit'){ ui.editing = id; render(); var t = document.getElementById('edit-text'); if(t) t.focus(); return; }
+  if(act === 'edit-cancel'){ ui.editing = null; return render(); }
+  if(act === 'starter'){
+    var ta = document.getElementById('edit-text'); if(ta){ ta.value = STARTERS[+b.getAttribute('data-i')]; ta.focus(); ta.select(); }
+    return;
+  }
+  if(act === 'edit-save'){
+    var tv = (document.getElementById('edit-text') || {}).value || ''; tv = tv.trim();
+    var orig = note(ui.editing);
+    if(!tv || !orig){ return; }
+    if(tv === orig.text){ toast('もとの 問いと 同じです'); return render(); }
+    var nid;
+    commit(function(st){
+      nid = newId();
+      st.notes.push({id:nid, team:orig.team, round:st.round, author:me, text:tv, lane:0, parent:orig.id, created:Date.now()});
+      var o = note(orig.id); o.changedTo = nid;
+      /* えらばれていた付箋がへんしんしたら、えらびを新しい付箋に引き継ぐ */
+      (st.picks[orig.team] || []).forEach(function(p){ if(p.noteId === orig.id) p.noteId = nid; });
+    }, {render:false});
+    ui.editing = null; toast('へんしん した 付箋を はりました'); return render();
+  }
+  if(act === 'pick'){
+    return commit(function(st){
+      var pk = st.picks[c.team] = st.picks[c.team] || [];
+      var at = -1; pk.forEach(function(p,i){ if(p.noteId===id) at = i; });
+      if(at >= 0) pk.splice(at, 1);
+      else if(pk.length < PICKS) pk.push({noteId:id, reason:''});
+      else toast('3つ えらんでいます。やめたい 付箋を もう一ど タップしてね');
+    });
+  }
+  if(act === 'star'){
+    id = b.getAttribute('data-star');
+    var on = starred(id, me);
+    if(!on && (!hasPred(S, id, me) || starsUsed(me) >= MAX_STARS)) return;
+    if(!on) ui.popNote = id;
+    return commit(function(st){
+      if(on) st.stars = st.stars.filter(function(s){ return !(s.noteId===id && s.viewer===me); });
+      else st.stars.push({noteId:id, viewer:me});
+    });
+  }
+  if(act === 'type') return commit(function(st){ var t = b.getAttribute('data-t'); st.types[id] = st.types[id] === t ? '' : t; });
+  if(act === 'main') return commit(function(st){ var m = st.main[c.team] = st.main[c.team] || {}; m.noteId = id; });
+  if(act === 'phase'){ var n = +b.getAttribute('data-n'); return commit(function(st){ st.phase = n; }); }
+  if(act === 'tab'){ ui.tab = b.getAttribute('data-t'); ui.armed = false; return render(); }
+  if(act === 'seed') return seed();
+  if(act === 'csv'){
+    var csv = exportRows().map(function(r){ return r.map(function(v){ v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }).join(','); }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], {type:'text/csv'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'toiboard-' + S.klass + '.csv'; a.click();
+    return;
+  }
+  if(act === 'wipe'){
+    if(!ui.armed){ ui.armed = true; render(); setTimeout(function(){ if(ui.armed){ ui.armed = false; render(); } }, 3000); return; }
+    ui.armed = false; Platform.clear(); S = freshState(); Platform.save(S); toast('すべて 消しました'); return render();
+  }
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.target.id === 'draft' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
+    e.preventDefault(); addNote();
+  }
+  if(e.key === 'Escape' && ui.editing){ ui.editing = null; render(); }
+});
+
+/* 文字の入力は描画しなおさずに保存する（IMEの変換を壊さない） */
+document.addEventListener('input', function(e){
+  var t = e.target, v;
+  if((v = t.getAttribute('data-pred'))){
+    commit(function(st){
+      var p = predOf(v, me);
+      if(!p){ p = {noteId:v, viewer:me, text:'', cannot:false}; st.preds.push(p); }
+      p.text = t.value;
+      if(!hasPred(st, v, me)) st.stars = st.stars.filter(function(s){ return !(s.noteId===v && s.viewer===me); });
+    }, {render:false});
+    refreshStar(v);
+  } else if((v = t.getAttribute('data-why'))){
+    commit(function(st){ var c = child(me); (st.picks[c.team]||[]).forEach(function(p){ if(p.noteId===v) p.reason = t.value; }); }, {render:false});
+  } else if(t.getAttribute('data-mainwhy')){
+    commit(function(st){ var c = child(me); var m = st.main[c.team] = st.main[c.team] || {}; m.reason = t.value; }, {render:false});
+  } else if((v = t.getAttribute('data-focus'))){
+    commit(function(st){ st.spots.forEach(function(s){ if(String(s.team)===v) s.focus = t.value; }); }, {render:false});
+    var w = document.querySelector('[data-fwarn="' + v + '"]'); if(w) w.hidden = !/[？?]\s*$/.test(t.value);
+  }
+});
+document.addEventListener('change', function(e){
+  var t = e.target, v;
+  if(t.id === 'who'){ me = t.value; Platform.setMe(me); ui.editing = null; ui.armed = false; window.scrollTo(0,0); return render(); }
+  if((v = t.getAttribute('data-cant'))){
+    commit(function(st){
+      var p = predOf(v, me);
+      if(!p){ p = {noteId:v, viewer:me, text:'', cannot:false}; st.preds.push(p); }
+      p.cannot = t.checked;
+      if(!hasPred(st, v, me)) st.stars = st.stars.filter(function(s){ return !(s.noteId===v && s.viewer===me); });
+    });
+  }
+});
+/* シールのボタンだけを今の状態に合わせる（入力中の欄はそのまま） */
+function refreshStar(noteId){
+  var b = document.querySelector('[data-star="' + noteId + '"]'); if(!b) return;
+  var n = note(noteId), wrap = document.createElement('div');
+  wrap.innerHTML = starButton(n, child(me));
+  var nb = wrap.querySelector('button'), nl = wrap.querySelector('p');
+  b.replaceWith(nb);
+  var l = document.querySelector('[data-lock="' + noteId + '"]'); if(l) l.replaceWith(nl);
+  /* 残りのシールの表示と、ほかの問いのボタン（3まい目で押せなくなる）は描画しなおさなくても変わらないので、そのまま */
+}
+
+render();
+</script>
+</body>
+</html>
