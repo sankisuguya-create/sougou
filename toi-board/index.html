@@ -109,7 +109,7 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 1, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 2, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -161,7 +161,8 @@ var Platform = {
     });
   },
   push:function(ops){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} },
-  setMe:function(v){ try{ localStorage.setItem(KEY + '.me', v); }catch(e){} }
+  setMe:function(v){ try{ localStorage.setItem(KEY + '.me', v); }catch(e){} },
+  watch:function(){}
 };
 'PLATFORM_END';
 
@@ -226,6 +227,13 @@ function mergeRemote(r, pend){
     var mineP = S.stars.filter(function(s){ return s.viewer === me && pend['*' + s.noteId]; });
     S.stars = r.stars.filter(function(s){ return s.on && !(s.viewer === me && pend['*' + s.noteId]); }).map(function(s){ return {noteId:s.noteId, viewer:s.viewer}; }).concat(mineP);
   } else {
+    /* 初めて 取った 班は その班の 分を まるごと 入れ替える */
+    (r.fullTeams || []).forEach(function(t){
+      var gone = {};
+      S.items.forEach(function(x){ if(x.team === t && !pend[x.id]) gone[x.id] = 1; });
+      S.items = S.items.filter(function(x){ return !gone[x.id]; });
+      S.stars = S.stars.filter(function(s){ return !gone[s.noteId] || (s.viewer === me && pend['*' + s.noteId]); });
+    });
     r.items.forEach(function(x){
       if(pend[x.id]) return;
       S.items = S.items.filter(function(o){ return o.id !== x.id; });
@@ -240,7 +248,7 @@ function mergeRemote(r, pend){
   afterRemote();
 }
 function afterRemote(){
-  if(ui.viewTeam && !reach('view', ui.viewTeam) && !reach('propose', ui.viewTeam)) ui.viewTeam = null;
+  if(ui.viewTeam && !reach('view', ui.viewTeam) && !reach('propose', ui.viewTeam)){ ui.viewTeam = null; Platform.watch(null); }
   if(ui.sheet && ui.sheet.id && !item(ui.sheet.id) && ui.sheet.type !== 'write') ui.sheet = null;
   render();
 }
@@ -375,7 +383,8 @@ function boardHTML(team, face){
   var arrows = all.filter(function(x){ return x.kind === 'arrow'; });
   var h = '<div class="wrap"><div class="board' + (face === 'trash' ? ' trash' : '') + '" id="board">';
   h += frames.map(frameHTML).join('') + arrowsSVG(arrows) + notes.map(function(n){ return noteHTML(n); }).join('');
-  if(!all.length) h += '<div class="empty">' + (face === 'gift' ? 'ほかの班からの 付箋は まだ ありません' : face === 'trash' ? 'すてた 付箋は ここに のこります' : 'まだ 何も ありません') + '</div>';
+  if(!all.length && Platform.loading && Platform.loading(team)) h += '<div class="empty">よみこんでいます…</div>';
+  else if(!all.length) h += '<div class="empty">' + (face === 'gift' ? 'ほかの班からの 付箋は まだ ありません' : face === 'trash' ? 'すてた 付箋は ここに のこります' : 'まだ 何も ありません') + '</div>';
   return h + '</div></div>';
 }
 
@@ -479,7 +488,8 @@ function opinionTSV(){
 }
 function viewTeacher(){
   var cs = classes(), tm = S.modes[ui.tCls] || blankModes();
-  var h = '<div class="teacher"><h2>モード（児童の画面に 10秒ほどで 届きます）</h2>';
+  var h = '<div class="teacher"><h2>モード</h2>';
+  if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童に「ページを 更新して」と 伝えてください。更新するまで 前の モードの 画面の ままです（できない 操作は はねられます）。</div>';
   h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '">' + c + '組</button>'; }).join('') + '</div>';
   MODES.forEach(function(x){
     h += '<div class="mode"><span style="min-width:150px;font-weight:700">' + x.label + '</span>';
@@ -678,8 +688,8 @@ document.addEventListener('click', function(e){
     render(); return;
   }
   if(act === 'teams'){ ui.sheet = {type:'teams'}; render(); return; }
-  if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; render(); return; }
-  if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; render(); return; }
+  if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; Platform.watch(ui.viewTeam); render(); return; }
+  if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; Platform.watch(null); render(); return; }
   if(act === 'tcls'){ ui.tCls = b.getAttribute('data-c'); render(); return; }
   if(act === 'mode'){
     var key = b.getAttribute('data-k'), val = b.getAttribute('data-v');
@@ -687,6 +697,7 @@ document.addEventListener('click', function(e){
       var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes();
       mm[key] = key === 'starIn' ? val === 'on' : val;
     });
+    ui.modeNote = ui.tCls; render();
     return;
   }
   if(act === 'tteam'){ ui.tTeam = b.getAttribute('data-t'); render(); return; }

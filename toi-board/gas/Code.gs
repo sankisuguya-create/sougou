@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 1;
+var API_VER = 2;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -30,7 +30,7 @@ function setup(){
     var sh = ss.getSheetByName(n) || ss.insertSheet(n);
     if(sh.getLastRow() === 0) sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]);
   });
-  PropertiesService.getScriptProperties().setProperties({ver:'0', mver:'0'});
+  PropertiesService.getScriptProperties().setProperties({ver:'0'});
 }
 
 /* ===== 読み書きの 道具 ===== */
@@ -49,15 +49,12 @@ function getVer_(){
   cache_().put('ver', String(v), 21600);
   return v;
 }
-function getMver_(){
-  var c = cache_().get('mver');
-  if(c !== null && c !== undefined) return String(c);
-  var v = String(props_().getProperty('mver') || '0');
-  cache_().put('mver', v, 21600);
-  return v;
+/* 班ごとの 版。キャッシュが 消えていたら 学年の 版を 返す（読み直しが 起きるだけで 正しさは 保つ） */
+function teamVer_(t){
+  var c = cache_().get('tv:' + t);
+  return c === null || c === undefined ? getVer_() : Number(c);
 }
 function setVer_(v){ props_().setProperty('ver', String(v)); cache_().put('ver', String(v), 21600); }
-function setMver_(v){ props_().setProperty('mver', String(v)); cache_().put('mver', String(v), 21600); }
 
 /* ===== だれか ===== */
 function who_(){
@@ -83,9 +80,12 @@ function spots_(){
 }
 function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off'}; }
 function modes_(){
+  var c = cache_().get('modes');
+  if(c) return JSON.parse(c);
   var m = {};
   spots_().forEach(function(s){ if(!m[s.cls]) m[s.cls] = blankModes_(); });
   rows_(SH.modes).forEach(function(r){ if(r[0] !== ''){ try{ m[String(r[0]).trim()] = JSON.parse(r[1]); }catch(e){} } });
+  cache_().put('modes', JSON.stringify(m), 21600);
   return m;
 }
 function clsOf_(team){ return String(team).split('-')[0]; }
@@ -107,42 +107,61 @@ function anon_(viewer){
 }
 
 /* ===== 画面から 呼ぶ ===== */
+/* 開いた時に 1回。モードも ここで 渡す（モードを 変えたら 先生の 合図で 児童が ページを 更新する） */
 function boot(){
-  var u = who_(), v = getVer_(), mv = getMver_();
+  var u = who_();
   var roster = u.role === 'teacher'
     ? rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).map(function(r){ var cls = String(r[1]).trim(); return {id:low_(r[0]), cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; })
     : [{id:u.id, cls:u.cls, team:u.team, no:u.no}];
-  var p = pull_(u, 0, v, mv);
-  p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster;
+  var p;
+  if(u.role === 'teacher'){ var v = getVer_(); p = pull_(u, 0); p.all = v; }
+  else { var tv = {}; tv[u.team] = teamVer_(u.team); p = pull_(u, mapOf_(u.team, 0)); p.tv = tv; }
+  p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
+function mapOf_(t, v){ var m = {}; m[t] = v; return m; }
 
-/* 10秒ごとの 確認。版が 同じなら 何も 読まずに 返す */
-function poll(since, mver){
-  var u = who_(), v = getVer_(), mv = getMver_();
-  if(since && v === Number(since) && mv === String(mver)) return {ver:v, mver:mv};
-  var full = !since || mv !== String(mver);
-  return pull_(u, full ? 0 : Number(since), v, mv);
+/* 約10秒ごとの 確認。児童は 自分の班（と 今 見ている 班）の 版だけを 確かめる。
+   どれも 同じなら シートを 読まずに {same:true} を 返す。
+   req = 児童 {teams:{'A-1':版, 'B-3':版}}／先生 {all:版} */
+function poll(req){
+  var u = who_(); req = req || {};
+  if(u.role === 'teacher'){
+    var v = getVer_(), since = Number(req.all || 0);
+    if(since && v === since) return {same:true};
+    var p = pull_(u, since); p.all = v; return p;
+  }
+  var teams = req.teams || {}, want = {}, cur = {}, changed = false;
+  Object.keys(teams).slice(0, 2).forEach(function(t){
+    var c = teamVer_(t), since = Number(teams[t] || 0);
+    cur[t] = c;
+    if(!since || c > since){ want[t] = since; changed = true; }
+  });
+  if(!changed) return {same:true};
+  var q = pull_(u, want); q.tv = cur; return q;
 }
 
-function pull_(u, since, v, mv){
-  var modes = modes_(), items = [], stars = [];
+/* spec：数（学年全部を その版より 新しい分）または {班:版}（その班だけ） */
+function pull_(u, spec){
+  var modes = modes_(), items = [], stars = [], fullTeams = [];
+  function sinceOf(team){ return typeof spec === 'number' ? spec : (team in spec ? Number(spec[team]) : null); }
+  if(typeof spec !== 'number') Object.keys(spec).forEach(function(t){ if(!Number(spec[t])) fullTeams.push(t); });
   rows_(SH.items).forEach(function(r){
-    var id = String(r[0]), ver = Number(r[4]);
-    if(!id || ver <= since) return;
-    var ok = !r[5] && visible_(u, modes, String(r[1]), String(r[2]));
+    var id = String(r[0]), team = String(r[1]), ver = Number(r[4]), since = sinceOf(team);
+    if(!id || since === null || ver <= since) return;
+    var ok = !r[5] && visible_(u, modes, team, String(r[2]));
     if(!ok){ if(since) items.push({id:id, del:true}); return; }
     var x; try{ x = JSON.parse(r[3]); }catch(e){ return; }
     if(u.role !== 'teacher') delete x.author;
     items.push(x);
   });
   rows_(SH.stars).forEach(function(r){
-    var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]);
-    if(!r[0] || ver <= since) return;
+    var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
+    if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
     stars.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]});
   });
-  return {ver:v, mver:mv, full:!since, items:items, stars:stars, modes:modes};
+  return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars};
 }
 
 /* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
@@ -153,12 +172,12 @@ function apply(ops){
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
     var ish = sheet_(SH.items), irows = rows_(SH.items), index = {};
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
-    var appends = [], touched = false;
+    var appends = [], touched = false, teams = {};
 
     function writeRow(id, row){
       if(index[id] !== undefined){ ish.getRange(index[id] + 2, 1, 1, row.length).setValues([row]); irows[index[id]] = row; }
       else { appends.push(row); index[id] = -1; }
-      touched = true;
+      touched = true; teams[row[1]] = 1;
     }
 
     (ops.up || []).forEach(function(x){
@@ -207,7 +226,7 @@ function apply(ops){
         var key = nId + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v];
         if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { sapp.push(row); sidx[key] = -1; }
-        touched = true;
+        touched = true; teams[t.team] = 1;
       });
       if(sapp.length) ssh.getRange(ssh.getLastRow() + 1, 1, sapp.length, sapp[0].length).setValues(sapp);
     }
@@ -226,20 +245,23 @@ function apply(ops){
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });
         var mrow = [cls, JSON.stringify(clean), v];
         if(at >= 0) msh.getRange(at + 2, 1, 1, 3).setValues([mrow]); else msh.getRange(msh.getLastRow() + 1, 1, 1, 3).setValues([mrow]);
-        setMver_(String(v));
-        touched = true;
+        cache_().remove('modes');
       }
     }
 
-    if(touched){ SpreadsheetApp.flush(); setVer_(v); }
-    return {ver:touched ? v : v - 1, rejected:rejected};
+    if(touched){
+      SpreadsheetApp.flush(); setVer_(v);
+      var tv = {}; Object.keys(teams).forEach(function(t){ tv['tv:' + t] = String(v); });
+      cache_().putAll(tv, 21600);
+    }
+    return {rejected:rejected};
   } finally {
     lock.releaseLock();
   }
 }
 
-/* 名簿を 直したら 実行（10分の 覚えを 消す） */
+/* 名簿・先生・スポットを 直したら 実行（覚えを 消す） */
 function clearWhoCache(){
   var keys = rows_(SH.roster).concat(rows_(SH.teachers)).map(function(r){ return 'who:' + low_(r[0]); });
-  if(keys.length) cache_().removeAll(keys);
+  cache_().removeAll(keys.concat(['modes']));
 }

@@ -35,7 +35,7 @@ function makeGas() {
   const ctx = {
     SpreadsheetApp: { getActive: () => ss, flush: () => {} },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, setProperties: o => Object.assign(props, o) }) },
-    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, removeAll: ks => ks.forEach(k => delete cache[k]) }) },
+    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, putAll: o => Object.assign(cache, o), remove: k => delete cache[k], removeAll: ks => ks.forEach(k => delete cache[k]) }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
     Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
@@ -67,6 +67,7 @@ function makeGas() {
   threw = ''; try { G.as('', 'boot'); } catch (e) { threw = String(e.message); }
   ok(/NO_EMAIL/.test(threw), 'メールが 読めない時は 理由を 出す');
   ok(G.as('tb@edu.nishi.or.jp', 'boot').me.role === 'teacher', '先生ドメインは 先生として 開ける');
+  const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher'); };
 
   const browser = await chromium.launch();
   const errors = [];
@@ -115,21 +116,26 @@ function makeGas() {
 
   // B組：モードが 切なら ほかの班は 見えない。サーバーも 送らない
   ok(!(await b01.isVisible('[data-act=look]')), 'モードが 切なら ほかの班の ボタンは 出ない');
-  let r = G.as('b01' + D, 'poll', [0, '']);
+  let r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
   ok(!r.items.some(x => x.team === 'A-1'), 'モードが 切なら サーバーは ほかの班の 付箋を 送らない');
 
   // 先生：A組だけ 学年で 共同閲覧 → B組の 児童には まだ 届かない（モードは 見る側の 組で 決まる）
   await ta.click('[data-act=mode][data-k=view][data-v=grade]');
-  await settle();
+  ok(await ta.isVisible('text=A組の 児童に「ページを 更新して」と 伝えてください'), 'モードを 変えると 先生に 更新の 合図を 出すよう 表示する');
+  await reload(b01);
   ok(!(await b01.isVisible('[data-act=teams]')), 'A組の モードは B組の 児童に 効かない');
   await ta.click('[data-act=tcls][data-c=B]');
   await ta.click('[data-act=mode][data-k=view][data-v=grade]');
   await ta.click('[data-act=mode][data-k=propose][data-v=grade]');
   await settle();
+  ok(!(await b01.isVisible('[data-act=teams]')), '更新するまでは 前の モードの まま（モードを 確かめに 行かない）');
+  await reload(b01);
   ok(await b01.isVisible('[data-act=teams]'), 'B組を 学年に すると 「ほかの組」が 出る');
   await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
+  ok(await b01.isVisible('text=よみこんでいます'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」');
+  await settle();
   ok(await b01.isVisible('#board .note:has-text("どうして 北口なの？")'), 'ほかの組の 班の 表がわを 見られる');
-  r = G.as('b01' + D, 'poll', [0, '']);
+  r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
   ok(!r.items.some(x => x.face === 'back' && x.team === 'A-1') && r.items.every(x => !x.author), 'サーバーは ほかの班の うらがわ と 書いた人を 送らない');
 
   // アイデア提案：B組1はん → A組1はんの いただきもの
@@ -146,16 +152,17 @@ function makeGas() {
 
   // シール：B組 班の外を 学年に → b01 が A組の 付箋に 貼る。A組では 数が 見え、貼った人は 記号
   await ta.click('[data-act=mode][data-k=starOut][data-v=grade]');
+  await settle(); await reload(b01);
+  await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
   await settle();
-  await b01.click('.face[data-face=front]');
   await b01.click(`#board .note[data-id="${ids[0]}"]`); await b01.click(`[data-act=star][data-id="${ids[0]}"]`);
   G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], on: true }] }]);
   await settle();
   await a01.click('.face[data-face=front]');
   ok((await a01.textContent(`[data-stars="${ids[0]}"]`)).includes('×2'), '自分の班では シールの数が 見える');
-  r = G.as('a01' + D, 'poll', [0, '']);
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.length === 2 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer)), '貼った人は 記号に なる');
-  r = G.as('b01' + D, 'poll', [0, '']);
+  r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
   ok(r.stars.length === 1 && r.stars[0].viewer === 'b01' + D, 'ほかの班の 付箋は 自分の シールだけ 届く');
 
   // 先生の 一覧
@@ -164,10 +171,16 @@ function makeGas() {
   ok(tsv.includes('A組\t1はん\t阪急西宮北口\t表がわ\tどうして 北口なの？') && !tsv.includes('@'), '先生の 一覧に ずらりと 出て、メールは 入らない');
   await ta.screenshot({ path: SHOTS + '/g2-teacher.png', fullPage: true });
 
-  // 版の 確認：版が 同じなら 何も 送らない
-  const v = G.as('a01' + D, 'poll', [0, '']).ver, mv = G.props.mver;
-  r = G.as('a01' + D, 'poll', [v, mv]);
-  ok(r.items === undefined, '変わっていなければ 版番号だけ 返す（シートを 読まない）');
+  // 版の 確認：自分の班に 変化が なければ シートを 読まない（ほかの班の 書き込みでは 読まない）
+  const tvA = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]).tv['A-1'];
+  G.as('b05' + D, 'apply', [{ up: [{ id: 'bx', kind: 'note', team: 'B-2', face: 'front', x: 1, y: 1, text: 'B組の 問い' }], del: [], star: [] }]);
+  let reads = 0; const orig = G.ctx.rows_; G.ctx.rows_ = n => { reads++; return orig(n); };
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': tvA } }]);
+  G.ctx.rows_ = orig;
+  ok(r.same === true && reads === 0, 'ほかの班が 書いても 自分の班に 変化が なければ シートを 読まない');
+  G.as('a02' + D, 'apply', [{ up: [{ id: 'ax', kind: 'note', team: 'A-1', face: 'front', x: 9, y: 9, text: 'A組の 問い' }], del: [], star: [] }]);
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': tvA } }]);
+  ok(!r.same && r.items.length === 1 && r.items[0].id === 'ax', '自分の班に 変化が あれば 差分だけ 届く');
 
   // 児童の 端末幅（CZ1104 は 1366x768 だが タブレット縦も 確かめる）
   const small = await open('a05' + D, 800);
