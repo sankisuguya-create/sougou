@@ -67,9 +67,11 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .mark{position:absolute;right:6px;bottom:4px;display:flex;gap:4px;align-items:center}
 .mark svg{width:22px;height:22px}
 .pick{position:absolute;left:-12px;top:-12px;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:16px;display:grid;place-items:center}
-.stars{position:absolute;left:50%;bottom:-18px;transform:translateX(-50%);white-space:nowrap;display:flex;align-items:center;gap:2px;background:#fff;border-radius:99px;padding:2px 6px 2px 2px;box-shadow:0 1px 3px rgba(0,0,0,.25);font-size:14px;font-weight:700}
+.stars{position:absolute;left:50%;bottom:-18px;transform:translateX(-50%);white-space:nowrap;display:flex;align-items:center;gap:7px;background:#fff;border-radius:99px;padding:2px 6px 2px 2px;box-shadow:0 1px 3px rgba(0,0,0,.25);font-size:14px;font-weight:700}
 .stars img{width:28px;height:28px;display:block}
-.stars span{display:flex;align-items:center}
+.stars span,.hit .sc{position:relative;display:flex;align-items:center}
+/* 数は シールの 右下に 重ねて 出す（横に 並べても 幅が 増えない） */
+.cnt{position:absolute;right:-5px;bottom:-5px;min-width:18px;padding:0 3px;border-radius:99px;background:var(--ink);color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;pointer-events:none}
 .show{position:absolute;left:8px;top:-14px;background:#0F5EA8;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px}
 /* シール貼り（ほかの班）画面 */
 .gal{padding:12px 16px 80px}
@@ -381,7 +383,7 @@ function noteHTML(n, opt){
   if(!all) st = st.filter(function(s){ return s.viewer === me; });
   if(st.length) stars = '<div class="stars' + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + KINDS.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length;
-      return c ? '<span data-kind="' + K.k + '">' + sealImg(K.k) + (all && c >= 2 ? '×' + c : '') + '</span>' : '';
+      return c ? '<span data-kind="' + K.k + '">' + sealImg(K.k) + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>' : '';
     }).join('') + '</div>';
   var show = n.showcase ? '<div class="show">見てほしい</div>' : '';
   var mark = n.mark ? '<div class="mark" title="' + MARKS[n.mark] + '">' + ICON['m' + n.mark] + '</div>' : '';
@@ -554,7 +556,7 @@ function viewSheet(){
       + '<div class="hits">' + (hits.length ? hits.slice(0, 60).map(function(n){
           var cs = kindCounts(n);
           return '<button class="hit" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span>'
-            + KINDS.map(function(K, i){ return cs[i] ? '<span>' + sealImg(K.k, 24) + (cs[i] >= 2 ? '×' + cs[i] : '') + '</span>' : ''; }).join('')
+            + KINDS.map(function(K, i){ return cs[i] ? '<span class="sc">' + sealImg(K.k, 24) + (cs[i] >= 2 ? '<b class="cnt">×' + cs[i] + '</b>' : '') + '</span>' : ''; }).join('')
             + '<span class="w">' + faceLabel(n.face) + (n.stackOf ? '・重なりの中' : '') + '</span></button>';
         }).join('') : '<p>見つかりません</p>') + '</div>'
       + '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
