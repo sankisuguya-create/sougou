@@ -39,7 +39,7 @@ button{font-family:inherit;font-size:16px;color:inherit;cursor:pointer}
 
 /* ボード */
 .wrap{position:relative;margin:0 12px 12px;height:calc(100vh - 190px);min-height:420px;overflow:auto;border:2px solid var(--line);border-radius:12px;background:#fff;touch-action:pan-x pan-y}
-.board{position:relative;width:2016px;height:1248px;
+.board{position:relative;width:2016px;height:6240px;
   background-image:
     linear-gradient(to right, rgba(15,94,168,.10) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(15,94,168,.10) 1px, transparent 1px);
@@ -441,7 +441,7 @@ function tapItem(x){
 }
 function freeSpot(team, face){
   var used = S.items.filter(function(x){ return x.team === team && x.face === face && x.kind === 'note' && !x.stackOf; });
-  for(var r = 0; r < 20; r++) for(var c = 0; c < 9; c++){
+  for(var r = 0; r < 100; r++) for(var c = 0; c < 9; c++){
     var gx = 1 + c*(NOTE_W + 1), gy = 1 + r*(NOTE_H + 1);
     if(!used.some(function(u){ return Math.abs(u.x - gx) < NOTE_W && Math.abs(u.y - gy) < NOTE_H; })) return {x:gx, y:gy};
   }
