@@ -161,11 +161,11 @@ function makeGas() {
   ok(bigs.length === 1 && bigs[0] === ids[0], '開いた時に 範囲の 班の「見てほしい付箋」だけが 届く（共同閲覧が 切でも）');
   const bb = await b01.locator(`.big[data-id="${ids[0]}"]`).boundingBox();
   await b01.mouse.click(bb.x + 60, bb.y + 60);
-  await b01.click('[data-act=kind][data-k=circle]');
+  await b01.click('[data-act=kind][data-k=pick]');
   await b01.mouse.click(bb.x + 150, bb.y + 90);
   G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
   await settle();
-  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star]`)).includes('×2') && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=circle]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
+  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star]`)).includes('×2') && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.length === 3 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer) && s.x === undefined), '貼った人は 記号に なり、場所は 本人にしか 届かない');
   await reload(b01);
@@ -173,6 +173,15 @@ function makeGas() {
   r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
   ok(r.stars.length === 2 && r.stars.every(s => s.viewer === 'b01' + D), 'ほかの班の 付箋は 自分の シールだけ 届く');
   await b01.screenshot({ path: SHOTS + '/g3-gallery.png' });
+
+  // 持ち分（サーバー）：1つの班に 種類ごとに 2まいまで
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[1], k: 'pick', on: true }, { noteId: 'ax0', k: 'pick', on: true }] }]);
+  G.as('a01' + D, 'apply', [{ up: ['az1', 'az2'].map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 30 + i * 8, y: 1, text: 'もう1まい' + i })), del: [], star: [] }]);
+  const aNotes = G.as('ta@edu.nishi.or.jp', 'poll', [{ all: 0 }]).items.filter(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front').map(x => x.id);
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 3).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  ok(aNotes.length >= 3 && r.rejected.length === 1 && r.rejected[0] === '*' + aNotes[2] + '|wow', 'サーバーも 同じ班への 同じ種類の 3まい目を はねる');
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
+  ok(r.rejected.length === 0, 'はがせば また 貼れる');
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');

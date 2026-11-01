@@ -138,12 +138,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible(`.big[data-id="${c}"]`) && await page.isVisible(`.big[data-id="${e}"]`), 'ほかの班の 見てほしい付箋が 大きく 出る');
   ok(!(await page.isVisible(`.big[data-id="${own.id}"]`)), '自分の班の 付箋は 出ない');
   ok(!(await page.locator('.gteam:has-text("組）")').count()), '「同じ組」なら ほかの組の 班は 出ない');
-  ok(await page.locator('.kpick img').count() === 3 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
+  ok(await page.locator('.kpick img').count() === 4 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
   await page.waitForTimeout(1800);
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   const bigC = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC.x + 180, bigC.y + 130);
-  await page.click('[data-act=kind][data-k=circle]');
+  await page.click('[data-act=kind][data-k=pick]');
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   Object.assign(bigC, await page.locator(`.big[data-id="${c}"]`).boundingBox());
   await page.mouse.click(bigC.x + 50, bigC.y + 140);
@@ -151,7 +151,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   s = await st();
   const mineC = s.stars.filter(x => x.viewer === 'A05' && x.noteId === c);
   ok(mineC.length === 2 && mineC.every(x => x.x > 0 && x.y > 0), 'タップした 場所に シールが 貼れる（種類ごとに 1まい）');
-  ok(await page.isVisible('text=この シールは もう 貼って あります'), '同じ種類を 2まい目は 貼れない');
+  ok(await page.isVisible('text=この 付箋には もう 同じ シールを 貼って あります'), '同じ種類を 2まい目は 貼れない');
+  const textBottom = await page.$eval(`.big[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild); return r.getBoundingClientRect().bottom; });
+  const sealTops = await page.$$eval(`.big[data-id="${c}"] .seal`, els => els.map(e => e.getBoundingClientRect().top));
+  ok(sealTops.length === 2 && sealTops.every(t => t >= textBottom - 2), 'シールは 付箋の 下の 帯に 貼られ、文字に かからない');
   await page.screenshot({ path: SHOTS + '/5-gallery.png' });
   await page.click(`.big[data-id="${c}"] .seal >> nth=0`);
   await page.click('[data-act=peel]');
@@ -165,11 +168,31 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const bigC2 = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC2.x + 200, bigC2.y + 40);
 
+  // 持ち分：1つの班に 種類ごとに 2まいまで
+  ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('1'), '班ごとの のこりの まい数が 出る（★ のこり1）');
+  const third = await page.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 40, y: 1, text: '3まいめの 付箋', author: 'A01', showcase: true }); }); return id; });
+  await page.reload();
+  await page.click('[data-act=kind][data-k=star]');
+  for (const id of [e, third]) { await page.locator(`.big[data-id="${id}"]`).scrollIntoViewIfNeeded(); const bx = await page.locator(`.big[data-id="${id}"]`).boundingBox(); await page.mouse.click(bx.x + 120, bx.y + 60); await page.waitForTimeout(150); }
+  s = await st();
+  const starA1 = s.stars.filter(x => x.viewer === 'A05' && x.k === 'star' && s.items.find(n => n.id === x.noteId).team === 'A-1');
+  ok(starA1.length === 2 && await page.isVisible('text=この 班には もう 面白い！ を 2まい 貼りました'), '同じ班に 同じ種類は 3まい目を 貼れない');
+  ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('0') && (await page.textContent('[data-left="A-3"] [data-kind=star]')).includes('2'), 'のこりは 班ごとに 数える（ほかの班は 2まい のこる）');
+  await page.evaluate(id => commit(() => { S.items = S.items.filter(x => x.id !== id); S.stars = S.stars.filter(x => x.noteId !== id); }), third);
+
   // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
-  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=circle]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
+  const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
+  const sStar = await page.locator(`[data-stars="${c}"] [data-kind=star]`).boundingBox(), sCirc = await page.locator(`[data-stars="${c}"] [data-kind=pick]`).boundingBox();
+  ok(Math.abs(sStar.y - sCirc.y) < 6 && sStar.x < sCirc.x && sStar.x < nb.x + nb.width / 3 && sStar.y + sStar.height <= nb.y + nb.height + 2, 'シールは 種類ごとに 決まった 位置（★は 最下段の 左、つるはしは その右）で 付箋の 中に 貼られる');
+  const textBox = await page.$eval(`#board .note[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild.nodeType === 3 ? el.firstChild : el.childNodes[[...el.childNodes].findIndex(n => n.nodeType === 3)]); return r.getBoundingClientRect().bottom; });
+  ok(sCirc.y >= textBox - 2, 'シールは 文字に かからない');
+  const cb = await page.locator(`[data-stars="${c}"] [data-kind=star] .cnt`).boundingBox(), ib = await page.locator(`[data-stars="${c}"] [data-kind=star] img`).boundingBox();
+  const cx = cb.x + cb.width / 2, cy = cb.y + cb.height / 2;
+  ok(cx > ib.x + ib.width / 2 && cy > ib.y + ib.height / 2 && cb.x < ib.x + ib.width && cb.y < ib.y + ib.height, '「×7」は シールの 右下に 重ねて 出る');
+  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=pick]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   ok(!(await page.textContent(`[data-stars="${c}"]`)).includes('×'), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
   await page.click('[data-act=home]');
@@ -198,7 +221,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 13 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 18 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -215,8 +238,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const starHits = await page.$$eval('.hits .hit', els => els.length);
   const starred = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && S.stars.some(s => s.noteId === x.id)).length);
   ok(starHits === starred && starHits > 0, 'シールが ある 付箋だけに しぼれる');
-  await page.click('[data-act=s-kind][data-k=circle]');
-  const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'circle')).length);
+  await page.click('[data-act=s-kind][data-k=pick]');
+  const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'pick')).length);
   ok(await page.locator('.hits .hit').count() === circ && circ > 0, 'シールの 種類で しぼれる');
   await page.click('[data-act=s-kind][data-k=""]');
   await page.fill('#s-text', 'うめた');
@@ -232,7 +255,76 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[9])), '先生の 一覧を シールの 種類で しぼれる');
+
+  // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
+  await who('A01');
+  const bg = async f => { await page.click(`.face[data-face=${f}]`); return page.$eval('#board', el => getComputedStyle(el).backgroundColor); };
+  const cols = { front: await bg('front'), back: await bg('back'), gift: await bg('gift'), trash: await bg('trash') };
+  const rgb = c => c.match(/\d+/g).map(Number);
+  const [gr, gg, gb] = rgb(cols.gift), [br, bgG, bb] = rgb(cols.back), [tr, tg, tb] = rgb(cols.trash);
+  ok(gr > gb + 20 && Math.abs(br - bb) < 8 && br < 240 && tb > tr + 15 && new Set(Object.values(cols)).size === 4, '面ごとの 背景色（いただきもの 茶・うらがわ 灰・ゴミばこ 薄青）');
+
+  // ゴミばこ：あいうえお順／書いた順、動かせない
+  await page.click('.face[data-face=front]');
+  for (const t of ['んまで', 'あいう', 'かきく']) await write(t);
+  s = await st();
+  const tIds = ['んまで', 'あいう', 'かきく'].map(t => s.items.find(x => x.text === t && x.team === 'A-1').id);
+  for (const id of tIds) { await page.click(`#board .note[data-id="${id}"]`); await page.click(`[data-act=toface][data-f=trash][data-id="${id}"]`); }
+  await page.click('.face[data-face=trash]');
+  const order = async () => page.$$eval('#board .note', els => els.map(e => [e.textContent, e.offsetTop * 10000 + e.offsetLeft]).sort((a, b) => a[1] - b[1]).map(a => a[0]));
+  let o = (await order()).filter(t => ['んまで', 'あいう', 'かきく'].some(w => t.startsWith(w)));
+  ok(o.map(t => t.slice(0, 3)).join() === 'あいう,かきく,んまで', 'ゴミばこは あいうえお順に 並ぶ');
+  await page.click('[data-act=tsort][data-v=time]');
+  o = (await order()).filter(t => ['んまで', 'あいう', 'かきく'].some(w => t.startsWith(w)));
+  ok(o.map(t => t.slice(0, 3)).join() === 'んまで,あいう,かきく', '書いた順にも できる');
+  const before = (await st()).items.find(x => x.id === tIds[0]);
+  const tb0 = await box(tIds[0]);
+  await page.mouse.move(tb0.x + 30, tb0.y + 30); await page.mouse.down(); await page.mouse.move(tb0.x + 300, tb0.y + 300, { steps: 8 }); await page.mouse.up();
+  const after = (await st()).items.find(x => x.id === tIds[0]);
+  ok(before.x === after.x && before.y === after.y && after.face === 'trash', 'ゴミばこの 中では 動かせない');
+  await page.click('.sheet-bg', { position: { x: 5, y: 5 } }).catch(() => {});
+
+  // ショートカット：Ctrl+Z／Ctrl+Y／Esc
+  await page.click(`#board .note[data-id="${tIds[1]}"]`);
+  await page.click(`[data-act=toface][data-f=front][data-id="${tIds[1]}"]`);
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'front', '（準備）表がわへ もどす');
+  await page.keyboard.press('Control+z');
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'trash', 'Ctrl+Z で 直前の 操作を もとに もどす');
+  await page.keyboard.press('Control+y');
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'front', 'Ctrl+Y で やり直す');
+  await page.keyboard.press('Control+Shift+z');
+  ok(await page.isVisible('text=やり直せる 操作は ありません'), 'やり直す ものが なければ そう 出る');
+  await page.click('.face[data-face=front]');
+  await write('けす 付箋');
+  await page.keyboard.press('Control+z');
+  ok(!(await st()).items.some(x => x.text === 'けす 付箋'), '付箋を 書いたのも もどせる');
+  await page.click('[data-act=add]'); await page.fill('#w-text', 'あいうえ');
+  await page.keyboard.press('Control+z');
+  ok(await page.isVisible('#w-text'), '文字を 打っている 欄の Ctrl+Z は その欄の ふつうの 動き');
+  await page.keyboard.press('Escape');
+  ok(!(await page.isVisible('#w-text')), 'Esc で とじる');
+  await page.keyboard.press('Control+f');
+  ok(await page.isVisible('#s-text'), 'Ctrl+F で さがす');
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: SHOTS + '/9-trash.png' });
+
+  // 調査済み → 緑／いただきもの → 茶色の テープに「頂き物」
+  await who('A01'); await page.click('.face[data-face=front]');
+  const dn = (await st()).items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf);
+  const colOf = id => page.$eval(`#board .note[data-id="${id}"]`, el => getComputedStyle(el).backgroundColor);
+  const c0 = await colOf(dn.id);
+  await page.click(`#board .note[data-id="${dn.id}"]`); await page.click(`[data-act=done][data-id="${dn.id}"]`);
+  await page.fill('#d-text', 'たろう・はなこ'); await page.press('#d-text', 'Enter');
+  const c1 = await colOf(dn.id), g1 = c1.match(/\d+/g).map(Number);
+  ok((await st()).items.find(x => x.id === dn.id).done && c1 !== c0 && g1[1] > g1[0] + 20 && g1[1] > g1[2] + 20, '「調査済み」を 選ぶと 付箋が 緑に なる');
+  ok((await st()).items.find(x => x.id === dn.id).doneBy === 'たろう・はなこ' && await page.isVisible(`#board .note[data-id="${dn.id}"] .by:has-text("しらべた人：たろう・はなこ")`), '調査済みに する時に しらべた人を 書き、付箋に 出る');
+  await page.click('.face[data-face=gift]');
+  const tape = await page.$eval('#board .note.gift', el => { const cs = getComputedStyle(el, '::before'); return [cs.content, cs.backgroundColor, getComputedStyle(el).backgroundColor]; });
+  const tpb = tape[1].match(/\d+/g).map(Number), body = tape[2];
+  ok(tape[0].includes('頂き物') && tpb[0] > tpb[2] + 40 && body !== c1, 'いただきものの 付箋は テープが 茶色で「頂き物」、緑（調査済み）とは 別の 色');
+  await page.screenshot({ path: SHOTS + '/10-done-gift.png' });
+  await page.click('.face[data-face=front]');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
