@@ -315,9 +315,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const colOf = id => page.$eval(`#board .note[data-id="${id}"]`, el => getComputedStyle(el).backgroundColor);
   const c0 = await colOf(dn.id);
   await page.click(`#board .note[data-id="${dn.id}"]`); await page.click(`[data-act=done][data-id="${dn.id}"]`);
-  await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
+  await page.fill('#d-text', 'たろう・はなこ'); await page.press('#d-text', 'Enter');
   const c1 = await colOf(dn.id), g1 = c1.match(/\d+/g).map(Number);
   ok((await st()).items.find(x => x.id === dn.id).done && c1 !== c0 && g1[1] > g1[0] + 20 && g1[1] > g1[2] + 20, '「調査済み」を 選ぶと 付箋が 緑に なる');
+  ok((await st()).items.find(x => x.id === dn.id).doneBy === 'たろう・はなこ' && await page.isVisible(`#board .note[data-id="${dn.id}"] .by:has-text("しらべた人：たろう・はなこ")`), '調査済みに する時に しらべた人を 書き、付箋に 出る');
   await page.click('.face[data-face=gift]');
   const tape = await page.$eval('#board .note.gift', el => { const cs = getComputedStyle(el, '::before'); return [cs.content, cs.backgroundColor, getComputedStyle(el).backgroundColor]; });
   const tpb = tape[1].match(/\d+/g).map(Number), body = tape[2];

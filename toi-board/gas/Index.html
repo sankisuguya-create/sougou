@@ -62,6 +62,7 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .note::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:16px;margin-left:-35px;background:rgba(255,255,255,.65);box-shadow:0 0 1px rgba(0,0,0,.2)}
 .note.gift::before{content:"頂き物";background:#9C6B3C;color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;letter-spacing:.1em}
 .note.done{background:var(--done)}
+.by{display:block;margin-top:4px;font-size:13px;color:#2E5E1F}
 .note.done .layer{background:var(--done)}
 .note.dragging{box-shadow:0 10px 20px rgba(0,0,0,.25);z-index:50;transform:rotate(-2deg)}
 .note.target{outline:4px solid var(--cat-1);outline-offset:4px}
@@ -496,7 +497,7 @@ function noteHTML(n, opt){
     }).join('') + '</div>';
   var show = n.showcase ? '<div class="show">見てほしい</div>' : '';
   var mark = n.mark ? '<div class="mark" title="' + MARKS[n.mark] + '">' + ICON['m' + n.mark] + '</div>' : '';
-  var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
+  var from = (n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '') + (n.done && n.doneBy ? '<div class="by">しらべた人：' + esc(n.doneBy) + '</div>' : '');
   var pick = n.pick ? '<div class="pick">' + n.pick + '</div>' : '';
   var at = opt.pos || n, pos = opt.inline ? '' : 'left:' + (at.x*GRID) + 'px;top:' + (at.y*GRID) + 'px;';
   return '<div class="item note' + (n.done ? ' done' : '') + (n.mark ? ' has-mark' : '') + (stars ? ' has-seal' + (oneRow ? ' one' : '') : '') + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
@@ -702,6 +703,10 @@ function viewSheet(){
       h += '</div>';
     }
     h += '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
+  } else if(s.type === 'done'){
+    h += '<h2>調査済みに する</h2><p>「' + esc(item(s.id).text) + '」を しらべたのは だれ？（2人以上なら 「・」で つなぐ）</p>'
+      + '<input id="d-text" class="sbox" placeholder="名前（例：たろう・はなこ）">'
+      + '<div class="row"><button class="btn primary" data-act="d-save" data-id="' + s.id + '">きめる</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'frame'){
     var f = item(s.id);
     h += '<h2>枠</h2><input id="f-text" class="btn" style="width:100%;font-size:18px" placeholder="枠の 名前（なくてもよい）" value="' + esc(f.text || '') + '">'
@@ -726,10 +731,10 @@ function opinionRows(){
   rows.sort(function(a, b){ return (order[a.team] - order[b.team]) || ((a.pick || 9) - (b.pick || 9)) || (a.y - b.y) || (a.x - b.x); });
   return rows.map(function(n){
     var s = spot(n.team), p = n.stackOf ? item(n.stackOf) : null;
-    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, MARKS[n.mark || 0], n.done ? '○' : '', n.pick ? n.pick + 'ばん' : '', n.showcase ? '○' : ''].concat(kindCounts(n).map(function(c){ return c || ''; })).concat([p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : '']);
+    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, MARKS[n.mark || 0], n.done ? (n.doneBy || '○') : '', n.pick ? n.pick + 'ばん' : '', n.showcase ? '○' : ''].concat(kindCounts(n).map(function(c){ return c || ''; })).concat([p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : '']);
   });
 }
-var OP_HEAD = ['組','班','スポット','面','付箋','印','調査済み','えらんだ順','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元']);
+var OP_HEAD = ['組','班','スポット','面','付箋','印','調査済み（しらべた人）','えらんだ順','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元']);
 function kindCounts(n){ var st = starsOf(n.id); return KINDS.map(function(K){ return st.filter(function(x){ return kindOf(x) === K.k; }).length; }); }
 function opinionTSV(){
   return [OP_HEAD].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
@@ -942,7 +947,15 @@ document.addEventListener('click', function(e){
     commit(function(){ S.stars.push({noteId:id, viewer:me, k:kind, x:+sx.toFixed(1), y:+sy.toFixed(1), r:Math.round(Math.random()*30 - 15)}); });
     return;
   }
-  if(act === 'done'){ commit(function(){ var x = item(id); x.done = !x.done; }); return; }
+  if(act === 'done'){
+    var dx = item(id);
+    if(dx.done){ commit(function(){ dx.done = false; delete dx.doneBy; }); return; }
+    ui.sheet = {type:'done', id:id}; render(); setTimeout(function(){ var t = document.getElementById('d-text'); if(t) t.focus(); }, 0); return;
+  }
+  if(act === 'd-save'){
+    var who2 = document.getElementById('d-text').value.trim(); if(!who2){ toast('しらべた人の 名前を 書いてね'); return; }
+    ui.sheet = null; commit(function(){ var x = item(id); x.done = true; x.doneBy = who2.slice(0, 40); }); return;
+  }
   if(act === 'mark'){ var m = +b.getAttribute('data-m'); commit(function(){ var x = item(id); x.mark = x.mark === m ? 0 : m; }); return; }
   if(act === 'pick'){
     var r = +b.getAttribute('data-r');
@@ -1010,6 +1023,7 @@ document.addEventListener('keydown', function(e){
   if(k === 'f' && isTeacher()){ var q = document.getElementById('t-q'); if(q){ e.preventDefault(); q.focus(); } }
 });
 document.addEventListener('keydown', function(e){
+  if(e.target.id === 'd-text' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); var dsv = document.querySelector('[data-act=d-save]'); if(dsv) dsv.click(); return; }
   if(e.target.id === 'w-text' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
     e.preventDefault(); var s = document.querySelector('[data-act=w-save]'); if(s) s.click();
   }
@@ -1040,10 +1054,10 @@ function seed(){
   toast('見本の 付箋を 入れました');
 }
 function csv(){
-  var rows = [['組','班','面','付箋','書いた人','おくり元','印','調査済み','えらんだ順','重ねた先','見てほしい'].concat(KINDS.map(function(K){ return K.name; }))];
+  var rows = [['組','班','面','付箋','書いた人','おくり元','印','調査済み（しらべた人）','えらんだ順','重ねた先','見てほしい'].concat(KINDS.map(function(K){ return K.name; }))];
   S.items.filter(function(x){ return x.kind === 'note'; }).forEach(function(n){
     var c = child(n.author), p = n.stackOf ? item(n.stackOf) : null, s = spot(n.team);
-    rows.push([s.cls, s.no, faceLabel(n.face), n.text, c ? c.no : '', n.fromTeam ? teamLabel(n.fromTeam) : '', MARKS[n.mark || 0], n.done ? '○' : '', n.pick || '', p ? p.text : '', n.showcase ? '○' : ''].concat(kindCounts(n)));
+    rows.push([s.cls, s.no, faceLabel(n.face), n.text, c ? c.no : '', n.fromTeam ? teamLabel(n.fromTeam) : '', MARKS[n.mark || 0], n.done ? (n.doneBy || '○') : '', n.pick || '', p ? p.text : '', n.showcase ? '○' : ''].concat(kindCounts(n)));
   });
   var body = '﻿' + rows.map(function(r){ return r.map(function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], {type:'text/csv'})); a.download = 'toiboard.csv'; a.click();
