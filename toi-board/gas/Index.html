@@ -73,11 +73,12 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .stars{position:absolute;left:6px;right:6px;bottom:2px;height:66px;pointer-events:none}
 .stars.one{height:34px}
 .stars img{width:30px;height:30px;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
-.stars .slot{position:absolute;transform:translateX(-50%) rotate(var(--r,0deg))}
+.stars .slot{position:absolute;transform:translateX(-50%)}
+.stars .rot{display:block;transform:rotate(var(--r,0deg))}
 .stars .slot,.hit .sc{display:flex;align-items:center}
 .hit .sc{position:relative}
 /* 数は シールの 右下に 重ねて 出す（横に 並べても 幅が 増えない） */
-.cnt{position:absolute;right:-5px;bottom:-5px;min-width:18px;padding:0 3px;border-radius:99px;background:var(--ink);color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;pointer-events:none}
+.cnt{position:absolute;right:-7px;bottom:-6px;font-size:14px;font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:3px #1A1A1A;paint-order:stroke fill;text-shadow:0 0 1px #1A1A1A;white-space:nowrap;pointer-events:none;transform:none}
 .show{position:absolute;left:8px;top:-14px;background:#0F5EA8;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px}
 /* シール貼り（ほかの班）画面 */
 .gal{padding:12px 16px 80px}
@@ -481,7 +482,7 @@ function noteHTML(n, opt){
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, r = ((K.row * 4 + K.col) * 37 % 13) - 6;
-      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';--r:' + r + 'deg">' + sealImg(K.k, 30) + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
+      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = n.showcase ? '<div class="show">見てほしい</div>' : '';
   var mark = n.mark ? '<div class="mark" title="' + MARKS[n.mark] + '">' + ICON['m' + n.mark] + '</div>' : '';
