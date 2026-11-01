@@ -1,0 +1,245 @@
+/* といボード GAS版 サーバー
+   学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
+   画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
+
+var API_VER = 1;
+var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', modes:'modes'};
+var HEAD = {
+  '名簿':['メール', '組', '班', '番号'],
+  '先生':['メール', '組（空なら最初の組）'],
+  'スポット':['組', '班', 'スポット名'],
+  'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
+  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver'],
+  'modes':['組', 'json', 'ver']
+};
+var TEACHER_DOMAIN = '@edu.nishi.or.jp';
+var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
+var KINDS = ['note', 'arrow', 'frame'];
+var SCOPE_KEYS = ['off', 'class', 'grade'];
+
+function doGet(){
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('といボード')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/* 最初に 1回 実行：シートと 見出しを 作る */
+function setup(){
+  var ss = SpreadsheetApp.getActive();
+  Object.keys(HEAD).forEach(function(n){
+    var sh = ss.getSheetByName(n) || ss.insertSheet(n);
+    if(sh.getLastRow() === 0) sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]);
+  });
+  PropertiesService.getScriptProperties().setProperties({ver:'0', mver:'0'});
+}
+
+/* ===== 読み書きの 道具 ===== */
+function sheet_(n){ return SpreadsheetApp.getActive().getSheetByName(n); }
+function rows_(n){
+  var sh = sheet_(n), last = sh.getLastRow();
+  return last < 2 ? [] : sh.getRange(2, 1, last - 1, HEAD[n].length).getValues();
+}
+function low_(s){ return String(s || '').trim().toLowerCase(); }
+function props_(){ return PropertiesService.getScriptProperties(); }
+function cache_(){ return CacheService.getScriptCache(); }
+function getVer_(){
+  var c = cache_().get('ver');
+  if(c !== null && c !== undefined) return Number(c);
+  var v = Number(props_().getProperty('ver') || 0);
+  cache_().put('ver', String(v), 21600);
+  return v;
+}
+function getMver_(){
+  var c = cache_().get('mver');
+  if(c !== null && c !== undefined) return String(c);
+  var v = String(props_().getProperty('mver') || '0');
+  cache_().put('mver', v, 21600);
+  return v;
+}
+function setVer_(v){ props_().setProperty('ver', String(v)); cache_().put('ver', String(v), 21600); }
+function setMver_(v){ props_().setProperty('mver', String(v)); cache_().put('mver', String(v), 21600); }
+
+/* ===== だれか ===== */
+function who_(){
+  var email = low_(Session.getActiveUser().getEmail());
+  if(!email) throw new Error('NO_EMAIL：アカウントが 読めません。先生に 伝えてください');
+  var k = 'who:' + email, c = cache_().get(k);
+  if(c) return JSON.parse(c);
+  var u = null;
+  rows_(SH.teachers).forEach(function(r){ if(!u && low_(r[0]) === email) u = {id:email, role:'teacher', cls:String(r[1] || '').trim()}; });
+  if(!u) rows_(SH.roster).forEach(function(r){
+    if(!u && low_(r[0]) === email){ var cls = String(r[1]).trim(); u = {id:email, role:'child', cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; }
+  });
+  if(!u && email.slice(-TEACHER_DOMAIN.length) === TEACHER_DOMAIN) u = {id:email, role:'teacher', cls:''};
+  if(!u) throw new Error('NOT_IN_ROSTER：名簿に ありません（' + email + '）');
+  cache_().put(k, JSON.stringify(u), 600);
+  return u;
+}
+function spots_(){
+  return rows_(SH.spots).filter(function(r){ return r[0] !== '' && r[1] !== ''; }).map(function(r){
+    var cls = String(r[0]).trim(), no = Number(r[1]);
+    return {team:cls + '-' + no, cls:cls, no:no, name:String(r[2])};
+  });
+}
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off'}; }
+function modes_(){
+  var m = {};
+  spots_().forEach(function(s){ if(!m[s.cls]) m[s.cls] = blankModes_(); });
+  rows_(SH.modes).forEach(function(r){ if(r[0] !== ''){ try{ m[String(r[0]).trim()] = JSON.parse(r[1]); }catch(e){} } });
+  return m;
+}
+function clsOf_(team){ return String(team).split('-')[0]; }
+function reach_(u, modes, key, team){
+  var v = (modes[u.cls] || blankModes_())[key];
+  return v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
+}
+/* 児童に その行を 見せるか */
+function visible_(u, modes, team, face){
+  if(u.role === 'teacher' || team === u.team) return true;
+  if(face === 'front') return reach_(u, modes, 'view', team);
+  if(face === 'gift') return reach_(u, modes, 'propose', team);
+  return false;
+}
+/* シールを 貼った人は 本人以外には 記号にする */
+function anon_(viewer){
+  var d = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, 'toi:' + viewer);
+  return 'o' + d.slice(0, 5).map(function(b){ return ((b + 256) % 256).toString(16); }).join('');
+}
+
+/* ===== 画面から 呼ぶ ===== */
+function boot(){
+  var u = who_(), v = getVer_(), mv = getMver_();
+  var roster = u.role === 'teacher'
+    ? rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).map(function(r){ var cls = String(r[1]).trim(); return {id:low_(r[0]), cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; })
+    : [{id:u.id, cls:u.cls, team:u.team, no:u.no}];
+  var p = pull_(u, 0, v, mv);
+  p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster;
+  return p;
+}
+
+/* 10秒ごとの 確認。版が 同じなら 何も 読まずに 返す */
+function poll(since, mver){
+  var u = who_(), v = getVer_(), mv = getMver_();
+  if(since && v === Number(since) && mv === String(mver)) return {ver:v, mver:mv};
+  var full = !since || mv !== String(mver);
+  return pull_(u, full ? 0 : Number(since), v, mv);
+}
+
+function pull_(u, since, v, mv){
+  var modes = modes_(), items = [], stars = [];
+  rows_(SH.items).forEach(function(r){
+    var id = String(r[0]), ver = Number(r[4]);
+    if(!id || ver <= since) return;
+    var ok = !r[5] && visible_(u, modes, String(r[1]), String(r[2]));
+    if(!ok){ if(since) items.push({id:id, del:true}); return; }
+    var x; try{ x = JSON.parse(r[3]); }catch(e){ return; }
+    if(u.role !== 'teacher') delete x.author;
+    items.push(x);
+  });
+  rows_(SH.stars).forEach(function(r){
+    var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]);
+    if(!r[0] || ver <= since) return;
+    if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
+    stars.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]});
+  });
+  return {ver:v, mver:mv, full:!since, items:items, stars:stars, modes:modes};
+}
+
+/* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
+function apply(ops){
+  var u = who_(), lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try{
+    var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
+    var ish = sheet_(SH.items), irows = rows_(SH.items), index = {};
+    irows.forEach(function(r, i){ index[String(r[0])] = i; });
+    var appends = [], touched = false;
+
+    function writeRow(id, row){
+      if(index[id] !== undefined){ ish.getRange(index[id] + 2, 1, 1, row.length).setValues([row]); irows[index[id]] = row; }
+      else { appends.push(row); index[id] = -1; }
+      touched = true;
+    }
+
+    (ops.up || []).forEach(function(x){
+      var id = String(x && x.id || '');
+      if(!id || u.role !== 'child' || KINDS.indexOf(x.kind) < 0 || FACE_KEYS.indexOf(x.face) < 0){ rejected.push(id); return; }
+      var ex = index[id] !== undefined && index[id] >= 0 ? irows[index[id]] : null;
+      var old = null; if(ex){ try{ old = JSON.parse(ex[3]); }catch(e){} }
+      if(ex && !ex[5]){
+        // 自分の班の物だけ 直せる。ほかの班へ 移すことは できない
+        if(String(ex[1]) !== u.team || x.team !== u.team){ rejected.push(id); return; }
+        x.author = old && old.author || u.id;
+        if(old && old.fromTeam) x.fromTeam = old.fromTeam; else delete x.fromTeam;
+      } else if(ex && ex[5]){
+        rejected.push(id); return;
+      } else if(x.team === u.team){
+        if(x.face === 'gift'){ rejected.push(id); return; }
+        x.author = u.id; delete x.fromTeam;
+      } else {
+        // アイデア提案：ほかの班の いただきものへ 付箋を 1まい 置くだけ
+        if(x.kind !== 'note' || x.face !== 'gift' || !reach_(u, modes, 'propose', x.team)){ rejected.push(id); return; }
+        x.author = u.id; x.fromTeam = u.team;
+      }
+      if(typeof x.text === 'string') x.text = x.text.slice(0, 200);
+      writeRow(id, [id, x.team, x.face, JSON.stringify(x), v, false, u.id, now]);
+    });
+
+    (ops.del || []).forEach(function(id){
+      id = String(id);
+      var i = index[id];
+      if(i === undefined || i < 0 || u.role !== 'child' || String(irows[i][1]) !== u.team){ rejected.push(id); return; }
+      var r = irows[i].slice(); r[4] = v; r[5] = true; r[6] = u.id; r[7] = now;
+      writeRow(id, r);
+    });
+    if(appends.length) ish.getRange(ish.getLastRow() + 1, 1, appends.length, appends[0].length).setValues(appends);
+
+    if(ops.star && ops.star.length){
+      var ssh = sheet_(SH.stars), srows = rows_(SH.stars), sidx = {}, sapp = [];
+      srows.forEach(function(r, i){ sidx[String(r[0])] = i; });
+      // 書いたばかりの 行も 含めて 付箋の班を 引く
+      var teamOf = {};
+      rows_(SH.items).forEach(function(r){ if(!r[5]) teamOf[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
+      ops.star.forEach(function(s){
+        var nId = String(s.noteId), t = teamOf[nId];
+        var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
+        if(!ok){ rejected.push('*' + nId); return; }
+        var key = nId + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v];
+        if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
+        else { sapp.push(row); sidx[key] = -1; }
+        touched = true;
+      });
+      if(sapp.length) ssh.getRange(ssh.getLastRow() + 1, 1, sapp.length, sapp[0].length).setValues(sapp);
+    }
+
+    if(ops.modes){
+      var cls = String(ops.modes.cls || ''), m = ops.modes.m || {};
+      if(u.role !== 'teacher' || !modes[cls]) rejected.push('modes');
+      else {
+        var clean = {
+          view:SCOPE_KEYS.indexOf(m.view) >= 0 ? m.view : 'off',
+          propose:SCOPE_KEYS.indexOf(m.propose) >= 0 ? m.propose : 'off',
+          starIn:!!m.starIn,
+          starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off'
+        };
+        var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
+        mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });
+        var mrow = [cls, JSON.stringify(clean), v];
+        if(at >= 0) msh.getRange(at + 2, 1, 1, 3).setValues([mrow]); else msh.getRange(msh.getLastRow() + 1, 1, 1, 3).setValues([mrow]);
+        setMver_(String(v));
+        touched = true;
+      }
+    }
+
+    if(touched){ SpreadsheetApp.flush(); setVer_(v); }
+    return {ver:touched ? v : v - 1, rejected:rejected};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* 名簿を 直したら 実行（10分の 覚えを 消す） */
+function clearWhoCache(){
+  var keys = rows_(SH.roster).concat(rows_(SH.teachers)).map(function(r){ return 'who:' + low_(r[0]); });
+  if(keys.length) cache_().removeAll(keys);
+}

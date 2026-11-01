@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>といボード</title>
+<style>
+:root{
+  --ink:#1A1A1A; --sub:#55585E; --line:#D5D8DD; --paper:#F7F7F4; --white:#fff;
+  --cat-1:#0F5EA8; --cat-2:#C86A00; --cat-3:#6E4310;
+  --fill-a:#D7E8F8; --fill-b:#FBE3B4; --gift:#E6F2DD; --gold:#E0A43A;
+  --grid:24px;
+  --font:"BIZ UDPGothic","Yu Gothic UI","Yu Gothic","Meiryo","Noto Sans CJK JP","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--font);}
+button{font-family:inherit;font-size:16px;color:inherit;cursor:pointer}
+.btn{min-height:48px;padding:0 16px;border:2px solid var(--line);border-radius:12px;background:var(--white);font-weight:700}
+.btn.on{border-color:var(--cat-1);background:var(--fill-a)}
+.btn.primary{background:var(--cat-1);border-color:var(--cat-1);color:#fff}
+.btn:disabled{opacity:.4;cursor:default}
+.demo{display:flex;gap:8px;align-items:center;padding:6px 12px;background:#fff;border-bottom:1px solid var(--line);font-size:13px;color:var(--sub)}
+.demo select{font-size:14px;padding:4px}
+
+/* 上の帯 */
+.head{display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap}
+.head h1{font-size:22px;margin:0 8px 0 0}
+.faces{display:flex;gap:6px}
+.face{min-height:52px;min-width:96px;padding:0 12px;border:2px solid var(--line);border-bottom-width:5px;border-radius:12px;background:#fff;font-weight:700;font-size:17px}
+.face.on{border-color:var(--ink)}
+.face.drop{background:var(--fill-a);border-color:var(--cat-1)}
+.face .n{font-size:13px;color:var(--sub);margin-left:4px}
+.modes{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:13px;padding:4px 10px;border-radius:99px;background:#fff;border:1px solid var(--line);color:var(--sub)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tools{display:flex;gap:6px;padding:0 12px 8px;align-items:center;flex-wrap:wrap}
+.tools .hint{font-size:14px;color:var(--sub);margin-left:6px}
+.viewing{background:#FFF4D6;border:2px solid var(--cat-2);border-radius:12px;padding:6px 12px;margin:0 12px 8px;font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ボード */
+.wrap{position:relative;margin:0 12px 12px;height:calc(100vh - 190px);min-height:420px;overflow:auto;border:2px solid var(--line);border-radius:12px;background:#fff;touch-action:pan-x pan-y}
+.board{position:relative;width:2016px;height:6240px;
+  background-image:
+    linear-gradient(to right, rgba(15,94,168,.10) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15,94,168,.10) 1px, transparent 1px);
+  background-size:var(--grid) var(--grid);}
+.board.trash{background-color:#F1F1EE}
+svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+svg.arrows line{stroke:var(--ink);stroke-width:4;pointer-events:stroke;cursor:pointer}
+svg.arrows line.hit{stroke:transparent;stroke-width:28}
+
+.item{position:absolute;touch-action:none;user-select:none;-webkit-user-select:none}
+.note{width:168px;min-height:120px;padding:14px 12px 22px;background:var(--fill-b);box-shadow:0 2px 4px rgba(0,0,0,.15);font-size:18px;font-weight:700;line-height:1.45;word-break:break-all;border-radius:2px}
+.note::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:16px;margin-left:-35px;background:rgba(255,255,255,.65);box-shadow:0 0 1px rgba(0,0,0,.2)}
+.note.gift{background:var(--gift)}
+.note.dragging{box-shadow:0 10px 20px rgba(0,0,0,.25);z-index:50;transform:rotate(-2deg)}
+.note.target{outline:4px solid var(--cat-1);outline-offset:4px}
+.note.sel{outline:4px dashed var(--cat-2);outline-offset:4px}
+.layer{position:absolute;inset:0;background:var(--fill-b);border:1px solid rgba(0,0,0,.18);border-radius:2px;z-index:-1}
+.note.gift .layer{background:var(--gift)}
+.from{position:absolute;left:8px;bottom:4px;font-size:12px;color:var(--cat-3)}
+.mark{position:absolute;right:6px;bottom:4px;display:flex;gap:4px;align-items:center}
+.mark svg{width:22px;height:22px}
+.pick{position:absolute;left:-12px;top:-12px;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:16px;display:grid;place-items:center}
+.stars{position:absolute;right:-12px;top:-14px;display:flex;align-items:center;gap:2px;background:#fff;border-radius:99px;padding:2px 6px 2px 2px;box-shadow:0 1px 3px rgba(0,0,0,.25);font-size:14px;font-weight:700}
+.stars svg{width:28px;height:28px}
+.frame{border:3px dashed var(--cat-3);border-radius:10px;background:rgba(251,227,180,.12)}
+.frame .label{position:absolute;left:8px;top:-15px;background:#fff;padding:0 6px;font-weight:700;font-size:16px;color:var(--cat-3);min-width:40px;min-height:24px}
+.frame .grip{position:absolute;right:-14px;bottom:-14px;width:32px;height:32px;border-radius:50%;background:#fff;border:3px solid var(--cat-3)}
+.empty{position:absolute;left:40px;top:40px;color:var(--sub);font-size:18px}
+
+/* 下から出る操作 */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;width:min(720px,100%);border-radius:16px 16px 0 0;padding:16px;max-height:85vh;overflow:auto}
+.sheet h2{margin:0 0 10px;font-size:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.row .btn{min-height:56px}
+textarea{width:100%;font:inherit;font-size:20px;padding:10px;border:2px solid var(--ink);border-radius:10px;min-height:96px}
+.stacklist{display:flex;gap:10px;flex-wrap:wrap}
+.stacklist .note{position:relative}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-weight:700;z-index:200}
+
+/* 先生 */
+.teacher{padding:12px;max-width:1100px}
+.teacher h2{font-size:18px;margin:18px 0 8px}
+.mode{display:flex;align-items:center;gap:10px;margin:6px 0}
+.mode .btn{min-width:220px;text-align:left}
+table{border-collapse:collapse;font-size:14px;background:#fff}
+td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
+@keyframes pop{0%{transform:scale(.4)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
+.stars.pop svg{animation:pop .35s ease-out}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{min-height:44px;min-width:84px;border:0;border-right:1px solid var(--line);background:#fff;font-weight:700}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.net{position:fixed;right:12px;bottom:12px;background:#FFF4D6;border:2px solid var(--cat-2);border-radius:10px;padding:6px 12px;font-weight:700;z-index:150}
+.net:empty{display:none}
+.ttable{max-height:60vh;overflow:auto;border:1px solid var(--line)}
+.ttable td.text{min-width:260px}
+.filters{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.ctabs{display:flex;gap:6px;margin:6px 0}
+</style>
+<div id="app"></div>
+<div id="net" class="net"></div>
+<script>
+/* ===== 語彙 ===== */
+var VER = 3, API_WANT = 1, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var FACES = [
+  {k:'front', label:'表がわ'},
+  {k:'back',  label:'うらがわ'},
+  {k:'gift',  label:'いただきもの'},
+  {k:'trash', label:'ゴミばこ'}
+];
+var MARKS = ['', 'ひとことで 答えられる', 'せつめいが いる'];
+/* 班は「組-番号」で 学年の中で 一意（例 A-3）。本番は スプレッドシートの「スポット」から 読む */
+var SPOTS = (function(){
+  var N = {
+    A:['阪急西宮北口','甲山','西宮砲台','神戸女学院','有馬川','えびすかき','今津灯台'],
+    B:['甲子園球場','西宮神社','御前浜・香櫨園浜','名塩和紙','ヨットハーバー','廣田神社','夙川'],
+    C:['甲子園浜','甑岩','今津六角堂','貝類館','高木地区','金仙寺湖','武庫川']
+  }, out = [];
+  Object.keys(N).forEach(function(c){ N[c].forEach(function(n, i){ out.push({team:c + '-' + (i + 1), cls:c, no:i + 1, name:n}); }); });
+  return out;
+})();
+var SCOPES = [{k:'off', label:'切'}, {k:'class', label:'同じ組'}, {k:'grade', label:'学年'}];
+var MODES = [
+  {k:'view',    label:'共同閲覧',          desc:'ほかの班の 表がわを 見られる',                 scoped:true},
+  {k:'propose', label:'アイデア提案',      desc:'ほかの班の「いただきもの」に 付箋を 貼れる',   scoped:true},
+  {k:'starIn',  label:'シール（班の中）',  desc:'自分の班の 付箋に シールを 貼れる',           scoped:false},
+  {k:'starOut', label:'シール（班の外）',  desc:'ほかの班の 付箋に シールを 貼れる',           scoped:true}
+];
+function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off'}; }
+
+/* ===== 保存（見本：localStorage。GAS版は build で この区間を 差し替える） ===== */
+'PLATFORM_BEGIN';
+/* GAS版の 保存。build.cjs が ../index.html の PLATFORM 区間を これに 差し替える。
+   書く：変更の 差分を 250ms ためて apply へ。届くまで 自分の 変更は 上書きしない（pend）。
+   読む：約10秒（±3秒）ごとに poll。版が 同じなら サーバーは 何も 読まない。タブが 裏の 間は 止める。 */
+var Platform = (function(){
+  var POLL = window.TOI_POLL_MS || 10000, JIT = window.TOI_POLL_JIT == null ? 3000 : window.TOI_POLL_JIT;
+  var ver = 0, mver = '', pend = {}, q = blank(), timer = null, busy = false, pollT = null, errs = 0, polling = false;
+  function blank(){ return {up:{}, del:{}, star:{}, modes:null}; }
+  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !x.modes; }
+  function net(t){ var el = document.getElementById('net'); if(el) el.textContent = t; }
+  function fail(e){ errs++; net('つながりにくい ようです（' + errs + '）。そのまま つづけて だいじょうぶ'); }
+  function run(name, args, ok, ng){
+    var r = google.script.run
+      .withSuccessHandler(function(x){ errs = 0; net(''); ok(x); })
+      .withFailureHandler(function(e){ fail(e); if(ng) ng(e); });
+    r[name].apply(r, args);
+  }
+  function schedule(ms){ clearTimeout(timer); timer = setTimeout(send, ms == null ? 250 : ms); }
+  function send(){
+    if(busy || empty(q)) return;
+    busy = true;
+    var sent = q; q = blank();
+    var ops = {
+      up:Object.keys(sent.up).map(function(k){ return sent.up[k]; }),
+      del:Object.keys(sent.del),
+      star:Object.keys(sent.star).map(function(k){ return {noteId:k, on:sent.star[k]}; }),
+      modes:sent.modes
+    };
+    run('apply', [ops], function(r){
+      busy = false;
+      Object.keys(sent.up).concat(Object.keys(sent.del)).forEach(function(id){ if(!q.up[id] && !q.del[id]) delete pend[id]; });
+      Object.keys(sent.star).forEach(function(id){ if(!(id in q.star)) delete pend['*' + id]; });
+      if(r && r.rejected && r.rejected.length) pull(true);
+      if(!empty(q)) schedule(0);
+    }, function(){
+      busy = false;
+      // 送れなかった 分を 戻す（あとから した 変更を 優先）
+      Object.keys(sent.up).forEach(function(k){ if(!q.up[k] && !q.del[k]) q.up[k] = sent.up[k]; });
+      Object.keys(sent.del).forEach(function(k){ if(!q.up[k]) q.del[k] = 1; });
+      Object.keys(sent.star).forEach(function(k){ if(!(k in q.star)) q.star[k] = sent.star[k]; });
+      if(!q.modes) q.modes = sent.modes;
+      schedule(Math.min(30000, 2000 * errs));
+    });
+  }
+  function pull(full){
+    if(polling) return;
+    polling = true;
+    run('poll', [full ? 0 : ver, full ? '' : mver], function(r){
+      polling = false;
+      var changed = r.items !== undefined;
+      ver = r.ver; mver = r.mver;
+      if(changed) mergeRemote(r, pend);
+    }, function(){ polling = false; });
+  }
+  function loop(){
+    clearTimeout(pollT);
+    pollT = setTimeout(function(){ if(!document.hidden) pull(false); loop(); }, Math.max(1000, POLL + (Math.random() * 2 - 1) * JIT));
+  }
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(false); });
+  return {
+    demo:false,
+    start:function(cb){
+      run('boot', [], function(r){
+        if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
+        ver = r.ver; mver = r.mver;
+        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(function(s){ return {noteId:s.noteId, viewer:s.viewer}; }), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+        loop();
+      }, function(e){
+        document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + String(e && e.message || e).replace(/[<>&]/g, '') + '</p>';
+      });
+    },
+    push:function(ops){
+      if(!ops) return;
+      ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
+      ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
+      ops.star.forEach(function(s){ q.star[s.noteId] = s.on; pend['*' + s.noteId] = 1; });
+      if(ops.modes) q.modes = ops.modes;
+      schedule();
+    },
+    setMe:function(){},
+    _pull:pull
+  };
+})();
+'PLATFORM_END';
+
+var S = null, me = null;
+var ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'};
+
+function child(id){ return S.roster.filter(function(c){ return c.id === id; })[0]; }
+function isTeacher(){ return !child(me); }
+function myTeam(){ var c = child(me); return c ? c.team : ''; }
+function myCls(){ var c = child(me); return c ? c.cls : ui.tCls; }
+function clsOf(team){ return String(team).split('-')[0]; }
+function boardTeam(){ return isTeacher() ? ui.tTeam : (ui.viewTeam || myTeam()); }
+function isMine(){ return !isTeacher() && boardTeam() === myTeam(); }
+function spot(t){ return SPOTS.filter(function(s){ return s.team === t; })[0] || {team:t, cls:clsOf(t), no:String(t).split('-')[1], name:t}; }
+/* 同じ組なら「3はん」、ほかの組なら「B組3はん」 */
+function teamLabel(t){ var s = spot(t); return (isTeacher() || s.cls !== myCls() ? s.cls + '組' : '') + s.no + 'はん'; }
+function item(id){ return S.items.filter(function(x){ return x.id === id; })[0]; }
+function stackOf(id){ return S.items.filter(function(x){ return x.stackOf === id; }); }
+function starsOf(id){ return S.stars.filter(function(s){ return s.noteId === id; }); }
+function nid(){ return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function M(){ return (S.modes && S.modes[myCls()]) || blankModes(); }
+function modeOn(v){ return !!v && v !== 'off'; }
+/* その班まで 届くか（範囲つきモード） */
+function reach(k, team){ var v = M()[k]; return v === 'grade' || (v === 'class' && clsOf(team) === myCls()); }
+
+/* 変更は 差分にして Platform へ渡す（GAS版は 差分だけ 送る） */
+function snap(){
+  var m = {}, st = {};
+  S.items.forEach(function(x){ m[x.id] = JSON.stringify(x); });
+  S.stars.forEach(function(s){ st[s.noteId + '|' + s.viewer] = 1; });
+  return {m:m, st:st, modes:JSON.stringify(S.modes)};
+}
+function commit(fn){
+  var b = snap(); fn(); check();
+  var ops = {up:[], del:[], star:[], modes:null}, now = {}, st = {};
+  S.items.forEach(function(x){ now[x.id] = 1; var j = JSON.stringify(x); if(b.m[x.id] !== j) ops.up.push(JSON.parse(j)); });
+  Object.keys(b.m).forEach(function(id){ if(!now[id]) ops.del.push(id); });
+  S.stars.forEach(function(s){ var k = s.noteId + '|' + s.viewer; st[k] = 1; if(!b.st[k] && s.viewer === me) ops.star.push({noteId:s.noteId, on:true}); });
+  Object.keys(b.st).forEach(function(k){ var i = k.indexOf('|'); if(!st[k] && k.slice(i + 1) === me) ops.star.push({noteId:k.slice(0, i), on:false}); });
+  if(JSON.stringify(S.modes) !== b.modes) ops.modes = {cls:ui.tCls, m:S.modes[ui.tCls]};
+  Platform.push(ops);
+  render();
+}
+function check(){
+  S.items.forEach(function(x){
+    if(x.stackOf){ var p = item(x.stackOf); console.assert(p && !p.stackOf && p.face === x.face, '重ねは1段・同じ面', x.id); }
+    if(x.kind === 'arrow') console.assert(item(x.from) && item(x.to), '矢印の両端がある', x.id);
+  });
+  var seen = {};
+  S.stars.forEach(function(s){ var k = s.noteId + '/' + s.viewer; console.assert(!seen[k], 'シールは1人1枚の付箋に1枚', k); seen[k] = 1; });
+}
+function toast(t){ ui.toast = t; render(); clearTimeout(ui.tt); ui.tt = setTimeout(function(){ ui.toast = ''; render(); }, 1600); }
+
+/* サーバーから 届いた 変更を 取り込む（pend：まだ 送り終えていない 自分の 変更は 上書きしない） */
+function mergeRemote(r, pend){
+  pend = pend || {};
+  if(r.modes) S.modes = r.modes;
+  if(r.full){
+    var keep = S.items.filter(function(x){ return pend[x.id]; }), ids = {};
+    keep.forEach(function(x){ ids[x.id] = 1; });
+    S.items = r.items.filter(function(x){ return !x.del && !ids[x.id]; }).concat(keep);
+    var mineP = S.stars.filter(function(s){ return s.viewer === me && pend['*' + s.noteId]; });
+    S.stars = r.stars.filter(function(s){ return s.on && !(s.viewer === me && pend['*' + s.noteId]); }).map(function(s){ return {noteId:s.noteId, viewer:s.viewer}; }).concat(mineP);
+  } else {
+    r.items.forEach(function(x){
+      if(pend[x.id]) return;
+      S.items = S.items.filter(function(o){ return o.id !== x.id; });
+      if(!x.del) S.items.push(x);
+    });
+    r.stars.forEach(function(s){
+      if(s.viewer === me && pend['*' + s.noteId]) return;
+      S.stars = S.stars.filter(function(o){ return !(o.noteId === s.noteId && o.viewer === s.viewer); });
+      if(s.on) S.stars.push({noteId:s.noteId, viewer:s.viewer});
+    });
+  }
+  afterRemote();
+}
+function afterRemote(){
+  if(ui.viewTeam && !reach('view', ui.viewTeam) && !reach('propose', ui.viewTeam)) ui.viewTeam = null;
+  if(ui.sheet && ui.sheet.id && !item(ui.sheet.id) && ui.sheet.type !== 'write') ui.sheet = null;
+  render();
+}
+
+/* 何ができるか（不変条件はここに集める） */
+function canEdit(){ return isMine(); }
+function canPropose(){ return !isTeacher() && boardTeam() !== myTeam() && reach('propose', boardTeam()); }
+function canStar(n){
+  if(isTeacher() || n.kind !== 'note' || n.face === 'trash' || n.stackOf) return false;
+  return n.team === myTeam() ? !!M().starIn : reach('starOut', n.team);
+}
+/* シールの数は 自分の班（と 先生）だけに 見せる。ほかの班では 自分が 貼ったかだけ */
+function showCount(n){ return isTeacher() || n.team === myTeam(); }
+function visibleFaces(){
+  if(isTeacher() || isMine()) return FACES;
+  return FACES.filter(function(f){ return (f.k === 'front' && reach('view', boardTeam())) || (f.k === 'gift' && canPropose()); });
+}
+function lookable(){ return SPOTS.filter(function(s){ return s.team !== myTeam() && (reach('view', s.team) || reach('propose', s.team)); }); }
+
+/* ===== 絵 ===== */
+/* シール：光は左上から。左上にツヤ、右下（3時〜6時）は黒の輪郭を太くして影。
+   黒の輪郭 → すぐ内側に白（反射光）→ 中は固有の色。角は丸める。
+   ツヤは左上の輪郭に平行な白い線（円は弧＋点）。
+   描き順：黒の太線 → 色の塗り → 白の細線（白は縁の内側半分にかかり、黒は外側に残る） */
+var SHAPES = {
+  star:(function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 6.8 : 13, a = -Math.PI/2 + i*Math.PI/5; p.push((16 + r*Math.cos(a)).toFixed(2) + ' ' + (17 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
+  circle:'M16 4a12 12 0 1 1 0 24a12 12 0 1 1 0-24Z',
+  bolt:'M20 3L6 18h8.5l-3.5 11l15-17h-8.5l2.5-9Z'
+};
+var GLINT = {
+  star:'<path d="M6.9 14.3L10.8 13.6" />',
+  circle:'<path d="M9 12.5q1.6-4 6-5.2" /><circle cx="8.4" cy="15.6" r="1.15" stroke="none"/>',
+  bolt:'<path d="M16.6 9.6L12.4 14.1" />'
+};
+/* 固有色は 明るい／パステルな 2色の グラデーション。黒っぽい色は使わない。種類ごとに 色の系統を分ける（左上が明るく 右下が濃い：光の向きと そろえる） */
+var STICKER_COLORS = {
+  '#E0A43A':['#FFF27A', '#FFAE4D'],  // 星（しりたい！）：レモン → アプリコット
+  '#FF8FB5':['#FFC2D6', '#FF7AAE'],  // 円（予備）：さくら → ピンク
+  '#7CC4FF':['#B2F0FF', '#7FA8FF']   // 稲妻（予備）：水色 → そら色
+};
+function sticker(shape, color, size){
+  var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
+  return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
+    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
+    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
+    + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
+    + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
+    // 白と固有色の境目をぼかす：形の内側だけに、ぼかした白をにじませる（外側の黒との境はくっきり保つ）
+    + '<defs><clipPath id="c' + gid + '"><path d="' + d + '"/></clipPath><filter id="f' + gid + '" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.3"/></filter></defs>'
+    + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
+    + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
+    + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
+    + '</svg>';
+}
+var ICON = {
+  star:sticker('star', '#E0A43A'),
+  m1:'<svg viewBox="0 0 24 24"><rect x="3" y="9" width="10" height="6" rx="3" fill="#0F5EA8"/><circle cx="18" cy="12" r="2.6" fill="#0F5EA8"/></svg>',
+  m2:'<svg viewBox="0 0 24 24"><path d="M3 4h18v12H9l-5 4v-4H3z" fill="none" stroke="#6E4310" stroke-width="2"/><path d="M7 8h10M7 12h7" stroke="#6E4310" stroke-width="2"/></svg>'
+};
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function noteHTML(n, opt){
+  opt = opt || {};
+  var layers = '', kids = stackOf(n.id).length;
+  for(var i = Math.min(kids, 6); i >= 1; i--) layers += '<div class="layer" style="transform:translate(' + (i*5) + 'px,' + (i*5) + 'px)"></div>';
+  var st = starsOf(n.id), mine = st.some(function(s){ return s.viewer === me; }), stars = '';
+  if(showCount(n)){ if(st.length) stars = '<div class="stars' + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + ICON.star + (st.length >= 2 ? '×' + st.length : '') + '</div>'; }
+  else if(mine) stars = '<div class="stars' + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + ICON.star + '</div>';
+  var mark = n.mark ? '<div class="mark" title="' + MARKS[n.mark] + '">' + ICON['m' + n.mark] + '</div>' : '';
+  var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
+  var pick = n.pick ? '<div class="pick">' + n.pick + '</div>' : '';
+  var pos = opt.inline ? '' : 'left:' + (n.x*GRID) + 'px;top:' + (n.y*GRID) + 'px;';
+  return '<div class="item note' + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
+    + layers + esc(n.text) + pick + mark + from + stars + '</div>';
+}
+function frameHTML(f){
+  return '<div class="item frame" data-id="' + f.id + '" style="left:' + (f.x*GRID) + 'px;top:' + (f.y*GRID) + 'px;width:' + (f.w*GRID) + 'px;height:' + (f.h*GRID) + 'px">'
+    + '<div class="label">' + esc(f.text || '') + '</div>' + (canEdit() ? '<div class="grip" data-grip="' + f.id + '"></div>' : '') + '</div>';
+}
+function center(x){
+  if(x.kind === 'frame') return {x:(x.x + x.w/2)*GRID, y:(x.y + x.h/2)*GRID};
+  return {x:(x.x + NOTE_W/2)*GRID, y:(x.y + NOTE_H/2)*GRID};
+}
+/* 中心から 向き(dx,dy) に進んで 四角の ふちに 当たるまでの 距離 */
+function edge(x, dx, dy){
+  var hw = (x.kind === 'frame' ? x.w : NOTE_W) * GRID / 2, hh = (x.kind === 'frame' ? x.h : NOTE_H) * GRID / 2;
+  var L = Math.sqrt(dx*dx + dy*dy) || 1, ux = Math.abs(dx/L), uy = Math.abs(dy/L);
+  return Math.min(ux ? hw/ux : 1e9, uy ? hh/uy : 1e9);
+}
+function arrowsSVG(list){
+  var s = '<svg class="arrows"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1A1A1A"/></marker></defs>';
+  list.forEach(function(a){
+    var A = item(a.from), B = item(a.to);
+    if(!A || !B) return; // 同期の途中で 片方が まだ 届いていない
+    var p = center(A), q = center(B);
+    var dx = q.x - p.x, dy = q.y - p.y, L = Math.sqrt(dx*dx + dy*dy) || 1;
+    var c1 = edge(A, dx, dy) + 10, c2 = edge(B, dx, dy) + 14;
+    var x1 = p.x + dx/L*c1, y1 = p.y + dy/L*c1, x2 = q.x - dx/L*c2, y2 = q.y - dy/L*c2;
+    s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" marker-end="url(#ah)"/>'
+       + '<line class="hit" data-arrow="' + a.id + '" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'"/>';
+  });
+  return s + '</svg>';
+}
+
+/* ===== 画面 ===== */
+function render(){
+  if(drag || !S) return; // 動かしている間は描き直さない（終わってから反映）
+  var app = document.getElementById('app');
+  var active = document.activeElement, keep = active && active.id ? {id:active.id, v:active.value, s:active.selectionStart} : null;
+  var h = '';
+  if(Platform.demo){
+    var opts = '<option value="teacher">先生</option>' + S.roster.map(function(c){ return '<option value="' + c.id + '">' + c.cls + '組 ' + c.no + 'ばん（' + c.team.split('-')[1] + 'はん）</option>'; }).join('');
+    h += '<div class="demo">見本の切り替え <select id="who">' + opts + '</select> 本番では Google アカウントで自動で決まります</div>';
+  }
+  h += isTeacher() ? viewTeacher() : viewChild();
+  if(ui.sheet) h += viewSheet();
+  if(ui.toast) h += '<div class="toast">' + esc(ui.toast) + '</div>';
+  var sc = document.querySelector('.wrap'), pos = sc ? [sc.scrollLeft, sc.scrollTop] : null;
+  var tt = document.querySelector('.ttable'), tpos = tt ? tt.scrollTop : null;
+  app.innerHTML = h;
+  if(Platform.demo) document.getElementById('who').value = me;
+  sc = document.querySelector('.wrap'); if(sc && pos){ sc.scrollLeft = pos[0]; sc.scrollTop = pos[1]; }
+  tt = document.querySelector('.ttable'); if(tt && tpos != null) tt.scrollTop = tpos;
+  if(keep){ var el = document.getElementById(keep.id); if(el){ el.value = keep.v; el.focus(); try{ el.setSelectionRange(keep.s, keep.s); }catch(e){} } }
+  ui.pop = null;
+}
+
+function boardHTML(team, face){
+  var all = S.items.filter(function(x){ return x.team === team && x.face === face; });
+  var frames = all.filter(function(x){ return x.kind === 'frame'; });
+  var notes = all.filter(function(x){ return x.kind === 'note' && !x.stackOf; });
+  var arrows = all.filter(function(x){ return x.kind === 'arrow'; });
+  var h = '<div class="wrap"><div class="board' + (face === 'trash' ? ' trash' : '') + '" id="board">';
+  h += frames.map(frameHTML).join('') + arrowsSVG(arrows) + notes.map(function(n){ return noteHTML(n); }).join('');
+  if(!all.length) h += '<div class="empty">' + (face === 'gift' ? 'ほかの班からの 付箋は まだ ありません' : face === 'trash' ? 'すてた 付箋は ここに のこります' : 'まだ 何も ありません') + '</div>';
+  return h + '</div></div>';
+}
+
+function viewChild(){
+  var team = boardTeam(), sp = spot(team), mine = isMine(), m = M();
+  var faces = visibleFaces();
+  if(!faces.some(function(f){ return f.k === ui.face; })) ui.face = faces[0] ? faces[0].k : 'front';
+  var h = '<div class="head"><h1>' + esc(sp.name) + '</h1><div class="faces">';
+  faces.forEach(function(f){
+    var n = S.items.filter(function(x){ return x.team === team && x.face === f.k && x.kind === 'note'; }).length;
+    h += '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '<span class="n">' + n + '</span></button>';
+  });
+  h += '</div><div class="modes">' + MODES.map(function(x){ var v = m[x.k]; return '<span class="chip' + (modeOn(v) ? ' on' : '') + '">' + x.label + (v === 'grade' ? '（学年）' : '') + '</span>'; }).join('') + '</div></div>';
+  if(!mine){
+    h += '<div class="viewing">' + teamLabel(team) + '「' + esc(sp.name) + '」を 見ています'
+      + (canPropose() && ui.face === 'gift' ? '<button class="btn primary" data-act="add">＋ アイデアを おくる</button>' : '')
+      + '<button class="btn" data-act="home">じぶんの 班に もどる</button></div>';
+  }
+  h += '<div class="tools">';
+  if(mine && ui.face !== 'trash'){
+    h += '<button class="btn primary" data-act="add">＋ 付箋</button>'
+      + '<button class="btn' + (ui.tool === 'arrow' ? ' on' : '') + '" data-act="tool" data-t="arrow">→ 矢印</button>'
+      + '<button class="btn" data-act="frame">□ 枠</button>';
+    h += '<span class="hint">' + (ui.tool === 'arrow' ? (ui.arrowFrom ? 'つなぐ 先を タップ' : 'はじめの 付箋を タップ') : '付箋は ドラッグで うごかせます。上に 重ねると まとまります。') + '</span>';
+  }
+  var L = lookable();
+  if(L.length){
+    var own = L.filter(function(s){ return s.cls === myCls(); }), other = L.length - own.length;
+    h += '<span class="hint" style="margin-left:auto">ほかの班：</span>';
+    own.forEach(function(s){ h += '<button class="btn' + (team === s.team ? ' on' : '') + '" data-act="look" data-t="' + s.team + '">' + s.no + '</button>'; });
+    if(other) h += '<button class="btn' + (clsOf(team) !== myCls() ? ' on' : '') + '" data-act="teams">ほかの組</button>';
+  }
+  h += '</div>';
+  return h + boardHTML(team, ui.face);
+}
+
+function viewSheet(){
+  var s = ui.sheet, h = '<div class="sheet-bg" data-act="close"><div class="sheet">';
+  if(s.type === 'write'){
+    h += '<h2>' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
+      + '<textarea id="w-text" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
+      + '<div class="row"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
+  } else if(s.type === 'teams'){
+    var L = lookable().filter(function(x){ return x.cls !== myCls(); }), cs = {};
+    L.forEach(function(x){ (cs[x.cls] = cs[x.cls] || []).push(x); });
+    h += '<h2>ほかの組の 班を 見る</h2>';
+    Object.keys(cs).forEach(function(c){
+      h += '<div style="font-weight:700;margin-top:8px">' + c + '組</div><div class="row">' + cs[c].map(function(x){ return '<button class="btn" data-act="look" data-t="' + x.team + '">' + x.no + ' ' + esc(x.name) + '</button>'; }).join('') + '</div>';
+    });
+    h += '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
+  } else if(s.type === 'note'){
+    var n = item(s.id), kids = stackOf(n.id), ed = canEdit() && n.face !== 'trash';
+    h += '<h2>' + esc(n.text) + '</h2>';
+    if(canStar(n)){
+      var on = starsOf(n.id).some(function(x){ return x.viewer === me; });
+      h += '<div class="row"><button class="btn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '">' + ICON.star.replace('<svg', '<svg width="28" height="28" style="vertical-align:middle"') + (on ? ' シールを はがす' : ' しりたい！シールを はる') + '</button></div>';
+    }
+    if(ed){
+      h += '<div class="row"><button class="btn" data-act="edit" data-id="' + n.id + '">文字を 直す</button></div>';
+      h += '<div class="row">' + [1,2].map(function(m){ return '<button class="btn' + (n.mark === m ? ' on' : '') + '" data-act="mark" data-m="' + m + '" data-id="' + n.id + '">' + ICON['m'+m].replace('<svg', '<svg width="24" height="24" style="vertical-align:middle"') + ' ' + MARKS[m] + '</button>'; }).join('') + '</div>';
+      h += '<div class="row">えらぶ：' + [1,2,3].map(function(r){ return '<button class="btn' + (n.pick === r ? ' on' : '') + '" data-act="pick" data-r="' + r + '" data-id="' + n.id + '">' + r + 'ばん</button>'; }).join('') + '</div>';
+    }
+    if(canEdit()){
+      h += '<div class="row">' + FACES.filter(function(f){ return f.k !== n.face && f.k !== 'gift'; }).map(function(f){ return '<button class="btn" data-act="toface" data-f="' + f.k + '" data-id="' + n.id + '">' + f.label + 'へ</button>'; }).join('') + '</div>';
+    }
+    if(kids.length){
+      h += '<h2 style="margin-top:14px">重なっている 付箋（' + (kids.length + 1) + 'まい）</h2><div class="stacklist">' + noteHTML(n, {inline:true}).replace(/<div class="layer"[^>]*><\/div>/g, '');
+      kids.forEach(function(k){ h += '<div>' + noteHTML(k, {inline:true}) + (canEdit() ? '<div class="row"><button class="btn" data-act="unstack" data-id="' + k.id + '">とりだす</button></div>' : '') + '</div>'; });
+      h += '</div>';
+    }
+    h += '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
+  } else if(s.type === 'frame'){
+    var f = item(s.id);
+    h += '<h2>枠</h2><input id="f-text" class="btn" style="width:100%;font-size:18px" placeholder="枠の 名前（なくてもよい）" value="' + esc(f.text || '') + '">'
+      + '<div class="row"><button class="btn primary" data-act="f-save" data-id="' + f.id + '">きめる</button><button class="btn" data-act="del" data-id="' + f.id + '">枠を けす</button></div>';
+  } else if(s.type === 'arrow'){
+    h += '<h2>矢印</h2><div class="row"><button class="btn" data-act="del" data-id="' + s.id + '">矢印を けす</button><button class="btn" data-act="close">やめる</button></div>';
+  }
+  return h + '</div></div>';
+}
+
+/* ===== 先生 ===== */
+function classes(){ var o = []; SPOTS.forEach(function(s){ if(o.indexOf(s.cls) < 0) o.push(s.cls); }); return o; }
+function faceLabel(k){ return FACES.filter(function(f){ return f.k === k; })[0].label; }
+/* 意見の一覧（1行＝付箋1まい）。書いた児童は 入れない（外部AIに 個人を 渡さない） */
+function opinionRows(){
+  var rows = S.items.filter(function(n){
+    return n.kind === 'note' && (ui.fCls === 'all' || clsOf(n.team) === ui.fCls)
+      && (ui.fFace === 'all' ? n.face !== 'trash' : n.face === ui.fFace);
+  });
+  var order = {}; SPOTS.forEach(function(s, i){ order[s.team] = i; });
+  rows.sort(function(a, b){ return (order[a.team] - order[b.team]) || ((a.pick || 9) - (b.pick || 9)) || (a.y - b.y) || (a.x - b.x); });
+  return rows.map(function(n){
+    var s = spot(n.team), p = n.stackOf ? item(n.stackOf) : null;
+    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, MARKS[n.mark || 0], n.pick ? n.pick + 'ばん' : '', starsOf(n.id).length || '', p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : ''];
+  });
+}
+var OP_HEAD = ['組','班','スポット','面','付箋','印','えらんだ順','しりたい！','重ねた先','おくり元'];
+function opinionTSV(){
+  return [OP_HEAD].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
+}
+function viewTeacher(){
+  var cs = classes(), tm = S.modes[ui.tCls] || blankModes();
+  var h = '<div class="teacher"><h2>モード（児童の画面に 10秒ほどで 届きます）</h2>';
+  h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '">' + c + '組</button>'; }).join('') + '</div>';
+  MODES.forEach(function(x){
+    h += '<div class="mode"><span style="min-width:150px;font-weight:700">' + x.label + '</span>';
+    if(x.scoped) h += '<span class="seg">' + SCOPES.map(function(sc){ return '<button class="' + (tm[x.k] === sc.k ? 'on' : '') + '" data-act="mode" data-k="' + x.k + '" data-v="' + sc.k + '">' + sc.label + '</button>'; }).join('') + '</span>';
+    else h += '<span class="seg">' + [['off','切'],['on','入']].map(function(p){ return '<button class="' + ((!!tm[x.k]) === (p[0] === 'on') ? 'on' : '') + '" data-act="mode" data-k="' + x.k + '" data-v="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</span>';
+    h += '<span>' + x.desc + '</span></div>';
+  });
+  h += '<p style="color:var(--sub);font-size:14px">「同じ組」は ' + ui.tCls + '組の中だけ、「学年」は ほかの組の 班にも 届きます。' + ui.tCls + '組の 児童が できることだけを 決めます。</p>';
+  var ts = SPOTS.filter(function(s){ return s.cls === ui.tCls; });
+  if(!ts.some(function(s){ return s.team === ui.tTeam; }) && ts[0]) ui.tTeam = ts[0].team;
+  h += '<h2>班のボード</h2><div class="row">' + ts.map(function(s){ return '<button class="btn' + (ui.tTeam === s.team ? ' on' : '') + '" data-act="tteam" data-t="' + s.team + '">' + s.no + 'はん ' + esc(s.name) + '</button>'; }).join('') + '</div>';
+  h += '<div class="faces" style="margin:6px 0">' + FACES.map(function(f){ return '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '</button>'; }).join('') + '</div>';
+  h += '</div>' + boardHTML(ui.tTeam, ui.face) + '<div class="teacher">';
+
+  var rows = opinionRows();
+  h += '<h2>意見の 一覧（' + rows.length + 'まい）</h2><div class="filters">組：<span class="seg">' + ['all'].concat(cs).map(function(c){ return '<button class="' + (ui.fCls === c ? 'on' : '') + '" data-act="fcls" data-c="' + c + '">' + (c === 'all' ? '全部' : c + '組') + '</button>'; }).join('') + '</span>'
+    + '面：<span class="seg">' + [{k:'front',label:'表がわ'},{k:'back',label:'うらがわ'},{k:'gift',label:'いただきもの'},{k:'all',label:'ゴミばこ以外'}].map(function(f){ return '<button class="' + (ui.fFace === f.k ? 'on' : '') + '" data-act="fface" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span>'
+    + '<button class="btn primary" data-act="copy">表を コピー（Gemini・スプレッドシートに 貼れる）</button></div>';
+  h += '<div class="ttable"><table><tr>' + OP_HEAD.map(function(x){ return '<th>' + x + '</th>'; }).join('') + '</tr>'
+    + rows.map(function(r){ return '<tr>' + r.map(function(v, i){ return '<td' + (i === 4 ? ' class="text"' : '') + '>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
+  h += '<p style="color:var(--sub);font-size:14px">コピーには 書いた児童の 名前・番号は 入りません。</p>';
+
+  var gifts = S.items.filter(function(x){ return x.fromTeam && (ui.fCls === 'all' || clsOf(x.team) === ui.fCls); });
+  h += '<h2>いただきもの（だれが おくったか：先生だけ 見える）</h2>';
+  h += gifts.length ? '<table><tr><th>おくり先</th><th>付箋</th><th>おくった人</th></tr>' + gifts.map(function(g){ var c = child(g.author); return '<tr><td>' + teamLabel(g.team) + '</td><td>' + esc(g.text) + '</td><td>' + teamLabel(g.fromTeam) + ' ' + (c ? c.no + 'ばん' : '') + '</td></tr>'; }).join('') + '</table>' : '<p>まだ ありません</p>';
+  h += '<h2>書き出し</h2><button class="btn" data-act="csv">CSV を ダウンロード（書いた人の 番号つき）</button>';
+  if(Platform.demo) h += '<h2>見本のデータ</h2><div class="row"><button class="btn" data-act="seed">見本の 付箋を 入れる</button><button class="btn" data-act="wipe">' + (ui.armed ? 'もう一度 押すと 全部 消えます' : '全部 消す') + '</button></div>';
+  return h + '</div>';
+}
+function copyText(t){
+  function fallback(){ var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove(); }
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).catch(fallback); return; } }catch(e){}
+  fallback();
+}
+
+/* ===== ドラッグ ===== */
+var drag = null;
+function boardPoint(e){ var b = document.getElementById('board').getBoundingClientRect(); return {x:e.clientX - b.left, y:e.clientY - b.top}; }
+function noteAt(pt, exceptId){
+  var found = null;
+  document.querySelectorAll('#board .note').forEach(function(el){
+    if(el.getAttribute('data-id') === exceptId) return;
+    var r = el.getBoundingClientRect(), b = document.getElementById('board').getBoundingClientRect();
+    var x = pt.x + b.left, y = pt.y + b.top;
+    if(x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) found = el.getAttribute('data-id');
+  });
+  return found;
+}
+function faceAt(e){
+  var f = null;
+  document.querySelectorAll('.face[data-face]').forEach(function(el){
+    var r = el.getBoundingClientRect();
+    if(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) f = el.getAttribute('data-face');
+  });
+  return f;
+}
+document.addEventListener('pointerdown', function(e){
+  if(ui.sheet || !S) return;
+  var grip = e.target.closest('[data-grip]');
+  var el = grip ? grip.parentNode : e.target.closest('#board .item');
+  if(!el) return;
+  var x = item(el.getAttribute('data-id')); if(!x) return;
+  drag = {id:x.id, el:el, sx:e.clientX, sy:e.clientY, ox:x.x, oy:x.y, ow:x.w, oh:x.h, moved:false, grip:!!grip};
+  try{ el.setPointerCapture(e.pointerId); }catch(err){}
+});
+document.addEventListener('pointermove', function(e){
+  if(!drag) return;
+  var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+  if(!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
+  if(!canEdit() || ui.tool === 'arrow') return;
+  drag.moved = true;
+  if(drag.grip){
+    drag.el.style.width = Math.max(4*GRID, drag.ow*GRID + dx) + 'px';
+    drag.el.style.height = Math.max(3*GRID, drag.oh*GRID + dy) + 'px';
+    return;
+  }
+  drag.el.classList.add('dragging');
+  drag.el.style.left = (drag.ox*GRID + dx) + 'px'; drag.el.style.top = (drag.oy*GRID + dy) + 'px';
+  var x = item(drag.id);
+  if(x && x.kind === 'note'){
+    var t = noteAt(boardPoint(e), drag.id);
+    document.querySelectorAll('.note.target').forEach(function(n){ n.classList.remove('target'); });
+    if(t){ var tel = document.querySelector('#board .note[data-id="' + t + '"]'); if(tel) tel.classList.add('target'); }
+    document.querySelectorAll('.face').forEach(function(f){ f.classList.toggle('drop', f.getAttribute('data-face') === faceAt(e) && f.getAttribute('data-face') !== ui.face); });
+  }
+});
+document.addEventListener('pointerup', function(e){
+  if(!drag) return;
+  var d = drag; drag = null;
+  var x = item(d.id);
+  if(!x){ render(); return; } // 動かしている間に 同期で 消えた
+  if(!d.moved){ tapItem(x); return; }
+  var dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+  if(d.grip){ commit(function(){ x.w = Math.max(4, Math.round(d.ow + dx/GRID)); x.h = Math.max(3, Math.round(d.oh + dy/GRID)); }); return; }
+  var f = x.kind === 'note' ? faceAt(e) : null;
+  var t = x.kind === 'note' ? noteAt(boardPoint(e), d.id) : null;
+  if(f && f !== ui.face && f !== 'gift'){ moveFace(x, f); return; }
+  if(t && item(t)){ stackOnto(x, item(t)); return; }
+  commit(function(){ x.x = Math.max(0, Math.round(d.ox + dx/GRID)); x.y = Math.max(0, Math.round(d.oy + dy/GRID)); });
+});
+
+function stackOnto(x, target){
+  commit(function(){
+    stackOf(x.id).forEach(function(k){ k.stackOf = target.id; });
+    x.stackOf = target.id; x.pick = 0;
+    dropArrows(x.id);
+  });
+  toast((stackOf(target.id).length + 1) + 'まい 重なりました');
+}
+function moveFace(x, f){
+  commit(function(){
+    x.face = f; x.pick = 0; x.stackOf = null;
+    stackOf(x.id).forEach(function(k){ k.face = f; });
+    dropArrows(x.id);
+  });
+  toast(faceLabel(f) + 'へ うつしました');
+}
+function dropArrows(id){ S.items = S.items.filter(function(a){ return !(a.kind === 'arrow' && (a.from === id || a.to === id)); }); }
+function tapItem(x){
+  if(ui.tool === 'arrow' && canEdit()){
+    if(!ui.arrowFrom){ ui.arrowFrom = x.id; render(); return; }
+    if(ui.arrowFrom === x.id){ ui.arrowFrom = null; render(); return; }
+    var from = ui.arrowFrom; ui.arrowFrom = null; ui.tool = 'move';
+    commit(function(){ S.items.push({id:nid(), kind:'arrow', team:x.team, face:x.face, from:from, to:x.id}); });
+    return;
+  }
+  if(x.kind === 'frame'){ if(canEdit()){ ui.sheet = {type:'frame', id:x.id}; render(); } return; }
+  ui.sheet = {type:'note', id:x.id}; render();
+}
+function freeSpot(team, face){
+  var used = S.items.filter(function(x){ return x.team === team && x.face === face && x.kind === 'note' && !x.stackOf; });
+  for(var r = 0; r < 100; r++) for(var c = 0; c < 9; c++){
+    var gx = 1 + c*(NOTE_W + 1), gy = 1 + r*(NOTE_H + 1);
+    if(!used.some(function(u){ return Math.abs(u.x - gx) < NOTE_W && Math.abs(u.y - gy) < NOTE_H; })) return {x:gx, y:gy};
+  }
+  return {x:1, y:1};
+}
+
+/* ===== 操作 ===== */
+document.addEventListener('click', function(e){
+  if(!S) return;
+  var b = e.target.closest('[data-act],[data-face],[data-arrow]'); if(!b) return;
+  if(b.hasAttribute('data-arrow')){ if(canEdit()){ ui.sheet = {type:'arrow', id:b.getAttribute('data-arrow')}; render(); } return; }
+  if(b.hasAttribute('data-face')){ ui.face = b.getAttribute('data-face'); ui.arrowFrom = null; render(); return; }
+  var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+  if(act === 'close'){ if(e.target !== b) return; ui.sheet = null; render(); return; }
+  if(act === 'add'){ ui.sheet = {type:'write', gift:!isMine()}; render(); setTimeout(function(){ var t = document.getElementById('w-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 'edit'){ ui.sheet = {type:'write', id:id, text:item(id).text}; render(); return; }
+  if(act === 'w-save'){
+    var text = document.getElementById('w-text').value.trim(); if(!text) return;
+    var s = ui.sheet; ui.sheet = null;
+    if(s.id){ if(item(s.id)) commit(function(){ item(s.id).text = text; }); else render(); return; }
+    if(s.gift){
+      if(!canPropose()){ render(); return; }
+      var to = boardTeam(), p = freeSpot(to, 'gift');
+      commit(function(){ S.items.push({id:nid(), kind:'note', team:to, face:'gift', x:p.x, y:p.y, text:text, author:me, fromTeam:myTeam()}); });
+      toast(teamLabel(to) + 'へ おくりました'); return;
+    }
+    var q = freeSpot(myTeam(), ui.face);
+    commit(function(){ S.items.push({id:nid(), kind:'note', team:myTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me}); });
+    return;
+  }
+  if(act === 'tool'){ ui.tool = ui.tool === 'arrow' ? 'move' : 'arrow'; ui.arrowFrom = null; render(); return; }
+  if(act === 'frame'){
+    var sc = document.querySelector('.wrap');
+    commit(function(){ S.items.push({id:nid(), kind:'frame', team:myTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
+    return;
+  }
+  if(act === 'f-save'){ var v = document.getElementById('f-text').value; ui.sheet = null; commit(function(){ item(id).text = v; }); return; }
+  if(act === 'del'){ ui.sheet = null; commit(function(){ dropArrows(id); S.items = S.items.filter(function(x){ return x.id !== id; }); }); return; }
+  if(act === 'star'){
+    var n = item(id); if(!n || !canStar(n)) return;
+    var had = starsOf(id).some(function(s){ return s.viewer === me; });
+    ui.sheet = null; if(!had) ui.pop = id;
+    commit(function(){
+      if(had) S.stars = S.stars.filter(function(s){ return !(s.noteId === id && s.viewer === me); });
+      else S.stars.push({noteId:id, viewer:me});
+    });
+    return;
+  }
+  if(act === 'mark'){ var m = +b.getAttribute('data-m'); commit(function(){ var x = item(id); x.mark = x.mark === m ? 0 : m; }); return; }
+  if(act === 'pick'){
+    var r = +b.getAttribute('data-r');
+    commit(function(){
+      var x = item(id), was = x.pick === r;
+      S.items.forEach(function(o){ if(o.team === x.team && o.pick === r) o.pick = 0; });
+      x.pick = was ? 0 : r;
+    });
+    return;
+  }
+  if(act === 'toface'){ ui.sheet = null; moveFace(item(id), b.getAttribute('data-f')); return; }
+  if(act === 'unstack'){
+    var k = item(id), parent = item(k.stackOf);
+    commit(function(){ k.stackOf = null; var p = freeSpot(k.team, k.face); k.x = p.x; k.y = p.y; });
+    if(!parent || !stackOf(parent.id).length) ui.sheet = null;
+    render(); return;
+  }
+  if(act === 'teams'){ ui.sheet = {type:'teams'}; render(); return; }
+  if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; render(); return; }
+  if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; render(); return; }
+  if(act === 'tcls'){ ui.tCls = b.getAttribute('data-c'); render(); return; }
+  if(act === 'mode'){
+    var key = b.getAttribute('data-k'), val = b.getAttribute('data-v');
+    commit(function(){
+      var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes();
+      mm[key] = key === 'starIn' ? val === 'on' : val;
+    });
+    return;
+  }
+  if(act === 'tteam'){ ui.tTeam = b.getAttribute('data-t'); render(); return; }
+  if(act === 'fcls'){ ui.fCls = b.getAttribute('data-c'); render(); return; }
+  if(act === 'fface'){ ui.fFace = b.getAttribute('data-f'); render(); return; }
+  if(act === 'copy'){ copyText(opinionTSV()); toast(opinionRows().length + 'まい ぶんを コピーしました'); return; }
+  if(act === 'seed'){ seed(); return; }
+  if(act === 'wipe'){ if(!ui.armed){ ui.armed = true; render(); setTimeout(function(){ ui.armed = false; render(); }, 3000); return; } ui.armed = false; S = fresh(); Platform.push(null); render(); return; }
+  if(act === 'csv'){ csv(); return; }
+});
+document.addEventListener('change', function(e){
+  if(e.target.id === 'who'){ me = e.target.value; Platform.setMe(me); ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'}; render(); }
+});
+document.addEventListener('keydown', function(e){
+  if(e.target.id === 'w-text' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
+    e.preventDefault(); var s = document.querySelector('[data-act=w-save]'); if(s) s.click();
+  }
+});
+
+/* ===== 見本・書き出し ===== */
+function seed(){
+  var Q = [
+    ['どうして うめたの？','いつ なくなったの？','ホームベースは 本物なの？','だれが きめたの？','どうして 野球場が なくなったの？'],
+    ['どうして 石が ちがうの？','甲山は 火山なの？','だれが 名前を つけたの？','どうして おわんの 形なの？'],
+    ['どうして 使わなかったの？','だれが 作ったの？','どうして 海の そばに あるの？','中に 入れるの？'],
+    ['どうして 重要文化財に なったの？','だれが たてたの？','今も 使っているの？'],
+    ['どうして 街灯を けしたの？','ホタルは 何びき いるの？','ポスターは だれが かいたの？','どうして 小学生の 声が とどいたの？'],
+    ['どうして 日本じゅうに 広まったの？','今も 人形は あるの？','だれが はじめたの？'],
+    ['どうして お酒屋さんが 建てたの？','今も 光るの？','いつ 建てたの？','国は どうして 建てなかったの？']
+  ];
+  commit(function(){
+    SPOTS.forEach(function(s){
+      if(S.items.some(function(x){ return x.team === s.team; })) return;
+      var members = S.roster.filter(function(c){ return c.team === s.team; });
+      if(!members.length) return;
+      Q[(s.no - 1) % Q.length].forEach(function(t, i){
+        S.items.push({id:nid(), kind:'note', team:s.team, face:'front', x:1 + (i%4)*(NOTE_W+1), y:2 + Math.floor(i/4)*(NOTE_H+2), text:t, author:members[i % members.length].id, mark:i%3 === 1 ? 1 : 0});
+      });
+      S.items.push({id:nid(), kind:'note', team:s.team, face:'back', x:1, y:1, text:'どこに あるの？', author:members[0].id});
+    });
+  });
+  toast('見本の 付箋を 入れました');
+}
+function csv(){
+  var rows = [['組','班','面','付箋','書いた人','おくり元','印','えらんだ順','重ねた先','シールの数']];
+  S.items.filter(function(x){ return x.kind === 'note'; }).forEach(function(n){
+    var c = child(n.author), p = n.stackOf ? item(n.stackOf) : null, s = spot(n.team);
+    rows.push([s.cls, s.no, faceLabel(n.face), n.text, c ? c.no : '', n.fromTeam ? teamLabel(n.fromTeam) : '', MARKS[n.mark || 0], n.pick || '', p ? p.text : '', starsOf(n.id).length]);
+  });
+  var body = '﻿' + rows.map(function(r){ return r.map(function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], {type:'text/csv'})); a.download = 'toiboard.csv'; a.click();
+}
+
+Platform.start(function(s, who, spots, info){ S = s; me = who; if(spots) SPOTS = spots; if(info && info.cls) ui.tCls = info.cls; var c = child(me); if(!c && classes().indexOf(ui.tCls) < 0) ui.tCls = classes()[0]; render(); });
+</script>
+</body>
+</html>

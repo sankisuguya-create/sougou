@@ -16,12 +16,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(FILE); await page.evaluate(() => localStorage.clear()); await page.reload();
   const who = v => page.selectOption('#who', v);
-  const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v2')));
+  const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v3')));
   const write = async t => { await page.click('[data-act=add]'); await page.fill('#w-text', t); await page.press('#w-text', 'Enter'); };
   const box = async id => page.locator(`#board .note[data-id="${id}"]`).boundingBox();
   const dragTo = async (id, x, y) => { const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
 
-  await who('c01');
+  await who('A01');
   for (const q of ['どうして うめたの？', 'いつ なくなったの？', 'ホームベースは 本物なの？', 'だれが きめたの？']) await write(q);
   let s = await st();
   ok(s.items.filter(x => x.kind === 'note' && x.face === 'front').length === 4, '付箋を4まい 表がわに貼れる');
@@ -88,20 +88,20 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.screenshot({ path: SHOTS + '/3-arrow-frame.png' });
 
   // 権限：モードが切ってある間
-  await who('c05');
+  await who('A05');
   ok(!(await page.isVisible('[data-act=look]')), '共同閲覧が 切ってあれば ほかの班は 見られない');
 
   // 先生：見本・モード
   await who('teacher');
   await page.click('[data-act=seed]');
-  await page.click('[data-act=mode][data-k=view]');
-  await page.click('[data-act=mode][data-k=propose]');
-  await page.click('[data-act=mode][data-k=starOut]');
+  await page.click('[data-act=mode][data-k=view][data-v=class]');
+  await page.click('[data-act=mode][data-k=propose][data-v=class]');
+  await page.click('[data-act=mode][data-k=starOut][data-v=class]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
   // 別の班の児童
-  await who('c05');
-  await page.click('[data-act=look][data-t="1"]');
+  await who('A05');
+  await page.click('[data-act=look][data-t="A-1"]');
   ok(await page.isVisible('text=1はん「阪急西宮北口」を 見ています'), '共同閲覧で ほかの班を 見られる');
   ok(!(await page.isVisible('.face[data-face=back]')) && !(await page.isVisible('.face[data-face=trash]')), 'ほかの班の うらがわ・ゴミばこは 見えない');
   ok(!(await page.isVisible('[data-act=frame]')), 'ほかの班の ボードは 動かせない');
@@ -111,34 +111,54 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click(`#board .note[data-id="${e}"]`);
   await page.click(`[data-act=star][data-id="${e}"]`);
   s = await st();
-  ok(s.stars.filter(x => x.viewer === 'c05').length === 2, 'シール（班の外）を 何まいでも 貼れる');
-  for (const v of ['c06', 'c07', 'c08', 'c09', 'c10', 'c11']) { await page.evaluate(v => { const s = JSON.parse(localStorage.getItem('toiboard.v2')); s.stars.push({ noteId: s.items.find(x => x.text === 'ホームベースは 本物なの？').id, viewer: v }); localStorage.setItem('toiboard.v2', JSON.stringify(s)); }, v); }
-  await page.reload(); await page.click('[data-act=look][data-t="1"]');
-  ok((await page.textContent(`[data-stars="${c}"]`)).includes('×7'), '同じシールは「×7」と まとまる');
+  ok(s.stars.filter(x => x.viewer === 'A05').length === 2, 'シール（班の外）を 何まいでも 貼れる');
+  for (const v of ['A06', 'A07', 'A08', 'A09', 'A10', 'A11']) { await page.evaluate(v => { const s = JSON.parse(localStorage.getItem('toiboard.v3')); s.stars.push({ noteId: s.items.find(x => x.text === 'ホームベースは 本物なの？').id, viewer: v }); localStorage.setItem('toiboard.v3', JSON.stringify(s)); }, v); }
+  await page.reload(); await page.click('[data-act=look][data-t="A-1"]');
+  ok(!(await page.textContent(`[data-stars="${c}"]`)).includes('×'), 'ほかの班では シールの数は 見えない（自分が貼ったかだけ）');
+  await who('A01');
+  ok((await page.textContent(`[data-stars="${c}"]`)).includes('×7'), '自分の班では 同じシールが「×7」と まとまる');
+  await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   // 提案
   await page.click('.face[data-face=gift]');
   await page.click('[data-act=add]'); await page.fill('#w-text', 'ホームベースは だれが ふむの？'); await page.click('[data-act=w-save]');
   s = await st();
-  const g = s.items.find(x => x.fromTeam === 2);
-  ok(g && g.team === 1 && g.face === 'gift', 'アイデア提案で ほかの班の いただきものに 貼れる');
+  const g = s.items.find(x => x.fromTeam === 'A-2');
+  ok(g && g.team === 'A-1' && g.face === 'gift', 'アイデア提案で ほかの班の いただきものに 貼れる');
   // 自分の班へ シール（班の中）は 切ってあるので 出ない
   await page.click('[data-act=home]');
-  const own = (await st()).items.find(x => x.team === 2 && x.face === 'front');
+  const own = (await st()).items.find(x => x.team === 'A-2' && x.face === 'front');
   await page.click(`#board .note[data-id="${own.id}"]`);
   ok(!(await page.isVisible(`[data-act=star][data-id="${own.id}"]`)), 'シール（班の中）が 切ってあれば 自分の班には 貼れない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
   // 班1 の いただきもの：班名だけ
-  await who('c01'); await page.click('.face[data-face=gift]');
+  await who('A01'); await page.click('.face[data-face=gift]');
   ok(await page.isVisible('text=2はんから') && !(await page.isVisible('text=5ばん')), 'いただきものは 班名だけ 出る');
   await page.screenshot({ path: SHOTS + '/5-gift.png' });
 
   // 別タブへ モードが 届く
-  const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'c09');
-  await who('teacher'); await page.click('[data-act=mode][data-k=view]');
+  const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'A09');
+  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=off]'); await page.click('[data-act=mode][data-k=propose][data-v=off]');
   await p2.waitForTimeout(300);
   ok(!(await p2.isVisible('[data-act=look]')), '先生の モード切り替えが 別タブに すぐ届く');
 
+  // 組をまたぐ：A組で学年にすると B組の班が 見え、B組は 自分の組の設定（切）のまま
+  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=grade]');
+  await who('A05');
+  ok(await page.isVisible('[data-act=teams]'), '学年にすると「ほかの組」が 出る');
+  await page.click('[data-act=teams]'); await page.click('[data-act=look][data-t="B-3"]');
+  ok(await page.isVisible('text=B組3はん「御前浜・香櫨園浜」を 見ています'), 'ほかの組の班を 見られる');
+  await who('B01');
+  ok(!(await page.isVisible('[data-act=look]')), 'モードは 組ごと（B組は 切のまま）');
+  // 先生の 意見の一覧
+  await who('teacher');
+  ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
+  const tsv = await page.evaluate(() => opinionTSV());
+  const lines = tsv.split('\n');
+  ok(lines[0].split('\t').length === 10 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  await page.click('[data-act=fcls][data-c=B]');
+  ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
+  await page.screenshot({ path: SHOTS + '/6-teacher-table.png', fullPage: true });
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
