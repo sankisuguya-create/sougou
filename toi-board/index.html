@@ -184,8 +184,8 @@ var GLINT = {
 function sticker(shape, color, size){
   var d = SHAPES[shape];
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
-    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="4.6" stroke-linejoin="round" transform="translate(1.3 1.3)"/>'
-    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="4.6" stroke-linejoin="round"/>'
+    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3.25" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
+    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3.25" stroke-linejoin="round"/>'
     + '<path d="' + d + '" fill="' + color + '"/>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>'
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
