@@ -522,9 +522,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const lkb = await page.locator(`#board .note[data-id="${ln}"] .likes .lk`).first().boundingBox();
   const textTop = await page.$eval(`#board .note[data-id="${ln}"]`, el => { const r = document.createRange(); const tn = [...el.childNodes].find(n => n.nodeType === 3); r.selectNodeContents(tn); return r.getBoundingClientRect().top; });
   ok(lkb && Math.round(lkb.width) === 15 && lkb.y + lkb.height <= textTop + 1 && (await page.locator(`#board .note[data-id="${ln}"] .likes .lk`).count()) === 2, 'いいねは 半分の 大きさ（15px）で 付箋の 文の 上に 出る（2人分）');
-  const lks = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => [e.style.getPropertyValue('--c'), e.textContent, e.title]));
-  ok(lks[0][0] !== lks[1][0] && lks[0][1] !== lks[1][1] && lks[0][2] === '1ばん' && lks[1][2] === '2ばん', 'いいねは メンバーごとの 色と 形（1ばん●青・2ばん▲橙）');
-  ok(await page.isVisible('.mates:has-text("●1ばん")') && await page.isVisible('.mates:has-text("▲2ばん（じぶん）")'), '班の ボードに いいねの 色の 見本が 出る');
+  const lks = await page.$$eval(`#board .note[data-id="${ln}"] .likes .lk`, els => els.map(e => [e.dataset.m, e.title, !!e.querySelector('img')]));
+  ok(lks[0][0] === 'thumb1' && lks[1][0] === 'thumb2' && lks[0][1] === '1ばん' && lks[1][1] === '2ばん' && lks.every(x => x[2]), 'いいねは 元の シールの 絵のまま、メンバーごとに グラデーションの ちがう シール（1ばん・2ばん）');
+  ok(await page.isVisible('.mates:has-text("1ばん")') && await page.isVisible('.mates:has-text("2ばん（じぶん）")') && await page.locator('.mates img').count() >= 2, '班の ボードに メンバーごとの いいねの 見本が 出る');
   ok(!(await page.isVisible(`#board .note[data-id="${ln}"] .stars [data-kind=thumb]`)), 'いいねは 下の シールの 列には 出ない');
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   ok(!(await page.isVisible(`#board .note[data-id="${ln}"] .likes`)), 'ほかの班には いいねは 見えない');
