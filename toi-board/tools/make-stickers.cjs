@@ -89,8 +89,6 @@ function sticker(shape, color, size){
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + (DETAIL[shape] || '')
-    // 後ろの形（ギザギザ）に重なった所だけ、手前の形（刃先）の縁を 細い黒線で区切る
-    + (F ? '<defs><clipPath id="o' + gid + '"><path d="' + F.d + '"/></clipPath></defs><path d="' + d + '" fill="none" stroke="#1A1A1A" stroke-width="1" stroke-linejoin="round" clip-path="url(#o' + gid + ')"/>' : '')
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
 }
