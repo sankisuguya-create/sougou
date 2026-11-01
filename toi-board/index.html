@@ -181,10 +181,11 @@ var GLINT = {
   circle:'<path d="M9 12.5q1.6-4 6-5.2" /><circle cx="8.3" cy="15.8" r="1"/>',
   bolt:'<path d="M16.6 9.6L12.4 14.1" />'
 };
-/* 固有色は 黄と赤のように 色相のちがう2色の グラデーション（左上が明るく 右下が濃い：光の向きと そろえる） */
+/* 固有色は 明るい／パステルな 2色の グラデーション。黒っぽい色は使わない。種類ごとに 色の系統を分ける（左上が明るく 右下が濃い：光の向きと そろえる） */
 var STICKER_COLORS = {
-  '#E0A43A':['#FFE45C', '#F0612A'],
-  '#C8322E':['#FF9E3D', '#D21F3C']
+  '#E0A43A':['#FFF27A', '#FFAE4D'],  // 星（しりたい！）：レモン → アプリコット
+  '#FF8FB5':['#FFC2D6', '#FF7AAE'],  // 円（予備）：さくら → ピンク
+  '#7CC4FF':['#B2F0FF', '#7FA8FF']   // 稲妻（予備）：水色 → そら色
 };
 function sticker(shape, color, size){
   var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
