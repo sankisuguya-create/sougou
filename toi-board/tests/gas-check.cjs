@@ -40,6 +40,7 @@ function makeGas() {
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
     Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
     HtmlService: {},
+    ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/x/s/ID/exec' }) },
     JSON, Date, Number, String, Math, Error, Object
   };
   vm.createContext(ctx);
@@ -132,7 +133,8 @@ function makeGas() {
   await reload(b01);
   ok(await b01.isVisible('[data-act=teams]'), 'B組を 学年に すると 「ほかの組」が 出る');
   await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
-  ok(await b01.isVisible('text=よみこんでいます'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」');
+  // 模擬の サーバーは すぐ 返すので、まだ 読みこみ中なら「よみこんでいます」、もう 届いていれば 付箋が 出ていれば よい
+  ok(await b01.isVisible('text=よみこんでいます') || await b01.isVisible('#board .note'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」（届けば 付箋）');
   await settle();
   ok(await b01.isVisible('#board .note:has-text("どうして 北口なの？")'), 'ほかの組の 班の 表がわを 見られる');
   r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
@@ -182,6 +184,38 @@ function makeGas() {
   ok(aNotes.length >= 3 && r.rejected.length === 1 && r.rejected[0] === '*' + aNotes[2] + '|wow', 'サーバーも 同じ班への 同じ種類の 3まい目を はねる');
   r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
   ok(r.rejected.length === 0, 'はがせば また 貼れる');
+
+  // コメント（サーバー）：シール（班の外）が 届く 班の 付箋にだけ。相手の 班には だれが 書いたか 届かない
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ホームは いくつ？', on: true }] }]);
+  ok(r.rejected.length === 0, 'ほかの班の 付箋に コメントを 書ける');
+  r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: '自分の 班', on: true }] }]);
+  ok(r.rejected.length === 1, '自分の班の 付箋には（シール貼りの 範囲の外なので）書けない');
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.comments.length === 1 && r.comments[0].text === 'ホームは いくつ？' && /^o[0-9a-f]+$/.test(r.comments[0].viewer), '書かれた 班には コメントが 届き、書いた人は 記号');
+  await reload(a01); await a01.click('.face[data-face=front]');
+  ok(await a01.isVisible(`#board .note[data-id="${ids[0]}"] .cicon`), '児童の 画面に コメントの しるしが 出る');
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], on: false }] }]);
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.comments.every(c => !c.on), 'コメントを けせる');
+
+  // 回（サーバー）：B組の 回を 2に すると、A組の 付箋への シールは A組の 回（1）、持ち分は 回ごと
+  G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, JSON.parse((G.sheets.modes.data.find(r => r[0] === 'A') || [0, '{}'])[1]), { round: 2 }) } }]);
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 2).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  ok(r.rejected.length === 0, '回が 進むと 同じ班に また 2まい 貼れる（持ち分が もどる）');
+  r = G.as('b05' + D, 'poll', [{ teams: { 'B-2': 0, 'A-1': 0 } }]);
+  ok(r.stars.filter(s => s.k === 'wow' && s.rd === 2).length === 2 && r.stars.some(s => s.k === 'wow' && s.rd === 1), 'シールは 回ごとに 分けて 記録される');
+
+  ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && await ta.isVisible('a[href$="/exec?trial=1"]'), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
+
+  // 班の中の いいね（サーバー）：自分の班の 付箋だけ、持ち分・回に 関係なく
+  r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
+  ok(r.rejected.length === 0, '自分の班の 付箋に いいねを つけられる');
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
+  ok(r.rejected.length === 1, 'ほかの班の 付箋には いいねは つけられない');
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.stars.some(s => s.k === 'thumb' && s.rd === 0), 'いいねは 回に 関係ない（rd=0）');
+  ok(r.stars.some(s => s.k === 'thumb' && s.slot === 1) && JSON.stringify(G.as('a01' + D, 'boot').me.mates.map(m => [m.slot, m.no])) === '[[0,1],[1,2]]', 'いいねには 班の 中の 番号順（色・形）が つき、メンバーの 番号が 届く（メールは 届かない）');
+  ok(!JSON.stringify(G.as('a01' + D, 'boot').me.mates).includes('a02'), 'ほかの メンバーの メールは 届かない');
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');

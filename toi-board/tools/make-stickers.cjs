@@ -68,14 +68,24 @@ function frontLayer(F, gid){
     + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
 }
-function sticker(shape, color, size){
-  var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
+/* 班の中の いいね：メンバーごとに 色を 変える（緑・赤・青・黄・紫。絵と 光の 向きは 同じ） */
+var VARIANT = {
+  thumb1:{c:['#DDF8A8', '#6CCB8E'], v:[0, 0, 1, 1]},  // 緑（元の いいね）
+  thumb2:{c:['#FFC9C2', '#FF6F6F'], v:[0, 0, 1, 1]},  // 赤
+  thumb3:{c:['#B9E6FF', '#6A9CFF'], v:[0, 0, 1, 1]},  // 青
+  thumb4:{c:['#FFF58A', '#FFC93C'], v:[0, 0, 1, 1]},  // 黄
+  thumb5:{c:['#F0DEFF', '#AA80FF'], v:[0, 0, 1, 1]}   // 紫
+};
+function sticker(shape, color, size, variant){
+  var V = VARIANT[variant] || null;
+  var d = SHAPES[shape], c = V ? V.c : (STICKER_COLORS[color] || [color, color]), gid = 'g' + (variant || shape) + color.replace('#', '');
+  var gv = V ? V.v : [0, 0, 1, 1];
   var F = FRONT[shape], whole = F ? d + F.d : d;
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
     + (F ? frontLayer(F, gid) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
-    + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
+    + '<defs><linearGradient id="' + gid + '" x1="' + gv[0] + '" y1="' + gv[1] + '" x2="' + gv[2] + '" y2="' + gv[3] + '"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + (PARTS[shape] || []).map(function(pt, j){
         var pid = gid + 'p' + j;
@@ -95,17 +105,19 @@ function sticker(shape, color, size){
     + '</svg>';
 }
 `;
-const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF'], ['thumb', '#8EDB8A'], ['pick', '#7FB8FF'], ['wow', '#C9A8FF'], ['bulb', '#FFB38A']];
+const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF'], ['thumb', '#8EDB8A'], ['pick', '#7FB8FF'], ['wow', '#C9A8FF'], ['bulb', '#FFB38A'],
+  ['thumb', '#8EDB8A', 'thumb1'], ['thumb', '#8EDB8A', 'thumb2'], ['thumb', '#8EDB8A', 'thumb3'], ['thumb', '#8EDB8A', 'thumb4'], ['thumb', '#8EDB8A', 'thumb5']];
 const SIZE = 128; // 表示は最大 64px 程度。2倍密度の画面でも足りる大きさ
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: SIZE, height: SIZE } });
   const out = {};
-  for (const [k, c] of KINDS) {
+  for (const [k, c, va] of KINDS) {
     await p.setContent('<style>html,body{margin:0;background:transparent}</style><body></body>');
-    await p.evaluate(([src, k, c, s]) => { eval(src + ';window.__s=sticker'); document.body.innerHTML = window.__s(k, c, s); }, [SRC.replace(/^var /gm, 'var '), k, c, SIZE]);
+    await p.evaluate(([src, k, c, s, va]) => { eval(src + ';window.__s=sticker'); document.body.innerHTML = window.__s(k, c, s, va); }, [SRC.replace(/^var /gm, 'var '), k, c, SIZE, va || null]);
     const buf = await p.locator('svg').screenshot({ omitBackground: true });
-    fs.writeFileSync(path.join(__dirname, '..', 'stickers', k + '.png'), buf);
-    out[k] = 'data:image/png;base64,' + buf.toString('base64');
+    const name = va || k;
+    fs.writeFileSync(path.join(__dirname, '..', 'stickers', name + '.png'), buf);
+    out[name] = 'data:image/png;base64,' + buf.toString('base64');
   }
   fs.writeFileSync(path.join(__dirname, '..', 'stickers', 'stickers.js'), 'var SEAL_IMG = ' + JSON.stringify(out) + ';\n');
   await b.close(); console.log('ok', Object.keys(out).join(','));

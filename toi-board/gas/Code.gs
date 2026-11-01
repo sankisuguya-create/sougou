@@ -2,14 +2,15 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 3;
-var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', modes:'modes'};
+var API_VER = 5;
+var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
   '先生':['メール', '組（空なら最初の組）'],
   'スポット':['組', '班', 'スポット名'],
   'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
-  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos'],
+  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos', 'rd'],
+  'comments':['key', 'noteId', 'noteTeam', 'viewer', 'text', 'on', 'ver'],
   'modes':['組', 'json', 'ver']
 };
 var TEACHER_DOMAIN = '@edu.nishi.or.jp';
@@ -19,8 +20,10 @@ var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 var STAR_PER_TEAM = 2;  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
-function doGet(){
-  return HtmlService.createHtmlOutputFromFile('Index')
+/* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
+function doGet(e){
+  var trial = e && e.parameter && e.parameter.trial;
+  return HtmlService.createHtmlOutputFromFile(trial ? 'Trial' : 'Index')
     .setTitle('といボード')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -80,7 +83,18 @@ function spots_(){
     return {team:cls + '-' + no, cls:cls, no:no, name:String(r[2])};
   });
 }
-function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off'}; }
+/* 班の 中の 番号順（いいねの 色・形）。メール → {team, slot, no} */
+function slots_(){
+  var c = cache_().get('slots'); if(c) return JSON.parse(c);
+  var by = {};
+  rows_(SH.roster).forEach(function(r){ if(r[0] === '') return; var t = String(r[1]).trim() + '-' + Number(r[2]); (by[t] = by[t] || []).push({id:low_(r[0]), no:Number(r[3])}); });
+  var m = {};
+  Object.keys(by).forEach(function(t){ by[t].sort(function(a, b){ return a.no - b.no; }).forEach(function(x, i){ m[x.id] = {team:t, slot:i, no:x.no}; }); });
+  cache_().put('slots', JSON.stringify(m), 21600);
+  return m;
+}
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
+function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
   var c = cache_().get('modes');
   if(c) return JSON.parse(c);
@@ -124,7 +138,10 @@ function boot(){
     spots_().forEach(function(s){ if(s.team !== u.team && reach_(u, modes, 'starOut', s.team)) spec[s.team] = 0; });
     p = pull_(u, spec); p.tv = tv;
   }
-  p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
+  if(u.role === 'child'){
+    var sl = slots_(); u.mates = Object.keys(sl).filter(function(k){ return sl[k].team === u.team; }).map(function(k){ return {slot:sl[k].slot, no:sl[k].no, id:k === u.id ? u.id : 'm' + sl[k].slot}; }).sort(function(a, b){ return a.slot - b.slot; });
+  }
+  p.api = API_VER; p.trialUrl = ScriptApp.getService().getUrl() + '?trial=1'; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
 function mapOf_(t, v){ var m = {}; m[t] = v; return m; }
@@ -167,11 +184,19 @@ function pull_(u, spec){
     var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
-    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), rd:r[8] === '' || r[8] == null ? 1 : Number(r[8]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    if(o.k === 'thumb' && (u.role === 'teacher' || team === u.team)){ var sv = slots_()[viewer]; if(sv) o.slot = sv.slot; }
     if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
     stars.push(o);
   });
-  return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars};
+  var comments = [];
+  rows_(SH.comments).forEach(function(r){
+    var ver = Number(r[6]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
+    if(!r[0] || since === null || ver <= since) return;
+    if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
+    comments.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), text:String(r[4] || ''), on:!!r[5]});
+  });
+  return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars, comments:comments};
 }
 
 /* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
@@ -228,28 +253,48 @@ function apply(ops){
       var have = {};  // 班|種類 → 自分が 貼っている 枚数
       srows.forEach(function(r, i){
         sidx[String(r[0])] = i;
-        if(low_(r[3]) === u.id && r[4]) have[r[2] + '|' + (r[6] || 'star')] = (have[r[2] + '|' + (r[6] || 'star')] || 0) + 1;
+        var hk0 = r[2] + '|' + (r[6] || 'star') + '|' + (r[8] === '' || r[8] == null ? 1 : Number(r[8]));
+        if(low_(r[3]) === u.id && r[4]) have[hk0] = (have[hk0] || 0) + 1;
       });
       // 書いたばかりの 行も 含めて 付箋の班を 引く
       var teamOf = {};
       rows_(SH.items).forEach(function(r){ if(!r[5]) teamOf[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
       ops.star.forEach(function(s){
         var nId = String(s.noteId), t = teamOf[nId];
-        var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
+        var like = s.k === 'thumb';  // 班の中の いいね：自分の班の 付箋だけ、モード・回・持ち分は 関係ない
+        var ok = u.role === 'child' && t && t.face !== 'trash' && (like ? t.team === u.team : (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team)));
         var k = STAR_KINDS.indexOf(s.k) >= 0 ? s.k : 'star';
-        var key0 = nId + '|' + k + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k);
-        if(ok && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
+        // 回は サーバーが 決める（その 付箋の 組の 今の 回）
+        var rd = like ? 0 : (t ? roundOf_(modes, t.team) : 1);
+        var key0 = nId + '|' + k + '|' + rd + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k + '|' + rd);
+        if(ok && !like && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
         if(!ok){ rejected.push('*' + nId + '|' + k); return; }
         if(s.on && !was) have[hk] = (have[hk] || 0) + 1;
         if(!s.on && was) have[hk] = (have[hk] || 1) - 1;
         // 貼った 場所（シール貼り画面）：% と 傾き
         var pos = s.x == null ? '' : JSON.stringify({x:clamp_(s.x, 0, 100), y:clamp_(s.y, 0, 100), r:clamp_(s.r, -30, 30)});
-        var key = nId + '|' + k + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v, k, pos];
+        var key = key0, row = [key, nId, t.team, u.id, !!s.on, v, k, pos, rd];
         if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { sapp.push(row); sidx[key] = -1; }
         touched = true; teams[t.team] = 1;
       });
       if(sapp.length) ssh.getRange(ssh.getLastRow() + 1, 1, sapp.length, sapp[0].length).setValues(sapp);
+    }
+
+    if(ops.cmt && ops.cmt.length){
+      var csh = sheet_(SH.comments), crows = rows_(SH.comments), cidx = {}, capp = [], cteam = {};
+      crows.forEach(function(r, i){ cidx[String(r[0])] = i; });
+      rows_(SH.items).forEach(function(r){ if(!r[5]) cteam[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
+      ops.cmt.forEach(function(c){
+        var nId = String(c.noteId), t = cteam[nId];
+        var ok = u.role === 'child' && t && t.team !== u.team && t.face !== 'trash' && reach_(u, modes, 'starOut', t.team);
+        if(!ok){ rejected.push('#' + nId); return; }
+        var key = nId + '|' + u.id, row = [key, nId, t.team, u.id, String(c.text || '').slice(0, 100), !!c.on && !!String(c.text || '').trim(), v];
+        if(cidx[key] !== undefined && cidx[key] >= 0) csh.getRange(cidx[key] + 2, 1, 1, row.length).setValues([row]);
+        else { capp.push(row); cidx[key] = -1; }
+        touched = true; teams[t.team] = 1;
+      });
+      if(capp.length) csh.getRange(csh.getLastRow() + 1, 1, capp.length, capp[0].length).setValues(capp);
     }
 
     if(ops.modes){
@@ -260,7 +305,8 @@ function apply(ops){
           view:SCOPE_KEYS.indexOf(m.view) >= 0 ? m.view : 'off',
           propose:SCOPE_KEYS.indexOf(m.propose) >= 0 ? m.propose : 'off',
           starIn:!!m.starIn,
-          starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off'
+          starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
+          round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1)))
         };
         var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });
@@ -286,5 +332,5 @@ function clamp_(v, a, b){ v = Number(v); return isNaN(v) ? a : Math.max(a, Math.
 /* 名簿・先生・スポットを 直したら 実行（覚えを 消す） */
 function clearWhoCache(){
   var keys = rows_(SH.roster).concat(rows_(SH.teachers)).map(function(r){ return 'who:' + low_(r[0]); });
-  cache_().removeAll(keys.concat(['modes']));
+  cache_().removeAll(keys.concat(['modes', 'slots']));
 }
