@@ -27,7 +27,7 @@ var Platform = (function(){
     var ops = {
       up:Object.keys(sent.up).map(function(k){ return sent.up[k]; }),
       del:Object.keys(sent.del),
-      star:Object.keys(sent.star).map(function(k){ return {noteId:k, on:sent.star[k]}; }),
+      star:Object.keys(sent.star).map(function(k){ return sent.star[k]; }),
       modes:sent.modes
     };
     run('apply', [ops], function(r){
@@ -80,7 +80,7 @@ var Platform = (function(){
       run('boot', [], function(r){
         if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
         role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all;
-        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(function(s){ return {noteId:s.noteId, viewer:s.viewer}; }), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
         loop();
       }, function(e){
         document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + String(e && e.message || e).replace(/[<>&]/g, '') + '</p>';
@@ -90,7 +90,7 @@ var Platform = (function(){
       if(!ops) return;
       ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
       ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
-      ops.star.forEach(function(s){ q.star[s.noteId] = s.on; pend['*' + s.noteId] = 1; });
+      ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k; q.star[key] = s; pend['*' + key] = 1; });
       if(ops.modes) q.modes = ops.modes;
       schedule();
     },

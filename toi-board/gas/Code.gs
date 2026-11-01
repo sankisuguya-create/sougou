@@ -2,20 +2,21 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 2;
+var API_VER = 3;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
   '先生':['メール', '組（空なら最初の組）'],
   'スポット':['組', '班', 'スポット名'],
   'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
-  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver'],
+  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos'],
   'modes':['組', 'json', 'ver']
 };
 var TEACHER_DOMAIN = '@edu.nishi.or.jp';
 var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
 var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
+var STAR_KINDS = ['star', 'circle', 'bolt'];
 
 function doGet(){
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -94,9 +95,9 @@ function reach_(u, modes, key, team){
   return v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
 }
 /* 児童に その行を 見せるか */
-function visible_(u, modes, team, face){
+function visible_(u, modes, team, face, showcase){
   if(u.role === 'teacher' || team === u.team) return true;
-  if(face === 'front') return reach_(u, modes, 'view', team);
+  if(face === 'front') return reach_(u, modes, 'view', team) || (!!showcase && reach_(u, modes, 'starOut', team));
   if(face === 'gift') return reach_(u, modes, 'propose', team);
   return false;
 }
@@ -115,7 +116,13 @@ function boot(){
     : [{id:u.id, cls:u.cls, team:u.team, no:u.no}];
   var p;
   if(u.role === 'teacher'){ var v = getVer_(); p = pull_(u, 0); p.all = v; }
-  else { var tv = {}; tv[u.team] = teamVer_(u.team); p = pull_(u, mapOf_(u.team, 0)); p.tv = tv; }
+  else {
+    // シール（班の外）が 入っていれば、範囲の 班の「見てほしい付箋」も 開いた時に 1回だけ 取る
+    var tv = {}, spec = mapOf_(u.team, 0), modes = modes_();
+    tv[u.team] = teamVer_(u.team);
+    spots_().forEach(function(s){ if(s.team !== u.team && reach_(u, modes, 'starOut', s.team)) spec[s.team] = 0; });
+    p = pull_(u, spec); p.tv = tv;
+  }
   p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
@@ -149,9 +156,9 @@ function pull_(u, spec){
   rows_(SH.items).forEach(function(r){
     var id = String(r[0]), team = String(r[1]), ver = Number(r[4]), since = sinceOf(team);
     if(!id || since === null || ver <= since) return;
-    var ok = !r[5] && visible_(u, modes, team, String(r[2]));
+    var x = null; try{ x = JSON.parse(r[3]); }catch(e){}
+    var ok = x && !r[5] && visible_(u, modes, team, String(r[2]), x.showcase);
     if(!ok){ if(since) items.push({id:id, del:true}); return; }
-    var x; try{ x = JSON.parse(r[3]); }catch(e){ return; }
     if(u.role !== 'teacher') delete x.author;
     items.push(x);
   });
@@ -159,7 +166,9 @@ function pull_(u, spec){
     var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
-    stars.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]});
+    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
+    stars.push(o);
   });
   return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars};
 }
@@ -222,8 +231,11 @@ function apply(ops){
       ops.star.forEach(function(s){
         var nId = String(s.noteId), t = teamOf[nId];
         var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
-        if(!ok){ rejected.push('*' + nId); return; }
-        var key = nId + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v];
+        var k = STAR_KINDS.indexOf(s.k) >= 0 ? s.k : 'star';
+        if(!ok){ rejected.push('*' + nId + '|' + k); return; }
+        // 貼った 場所（シール貼り画面）：% と 傾き
+        var pos = s.x == null ? '' : JSON.stringify({x:clamp_(s.x, 0, 100), y:clamp_(s.y, 0, 100), r:clamp_(s.r, -30, 30)});
+        var key = nId + '|' + k + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v, k, pos];
         if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { sapp.push(row); sidx[key] = -1; }
         touched = true; teams[t.team] = 1;
@@ -259,6 +271,8 @@ function apply(ops){
     lock.releaseLock();
   }
 }
+
+function clamp_(v, a, b){ v = Number(v); return isNaN(v) ? a : Math.max(a, Math.min(b, v)); }
 
 /* 名簿・先生・スポットを 直したら 実行（覚えを 消す） */
 function clearWhoCache(){

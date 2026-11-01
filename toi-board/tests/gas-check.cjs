@@ -67,7 +67,7 @@ function makeGas() {
   threw = ''; try { G.as('', 'boot'); } catch (e) { threw = String(e.message); }
   ok(/NO_EMAIL/.test(threw), 'メールが 読めない時は 理由を 出す');
   ok(G.as('tb@edu.nishi.or.jp', 'boot').me.role === 'teacher', '先生ドメインは 先生として 開ける');
-  const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher'); };
+  const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher, .gal'); };
 
   const browser = await chromium.launch();
   const errors = [];
@@ -87,7 +87,7 @@ function makeGas() {
       window.google = { script: { run: mk(null, null) } };
     });
     await page.goto(FILE);
-    await page.waitForSelector('.head, .teacher');
+    await page.waitForSelector('.head, .teacher, .gal');
     return page;
   }
   const write = async (p, t) => { await p.click('[data-act=add]'); await p.fill('#w-text', t); await p.press('#w-text', 'Enter'); };
@@ -150,20 +150,29 @@ function makeGas() {
   r = G.as('b01' + D, 'apply', [{ up: [{ id: 'evil', kind: 'note', team: 'A-1', face: 'front', x: 1, y: 1, text: 'x' }], del: [ids[0]], star: [], modes: { cls: 'A', m: { view: 'off' } } }]);
   ok(r.rejected.includes('evil') && r.rejected.includes(ids[0]) && r.rejected.includes('modes') && !G.sheets.items.data.some(x => x[0] === 'evil'), 'ほかの班への 書き込み・消去・モード変更は はねられる');
 
-  // シール：B組 班の外を 学年に → b01 が A組の 付箋に 貼る。A組では 数が 見え、貼った人は 記号
+  // シール：A組1はんが 1まいを「見てほしい」に。B組 班の外を 学年に → b01 は シール貼り画面
+  await a01.click('.face[data-face=front]');
+  await a01.evaluate(id => commit(() => { item(id).showcase = true; }), ids[0]);
+  await ta.click('[data-act=mode][data-k=view][data-v=off]');
   await ta.click('[data-act=mode][data-k=starOut][data-v=grade]');
   await settle(); await reload(b01);
-  await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
+  ok(await b01.isVisible('text=シールを 貼ろう'), 'B組が シール貼り画面に なる');
+  const bigs = await b01.$$eval('.big', els => els.map(e => e.dataset.id));
+  ok(bigs.length === 1 && bigs[0] === ids[0], '開いた時に 範囲の 班の「見てほしい付箋」だけが 届く（共同閲覧が 切でも）');
+  const bb = await b01.locator(`.big[data-id="${ids[0]}"]`).boundingBox();
+  await b01.mouse.click(bb.x + 60, bb.y + 60);
+  await b01.click('[data-act=kind][data-k=circle]');
+  await b01.mouse.click(bb.x + 150, bb.y + 90);
+  G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
   await settle();
-  await b01.click(`#board .note[data-id="${ids[0]}"]`); await b01.click(`[data-act=star][data-id="${ids[0]}"]`);
-  G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], on: true }] }]);
-  await settle();
-  await a01.click('.face[data-face=front]');
-  ok((await a01.textContent(`[data-stars="${ids[0]}"]`)).includes('×2'), '自分の班では シールの数が 見える');
+  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star]`)).includes('×2') && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=circle]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
-  ok(r.stars.length === 2 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer)), '貼った人は 記号に なる');
+  ok(r.stars.length === 3 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer) && s.x === undefined), '貼った人は 記号に なり、場所は 本人にしか 届かない');
+  await reload(b01);
+  ok(await b01.locator(`.big[data-id="${ids[0]}"] .seal`).count() === 2, '開き直しても 自分の シールは 貼った 場所に のこる');
   r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
-  ok(r.stars.length === 1 && r.stars[0].viewer === 'b01' + D, 'ほかの班の 付箋は 自分の シールだけ 届く');
+  ok(r.stars.length === 2 && r.stars.every(s => s.viewer === 'b01' + D), 'ほかの班の 付箋は 自分の シールだけ 届く');
+  await b01.screenshot({ path: SHOTS + '/g3-gallery.png' });
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
