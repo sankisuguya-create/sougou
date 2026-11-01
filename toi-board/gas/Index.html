@@ -454,14 +454,16 @@ var SEAL_IMG = {"star":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACA
 /* シールの 種類と ボードでの 決まった 位置。最下段に 4つ（★・つるはし・!?・豆電球）、その上に 3つ。
    位置は 種類ごとに いつも 同じ（ない 種類の 場所は 空けておく） */
 var KINDS = [
-  {k:'star',   name:'しりたい！',          row:0, col:0},
-  {k:'pick',   name:'もっと知りたい',      row:0, col:1},
-  {k:'wow',    name:'その発想はなかった',  row:0, col:2},
-  {k:'bulb',   name:'参考になった',        row:0, col:3},
+  {k:'star',   name:'面白い！',            row:0, col:0, use:1},  // あいまいな 応援（いいね！も ここに 含める）
+  {k:'pick',   name:'知りたい！',          row:0, col:1, use:1},
+  {k:'wow',    name:'その発想はなかった！', row:0, col:2, use:1},
+  {k:'bulb',   name:'？出しの参考になる！', row:0, col:3, use:1},
   {k:'circle', name:'まる',                row:1, col:0},
   {k:'bolt',   name:'ひらめき',            row:1, col:1},
   {k:'thumb',  name:'分かった',            row:1, col:2}
 ];
+/* シール貼り画面で 選べるのは use の 4種類だけ（ほかは 予備。データは 読める） */
+var USE_KINDS = KINDS.filter(function(K){ return K.use; });
 function slotStyle(K){ var cols = K.row ? 3 : 4, w = 100 / cols; return 'left:' + (w * K.col + w / 2).toFixed(2) + '%;bottom:' + (K.row ? 36 : 4) + 'px'; }
 function sealImg(k, size){ return '<img src="' + SEAL_IMG[k] + '" alt="" width="' + (size || 28) + '" height="' + (size || 28) + '" draggable="false">'; }
 var ICON = {
@@ -581,9 +583,9 @@ function shuffled(arr, seed){
 }
 function viewGallery(){
   var kind = ui.kind || 'star';
-  var h = '<div class="gal"><div class="gal-head"><h1>シールを 貼ろう</h1>' + KINDS.map(function(K){
+  var h = '<div class="gal"><div class="gal-head"><h1>シールを 貼ろう</h1>' + USE_KINDS.map(function(K){
     return '<button class="kpick' + (K.k === kind ? ' on' : '') + '" data-act="kind" data-k="' + K.k + '" aria-label="' + K.name + '">' + sealImg(K.k, 46) + '</button>';
-  }).join('') + '<span class="hint">シールを えらんで、付箋を タップ（シールは 付箋の 下に 貼られます）</span></div>';
+  }).join('') + '<span class="hint"><b>' + esc((USE_KINDS.filter(function(K){ return K.k === kind; })[0] || USE_KINDS[0]).name) + '</b>　付箋を タップして 貼る（シールは 付箋の 下に つきます）</span></div>';
   var teams = shuffled(SPOTS.filter(function(s){ return s.team !== myTeam() && reach('starOut', s.team); }), me);
   var any = false;
   teams.forEach(function(sp){
@@ -672,7 +674,7 @@ function viewSheet(){
     h += '<h2>' + esc(n.text) + '</h2>';
     if(canStar(n)){
       var on = starsOf(n.id).some(function(x){ return x.viewer === me && kindOf(x) === 'star'; });
-      h += '<div class="row"><button class="btn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '">' + sealImg('star', 28) + (on ? ' シールを はがす' : ' しりたい！シールを はる') + '</button></div>';
+      h += '<div class="row"><button class="btn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '">' + sealImg('star', 28) + (on ? ' シールを はがす' : ' 面白い！シールを はる') + '</button></div>';
     }
     if(ed){
       h += '<div class="row"><button class="btn" data-act="edit" data-id="' + n.id + '">文字を 直す</button></div>';
