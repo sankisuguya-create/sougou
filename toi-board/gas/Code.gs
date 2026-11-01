@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 5;
+var API_VER = 6;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -60,6 +60,24 @@ function teamVer_(t){
   return c === null || c === undefined ? getVer_() : Number(c);
 }
 function setVer_(v){ props_().setProperty('ver', String(v)); cache_().put('ver', String(v), 21600); }
+/* モード・回の 版：変えたら 上がる。児童は ふだんの 確認で これを 見て、変わった 時だけ モードを 受け取る（ページの 開き直しは いらない） */
+function getMver_(){
+  var c = cache_().get('mver');
+  if(c !== null && c !== undefined) return String(c);
+  var v = String(props_().getProperty('mver') || '0'); cache_().put('mver', v, 21600); return v;
+}
+function setMver_(v){ props_().setProperty('mver', String(v)); cache_().put('mver', String(v), 21600); }
+/* 付箋 → 班・面 を キャッシュで 引く（シールの 書き込みで 付箋の シート全体を 読まないため）。なければ 1回だけ シートを 読んで 覚える */
+function itemTeams_(ids){
+  var out = {}, keys = ids.map(function(id){ return 'it:' + id; }), got = cache_().getAll(keys) || {}, miss = false;
+  ids.forEach(function(id){ var c = got['it:' + id]; if(c){ var p = c.split('|'); out[id] = {team:p[0], face:p[1]}; } else miss = true; });
+  if(miss){
+    var put = {};
+    rows_(SH.items).forEach(function(r){ var id = String(r[0]); if(!id || r[5]) return; out[id] = out[id] || {team:String(r[1]), face:String(r[2])}; put['it:' + id] = String(r[1]) + '|' + String(r[2]); });
+    try{ cache_().putAll(put, 21600); }catch(e){}
+  }
+  return out;
+}
 
 /* ===== だれか ===== */
 function who_(){
@@ -141,6 +159,7 @@ function boot(){
   if(u.role === 'child'){
     var sl = slots_(); u.mates = Object.keys(sl).filter(function(k){ return sl[k].team === u.team; }).map(function(k){ return {slot:sl[k].slot, no:sl[k].no, id:k === u.id ? u.id : 'm' + sl[k].slot}; }).sort(function(a, b){ return a.slot - b.slot; });
   }
+  p.mver = getMver_();
   p.api = API_VER; p.trialUrl = ScriptApp.getService().getUrl() + '?trial=1'; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
@@ -154,16 +173,18 @@ function poll(req){
   if(u.role === 'teacher'){
     var v = getVer_(), since = Number(req.all || 0);
     if(since && v === since) return {same:true};
-    var p = pull_(u, since); p.all = v; return p;
+    var p = pull_(u, since); p.all = v; p.mver = getMver_(); return p;
   }
-  var teams = req.teams || {}, want = {}, cur = {}, changed = false;
-  Object.keys(teams).slice(0, 2).forEach(function(t){
-    var c = teamVer_(t), since = Number(teams[t] || 0);
+  var mv = getMver_(), extra = req.mv !== undefined && String(req.mv) !== mv ? {modes:modes_(), mver:mv} : null;
+  var teams = req.teams || {}, names = Object.keys(teams).slice(0, 30), want = {}, cur = {}, changed = false;
+  var got = names.length ? (cache_().getAll(names.map(function(t){ return 'tv:' + t; })) || {}) : {}, gv = null;
+  names.forEach(function(t){
+    var c0 = got['tv:' + t], c = c0 === null || c0 === undefined ? (gv === null ? (gv = getVer_()) : gv) : Number(c0), since = Number(teams[t] || 0);
     cur[t] = c;
     if(!since || c > since){ want[t] = since; changed = true; }
   });
-  if(!changed) return {same:true};
-  var q = pull_(u, want); q.tv = cur; return q;
+  if(!changed){ var s0 = {same:true}; if(extra){ s0.same = false; s0.items = []; s0.stars = []; s0.comments = []; s0.fullTeams = []; s0.modes = extra.modes; s0.mver = extra.mver; s0.tv = cur; } return s0; }
+  var q = pull_(u, want); q.tv = cur; if(extra){ q.modes = extra.modes; q.mver = extra.mver; } return q;
 }
 
 /* spec：数（学年全部を その版より 新しい分）または {班:版}（その班だけ） */
@@ -205,7 +226,8 @@ function apply(ops){
   lock.waitLock(20000);
   try{
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
-    var ish = sheet_(SH.items), irows = rows_(SH.items), index = {};
+    var needItems = (ops.up && ops.up.length) || (ops.del && ops.del.length);
+    var ish = needItems ? sheet_(SH.items) : null, irows = needItems ? rows_(SH.items) : [], index = {}, itput = {};
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
     var appends = [], touched = false, teams = {};
 
@@ -213,6 +235,7 @@ function apply(ops){
       if(index[id] !== undefined){ ish.getRange(index[id] + 2, 1, 1, row.length).setValues([row]); irows[index[id]] = row; }
       else { appends.push(row); index[id] = -1; }
       touched = true; teams[row[1]] = 1;
+      itput['it:' + id] = row[5] ? 'x|trash' : String(row[1]) + '|' + String(row[2]);
     }
 
     (ops.up || []).forEach(function(x){
@@ -257,8 +280,8 @@ function apply(ops){
         if(low_(r[3]) === u.id && r[4]) have[hk0] = (have[hk0] || 0) + 1;
       });
       // 書いたばかりの 行も 含めて 付箋の班を 引く
-      var teamOf = {};
-      rows_(SH.items).forEach(function(r){ if(!r[5]) teamOf[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
+      if(Object.keys(itput).length){ try{ cache_().putAll(itput, 21600); }catch(e){} itput = {}; }
+      var teamOf = itemTeams_(ops.star.map(function(s){ return String(s.noteId); }));
       ops.star.forEach(function(s){
         var nId = String(s.noteId), t = teamOf[nId];
         var like = s.k === 'thumb';  // 班の中の いいね：自分の班の 付箋だけ、モード・回・持ち分は 関係ない
@@ -284,7 +307,8 @@ function apply(ops){
     if(ops.cmt && ops.cmt.length){
       var csh = sheet_(SH.comments), crows = rows_(SH.comments), cidx = {}, capp = [], cteam = {};
       crows.forEach(function(r, i){ cidx[String(r[0])] = i; });
-      rows_(SH.items).forEach(function(r){ if(!r[5]) cteam[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
+      if(Object.keys(itput).length){ try{ cache_().putAll(itput, 21600); }catch(e){} itput = {}; }
+      cteam = itemTeams_(ops.cmt.map(function(c){ return String(c.noteId); }));
       ops.cmt.forEach(function(c){
         var nId = String(c.noteId), t = cteam[nId];
         var ok = u.role === 'child' && t && t.team !== u.team && t.face !== 'trash' && reach_(u, modes, 'starOut', t.team);
@@ -312,10 +336,12 @@ function apply(ops){
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });
         var mrow = [cls, JSON.stringify(clean), v];
         if(at >= 0) msh.getRange(at + 2, 1, 1, 3).setValues([mrow]); else msh.getRange(msh.getLastRow() + 1, 1, 1, 3).setValues([mrow]);
-        cache_().remove('modes');
+        cache_().remove('modes'); setMver_(String(v));
+        touched = true;
       }
     }
 
+    if(Object.keys(itput).length){ try{ cache_().putAll(itput, 21600); }catch(e){} }
     if(touched){
       SpreadsheetApp.flush(); setVer_(v);
       var tv = {}; Object.keys(teams).forEach(function(t){ tv['tv:' + t] = String(v); });

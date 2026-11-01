@@ -212,7 +212,7 @@ table.tally th{text-align:center;font-size:12px}
 <script>window.TOI_TRIAL = true;</script>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 5, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 6, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -494,6 +494,8 @@ function visibleFaces(){
   if(isTeacher() || isMine()) return FACES;
   return FACES.filter(function(f){ return (f.k === 'front' && reach('view', boardTeam())) || (f.k === 'gift' && canPropose()); });
 }
+/* シール貼り画面で 見る 班（シール（班の外）が 入っている 時だけ） */
+function galleryTeams(){ if(!S || isTeacher() || !modeOn(M().starOut)) return []; return SPOTS.filter(function(s){ return s.team !== myTeam() && reach('starOut', s.team); }).map(function(s){ return s.team; }); }
 function lookable(){ return SPOTS.filter(function(s){ return s.team !== myTeam() && (reach('view', s.team) || reach('propose', s.team)); }); }
 
 /* ===== 絵 ===== */
@@ -546,7 +548,7 @@ function noteHTML(n, opt){
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, j = jit(n.id + K.k), r = j.r;
-      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
+      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = shownNow(n) ? '<div class="show">見てほしい</div>' : shownBefore(n) ? '<div class="show old">第' + showRound(n) + '回</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
@@ -753,8 +755,8 @@ function viewSheet(){
       + '<div class="hits">' + (hits.length ? hits.map(function(n){
           var cs = kindCounts(n), lk = likesOf(n.id).length;
           return '<button class="hcard' + (n.done ? ' done' : '') + '" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span><span class="meta">'
-            + (lk ? '<span class="sc">' + sealImg('thumb', 16) + (lk >= 2 ? '×' + lk : '') + '</span>' : '')
-            + USE_KINDS.map(function(K){ var c = cs[KINDS.indexOf(K)]; return c ? '<span class="sc">' + sealImg(K.k, 20) + (c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>' : ''; }).join('')
+            + (lk ? '<span class="sc">' + sealImg('thumb', 16) + (lk >= 2 ? '<b class="cnt">' + lk + '</b>' : '') + '</span>' : '')
+            + USE_KINDS.map(function(K){ var c = cs[KINDS.indexOf(K)]; return c ? '<span class="sc">' + sealImg(K.k, 20) + (c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>' : ''; }).join('')
             + '<span class="tag">' + faceLabel(n.face) + (n.stackOf ? '・重なり' : '') + '</span><span class="tag">' + fmtDate(writtenAt(n)) + '</span></span></button>';
         }).join('') : '<p>見つかりません</p>') + '</div>';
   } else if(s.type === 'teams'){
@@ -893,7 +895,7 @@ function viewTeacher(){
   if(ui.tview === 'tally') return viewTally();
   var cs = classes(), tm = S.modes[ui.tCls] || blankModes();
   var h = '<div class="teacher"><h2>モード</h2>';
-  if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童に「ページを 更新して」と 伝えてください。更新するまで 前の モードの 画面の ままです（できない 操作は はねられます）。</div>';
+  if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童の 画面に 10秒ほどで 届きます（ページの 更新は いりません）。</div>';
   h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '">' + c + '組</button>'; }).join('') + '</div>';
   MODES.forEach(function(x){
     h += '<div class="mode"><span style="min-width:150px;font-weight:700">' + x.label + '</span>';
@@ -1259,7 +1261,8 @@ var TRIAL_STEPS = [
     '左下の ＋ で 付箋を 書く。書く 画面の「？のたね」を 押すと 言葉が 入る',
     '付箋を ドラッグで うごかす。ほかの 付箋の 上に 落とすと 重なる（タップ →「いちばん 上に する」）',
     '付箋を タップ →「調査済み」「見てほしい付箋に する」「うらがわへ」など',
-    '左の 道具：やじるし（2まいを 順に タップ）・わく・さがす・もどす（Ctrl+Z）',
+    '付箋を タップ →「いいね（班の中）」。いいねは 付箋の 右に、メンバーごとの 色で つく',
+    '左の 道具：やじるし（2まいを 順に タップ）・わく（タイトルを ドラッグで 辺の 上を うごかせる）・さがす（新しい順・あいうえお順など）・もどす（Ctrl+Z）',
     '上の タブで うらがわ・いただきもの・ゴミばこを 見る']},
   {who:'A05', title:'② シール貼り（児童）', items:[
     '先生が「シール（班の外）」を 入れた 時の 画面です（今は A組 2はんの 児童）',
@@ -1272,7 +1275,7 @@ var TRIAL_STEPS = [
     '「CSV を ダウンロード」で 書いた人の 番号つきの 記録']},
   {who:'teacher', title:'④ 児童の 画面の 設定を 変える（先生）', items:[
     'モード：共同閲覧・アイデア提案・シール（班の中／外）を 組ごとに「切／同じ組／学年」で 決める',
-    '本番では 変えたら「ページを 更新して」と 合図（体験版では すぐ 反映）',
+    '本番では 児童の 画面に 10秒ほどで 届く（ページの 更新は いらない。体験版では すぐ 反映）',
     '「第2回を はじめる」で 見合い会の 回を 進める（シール・持ち分・見てほしい付箋が 回ごとに なる）',
     '上の「見本の 切り替え」で 児童に して、変わった 画面を たしかめる']}
 ];
@@ -1305,6 +1308,15 @@ function trialSeed(){
   a1[2].done = true; a1[2].doneBy = 'たろう';
   a1[3].stackOf = a1[2].id;
   S.items.push({id:nid(), kind:'note', team:'A-1', face:'gift', x:1, y:1, text:'ホームベースは だれが ふむの？', author:'A09', fromTeam:'A-3', t:Date.now()});
+  // 班の中の いいね（メンバーごとの 色）、枠（タイトルつき）と 矢印、ゴミばこ、書いた日の ちがい
+  ['A01','A02','A03'].forEach(function(v, i){ S.stars.push({noteId:a1[0].id, viewer:v, k:'thumb', rd:0}); if(i) S.stars.push({noteId:a1[1].id, viewer:v, k:'thumb', rd:0}); });
+  S.stars.push({noteId:a1[4].id, viewer:'A04', k:'thumb', rd:0});
+  var day = 86400000, now = Date.now();
+  S.items.filter(function(x){ return x.team === 'A-1' && x.kind === 'note'; }).forEach(function(x, i){ x.t = now - (6 - i) * day; });
+  S.items.push({id:nid(), kind:'frame', team:'A-1', face:'front', x:0, y:15, w:17, h:8, text:'本命こうほ', lp:0.62});
+  a1[4].x = 1; a1[4].y = 16;
+  S.items.push({id:nid(), kind:'arrow', team:'A-1', face:'front', from:a1[0].id, to:a1[1].id});
+  [['ホームベースは 何こ あるの？', 3], ['あした 見に いける？', 2]].forEach(function(p){ S.items.push({id:nid(), kind:'note', team:'A-1', face:'trash', x:1, y:1, text:p[0], author:'A02', t:now - p[1] * day}); });
   S.modes.A.view = 'class'; S.modes.A.propose = 'class';
   Platform.push(null);
 }

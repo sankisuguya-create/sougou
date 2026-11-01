@@ -35,7 +35,7 @@ function makeGas() {
   const ctx = {
     SpreadsheetApp: { getActive: () => ss, flush: () => {} },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, setProperties: o => Object.assign(props, o) }) },
-    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, putAll: o => Object.assign(cache, o), remove: k => delete cache[k], removeAll: ks => ks.forEach(k => delete cache[k]) }) },
+    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), getAll: ks => { const o = {}; ks.forEach(k => { if (k in cache) o[k] = cache[k]; }); return o; }, put: (k, v) => { cache[k] = String(v); }, putAll: o => Object.assign(cache, o), remove: k => delete cache[k], removeAll: ks => ks.forEach(k => delete cache[k]) }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
     Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
@@ -71,13 +71,14 @@ function makeGas() {
   const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher, .gal'); };
 
   const browser = await chromium.launch();
+  const calls = {}; let failBoot = 0;
   const errors = [];
   async function open(email, w = 1366) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 768 } });
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error' || m.type() === 'assert') errors.push(email + ': ' + m.text()); });
     page.on('pageerror', e => errors.push(email + ': ' + e));
-    await page.exposeFunction('__gas', (fn, args) => { try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
+    await page.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; if (fn === 'boot' && failBoot > 0) { failBoot--; return { ng: 'Service invoked too many times for one user per minute' }; } try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
     await page.addInitScript(() => {
       window.TOI_POLL_MS = 400; window.TOI_POLL_JIT = 0;
       const mk = (okf, ngf) => new Proxy({}, { get: (t, k) => {
@@ -122,16 +123,15 @@ function makeGas() {
 
   // 先生：A組だけ 学年で 共同閲覧 → B組の 児童には まだ 届かない（モードは 見る側の 組で 決まる）
   await ta.click('[data-act=mode][data-k=view][data-v=grade]');
-  ok(await ta.isVisible('text=A組の 児童に「ページを 更新して」と 伝えてください'), 'モードを 変えると 先生に 更新の 合図を 出すよう 表示する');
-  await reload(b01);
+  ok(await ta.isVisible('text=10秒ほどで 届きます（ページの 更新は いりません）'), 'モードを 変えると 先生に「10秒ほどで 届く」と 出る');
+  await settle();
   ok(!(await b01.isVisible('[data-act=teams]')), 'A組の モードは B組の 児童に 効かない');
   await ta.click('[data-act=tcls][data-c=B]');
   await ta.click('[data-act=mode][data-k=view][data-v=grade]');
   await ta.click('[data-act=mode][data-k=propose][data-v=grade]');
   await settle();
-  ok(!(await b01.isVisible('[data-act=teams]')), '更新するまでは 前の モードの まま（モードを 確かめに 行かない）');
-  await reload(b01);
-  ok(await b01.isVisible('[data-act=teams]'), 'B組を 学年に すると 「ほかの組」が 出る');
+  const bootsBefore = calls.boot;
+  ok(await b01.isVisible('[data-act=teams]') && calls.boot === bootsBefore, 'モードは ページを 開き直さなくても ふだんの 確認で 届く（「ほかの組」が 出る）');
   await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
   // 模擬の サーバーは すぐ 返すので、まだ 読みこみ中なら「よみこんでいます」、もう 届いていれば 付箋が 出ていれば よい
   ok(await b01.isVisible('text=よみこんでいます') || await b01.isVisible('#board .note'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」（届けば 付箋）');
@@ -166,8 +166,8 @@ function makeGas() {
   await b01.click('[data-act=kind][data-k=pick]');
   await b01.mouse.click(bb.x + 150, bb.y + 90);
   G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
-  await settle();
-  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star]`)).includes('×2') && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
+  await sleep(1600); await settle();  // シールは 1.5秒 ためて 送る
+  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star] .cnt`)).trim() === '2' && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.length === 3 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer) && s.x === undefined), '貼った人は 記号に なり、場所は 本人にしか 届かない');
   await reload(b01);
@@ -216,6 +216,37 @@ function makeGas() {
   ok(r.stars.some(s => s.k === 'thumb' && s.rd === 0), 'いいねは 回に 関係ない（rd=0）');
   ok(r.stars.some(s => s.k === 'thumb' && s.slot === 1) && JSON.stringify(G.as('a01' + D, 'boot').me.mates.map(m => [m.slot, m.no])) === '[[0,1],[1,2]]', 'いいねには 班の 中の 番号順（色・形）が つき、メンバーの 番号が 届く（メールは 届かない）');
   ok(!JSON.stringify(G.as('a01' + D, 'boot').me.mates).includes('a02'), 'ほかの メンバーの メールは 届かない');
+
+  // 90人の 同時アクセスへの そなえ
+  // ① 開くのに 失敗（混雑）しても、間を おいて 自動で やり直す
+  failBoot = 2;
+  const busy = await open('a05' + D);
+  ok(await busy.isVisible('.head, .gal') && failBoot === 0, '開くのに 2回 失敗しても 自動で やり直して 開ける');
+  // ② シールの 書きこみは 1.5秒 ためて まとめて 送る
+  await ta.click('[data-act=tcls][data-c=A]'); await ta.click('[data-act=mode][data-k=starOut][data-v=class]');
+  await sleep(1500);
+  ok(await busy.isVisible('text=シールを 貼ろう'), 'シール（班の外）も ページの 開き直し なしで 切りかわる');
+  const ap0 = calls.apply || 0;
+  const bigs2 = await busy.$$eval('.big', els => els.map(e => e.dataset.id));
+  for (const [i, kk] of [['star', 0], ['pick', 1], ['wow', 2]].map((x, j) => [j, x[0]])) {
+    await busy.click(`[data-act=kind][data-k=${kk}]`);
+    const bb = await busy.locator(`.big[data-id="${bigs2[0]}"]`).boundingBox(); await busy.mouse.click(bb.x + 40 + i * 40, bb.y + 60);
+  }
+  await sleep(2600);
+  ok((calls.apply || 0) - ap0 === 1, 'シールを 3まい つづけて 貼っても 書きこみは 1回に まとまる');
+  const ap1 = calls.apply || 0;
+  await busy.click('[data-act=kind][data-k=bulb]');
+  { const bb2 = await busy.locator(`.big[data-id="${bigs2[0]}"]`).boundingBox(); await busy.mouse.click(bb2.x + 160, bb2.y + 60); }
+  await busy.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await sleep(300);
+  ok((calls.apply || 0) - ap1 === 1, 'ためている 間に 画面を はなれても すぐ 送る（消えない）');
+  // ③ シールだけの 書きこみでは 付箋の シートを 読まない（キャッシュで 班を 引く）
+  let itemReads = 0; const orig2 = G.ctx.rows_; G.ctx.rows_ = n => { if (n === 'items') itemReads++; return orig2(n); };
+  G.as('a05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: bigs2[0], k: 'bulb', on: true }] }]);
+  G.ctx.rows_ = orig2;
+  ok(itemReads === 0, 'シールだけの 書きこみでは 付箋の シートを 読まない');
+  await ta.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await busy.close();
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
