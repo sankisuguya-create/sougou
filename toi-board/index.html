@@ -169,7 +169,7 @@ function visibleFaces(){
 /* ===== 絵 ===== */
 /* シール：光は左上から。左上にツヤ、右下（3時〜6時）は黒の輪郭を太くして影。
    黒の輪郭 → すぐ内側に白（反射光）→ 中は固有の色。角は丸める。
-   ツヤは「！」を曲げて傾けた形（白い弧＋点）。
+   ツヤは左上の輪郭に平行な白い線（円は弧＋点）。
    描き順：黒の太線 → 色の塗り → 白の細線（白は縁の内側半分にかかり、黒は外側に残る） */
 var SHAPES = {
   star:(function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 6.8 : 13, a = -Math.PI/2 + i*Math.PI/5; p.push((16 + r*Math.cos(a)).toFixed(2) + ' ' + (17 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
@@ -177,9 +177,9 @@ var SHAPES = {
   bolt:'M20 3L6 18h8.5l-3.5 11l15-17h-8.5l2.5-9Z'
 };
 var GLINT = {
-  star:'<path d="M12.4 14.6q1-2.4 3-3.4" /><circle cx="11.6" cy="17" r=".85"/>',
+  star:'<path d="M6.9 14.3L10.8 13.6" />',
   circle:'<path d="M9 12.5q1.6-4 6-5.2" /><circle cx="8.3" cy="15.8" r="1"/>',
-  bolt:'<path d="M13.2 14.2q1.4-2.6 3.6-4.6" /><circle cx="11.9" cy="16.4" r=".9"/>'
+  bolt:'<path d="M16.6 9.6L12.4 14.1" />'
 };
 /* 固有色は 似た2色の グラデーション（左上が明るく 右下が濃い：光の向きと そろえる） */
 var STICKER_COLORS = {
