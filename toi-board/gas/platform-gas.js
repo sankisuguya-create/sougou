@@ -13,8 +13,8 @@ var Platform = (function(){
   var SEAL_WAIT = window.TOI_SEAL_WAIT == null ? 1500 : window.TOI_SEAL_WAIT;
   var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '';
   var pend = {}, q = blank(), timer = null, due = 0, busy = false, pollT = null, errs = 0, polling = false, again = false;
-  function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, purge:{}, modes:null}; }
-  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !Object.keys(x.purge).length && !x.modes; }
+  function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, purge:{}, cmtDel:{}, modes:null}; }
+  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !Object.keys(x.purge).length && !Object.keys(x.cmtDel).length && !x.modes; }
   function net(t){ var el = document.getElementById('net'); if(el) el.textContent = t; }
   function backoff(){ return 1000 + Math.random() * 4000; }
   /* 送り終わるまでの 変更を 端末にも 置く（通信が 切れたまま 閉じても、次に 開いた 時に 送り直す） */
@@ -23,7 +23,7 @@ var Platform = (function(){
     if(!keepKey) return;
     try{
       var all = JSON.parse(JSON.stringify(q));
-      if(inflight) ['up', 'del', 'star', 'cmt', 'purge'].forEach(function(t){ Object.keys(inflight[t]).forEach(function(k){ if(!(k in all[t])) all[t][k] = inflight[t][k]; }); });
+      if(inflight) ['up', 'del', 'star', 'cmt', 'purge', 'cmtDel'].forEach(function(t){ Object.keys(inflight[t] || {}).forEach(function(k){ if(!(k in all[t])) all[t][k] = inflight[t][k]; }); });
       if(empty(all)) localStorage.removeItem(keepKey); else localStorage.setItem(keepKey, JSON.stringify(all));
     }catch(e){}
   }
@@ -50,6 +50,7 @@ var Platform = (function(){
       star:Object.keys(sent.star).map(function(k){ return sent.star[k]; }),
       cmt:Object.keys(sent.cmt).map(function(k){ return sent.cmt[k]; }),
       purge:Object.keys(sent.purge),
+      cmtDel:Object.keys(sent.cmtDel).map(function(k){ return sent.cmtDel[k]; }),
       modes:sent.modes
     };
     run('apply', [ops], function(r){
@@ -76,6 +77,7 @@ var Platform = (function(){
         else if(later.p && !first.p){ Object.keys(later.p).forEach(function(f){ first[f] = later.p[f]; }); (later.u || []).forEach(function(f){ delete first[f]; }); q.up[k] = first; }
       });
       Object.keys(sent.purge).forEach(function(k){ q.purge[k] = 1; });
+      Object.keys(sent.cmtDel).forEach(function(k){ q.cmtDel[k] = sent.cmtDel[k]; });
       Object.keys(sent.del).forEach(function(k){ if(!q.up[k]) q.del[k] = 1; });
       Object.keys(sent.star).forEach(function(k){ if(!(k in q.star)) q.star[k] = sent.star[k]; });
       Object.keys(sent.cmt).forEach(function(k){ if(!(k in q.cmt)) q.cmt[k] = sent.cmt[k]; });
@@ -132,7 +134,7 @@ var Platform = (function(){
           try{
             var old = JSON.parse(localStorage.getItem(keepKey) || 'null');
             if(old && !empty(Object.assign(blank(), old))){
-              ['up', 'del', 'star', 'cmt', 'purge'].forEach(function(t){ Object.keys(old[t] || {}).forEach(function(k){ q[t][k] = old[t][k]; if(t === 'up' || t === 'del') pend[k] = 1; }); });
+              ['up', 'del', 'star', 'cmt', 'purge', 'cmtDel'].forEach(function(t){ Object.keys(old[t] || {}).forEach(function(k){ q[t][k] = old[t][k]; if(t === 'up' || t === 'del') pend[k] = 1; }); });
               net('前に 送れなかった 変更を 送っています'); schedule(0);
             }
           }catch(e){}
@@ -150,7 +152,7 @@ var Platform = (function(){
     },
     push:function(ops){
       if(!ops) return;
-      var onlySeal = !ops.up.length && !ops.del.length && !ops.modes && !(ops.purge || []).length;
+      var onlySeal = !ops.up.length && !ops.del.length && !ops.modes && !(ops.purge || []).length && !(ops.cmtDel || []).length;
       ops.up.forEach(function(x){
         var prev = q.up[x.id];
         if(x.p && prev && prev.p){ Object.keys(x.p).forEach(function(k){ prev.p[k] = x.p[k]; }); prev.u = (prev.u || []).filter(function(k){ return !(k in x.p); }).concat(x.u || []); }
@@ -162,6 +164,7 @@ var Platform = (function(){
       ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k + '|' + (s.rd == null ? 1 : s.rd); q.star[key] = s; pend['*' + key] = 1; });
       (ops.cmt || []).forEach(function(c){ q.cmt[c.noteId] = c; pend['#' + c.noteId] = 1; });
       (ops.purge || []).forEach(function(id){ q.purge[id] = 1; });
+      (ops.cmtDel || []).forEach(function(c){ q.cmtDel[c.noteId + '|' + c.viewer] = c; });
       if(ops.modes) q.modes = ops.modes;
       keep();
       schedule(onlySeal ? SEAL_WAIT : 250);

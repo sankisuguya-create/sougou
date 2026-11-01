@@ -589,6 +589,32 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A01');
   ok(!(await page.isVisible('[data-act=purge]')), '児童には 完全削除の ボタンが ない');
   }
+  {
+  // 学習が 止まらない（画面）
+  await who('A01'); await page.click('.face[data-face=front]');
+  // 入力は 字数で 止まる（あとで 切られて 消えない）
+  await page.click('.fab');
+  ok(await page.getAttribute('#w-text', 'maxlength') === '200', '付箋の 文は 200字で 入力が 止まる');
+  await page.keyboard.press('Escape');
+  // 見てほしい付箋は 4まいまで
+  await page.evaluate(() => commit(() => { for (let i = 0; i < 5; i++) S.items.push({ id: nid(), kind: 'note', team: 'A-1', face: 'front', x: 1 + i * 8, y: 60, text: 'え' + i, author: me }); }));
+  const five = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).slice(-5).map(x => x.id));
+  await page.evaluate(ids => commit(() => { S.items.forEach(x => { if (x.team === 'A-1' && shownNow(x) && !ids.includes(x.id)) x.showcase = 0; }); ids.slice(0, 4).forEach(id => { item(id).showcase = curRound('A-1'); }); }), five);
+  await page.locator(`#board .note[data-id="${five[4]}"]`).scrollIntoViewIfNeeded();
+  await page.click(`#board .note[data-id="${five[4]}"]`);
+  await page.click(`[data-act=showcase][data-id="${five[4]}"]`);
+  ok(await page.isVisible('text=見てほしい付箋は 4まいまで') && !(await page.evaluate(id => shownNow(item(id)), five[4])), '見てほしい付箋は 4まいまで（5まい目は 知らせて とめる）');
+  await page.keyboard.press('Escape');
+  // 先生：見てほしい付箋が ない 班を 知らせる
+  await who('teacher');
+  ok(await page.isVisible('.warn:has-text("見てほしい付箋が まだ ない 班")') && !(await page.textContent('.warn')).includes('1はん'), '先生の 画面に 見てほしい付箋が ない 班が 出る（1はんは ある）');
+  // 先生：コメントを 1つずつ 消せる
+  const cn = await page.evaluate(() => { const n = S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); S.comments.push({ noteId: n.id, viewer: 'B03', text: 'ふさわしくない ことば' }); Platform.push(null); return n.id; });
+  await page.click('[data-act=ttab][data-k=board]');
+  await page.click(`#board .note[data-id="${cn}"] .cicon`);
+  await page.click('[data-act=cmt-purge]');
+  ok(!(await page.evaluate(id => S.comments.some(c => c.noteId === id && c.text === 'ふさわしくない ことば'), cn)), '先生は コメントを 1つずつ 消せる');
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
