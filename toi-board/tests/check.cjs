@@ -576,6 +576,19 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const mA = await page.evaluate(() => S.modes.A);
   ok(mA.view === 'off' && mA.propose === 'off' && mA.starOut === 'off' && await page.isDisabled('[data-act=modes-off]'), '先生は ひとおしで その組を ぜんぶ 切に もどせる');
   }
+  {
+  // 先生は 付箋を 完全に 消せる（2回 押して 確定）
+  await who('teacher'); await page.click('[data-act=ttab][data-k=board]');
+  const pid = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).id);
+  await page.click(`#board .note[data-id="${pid}"]`);
+  await page.click(`[data-act=purge][data-id="${pid}"]`);
+  ok(await page.isVisible('text=もう一度 押すと 完全に 消えます（もどせません）') && await page.evaluate(id => !!item(id), pid), '完全削除は 1回目では 消えず、もどせないと 知らせる');
+  await page.click(`[data-act=purge][data-id="${pid}"]`);
+  const gone = await page.evaluate(id => !item(id) && !S.stars.some(s => s.noteId === id) && !S.comments.some(c => c.noteId === id), pid);
+  ok(gone && !(await page.isVisible(`#board .note[data-id="${pid}"]`)), '2回目で 付箋と その シール・コメントが 完全に 消える');
+  await who('A01');
+  ok(!(await page.isVisible('[data-act=purge]')), '児童には 完全削除の ボタンが ない');
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

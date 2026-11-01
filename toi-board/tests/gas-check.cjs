@@ -71,14 +71,14 @@ function makeGas() {
   const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher, .gal'); };
 
   const browser = await chromium.launch();
-  const calls = {}; let failBoot = 0;
+  const calls = {}; let failBoot = 0, failApply = 0;
   const errors = [];
   async function open(email, w = 1366) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 768 } });
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error' || m.type() === 'assert') errors.push(email + ': ' + m.text()); });
     page.on('pageerror', e => errors.push(email + ': ' + e));
-    await page.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; if (fn === 'boot' && failBoot > 0) { failBoot--; return { ng: 'Service invoked too many times for one user per minute' }; } try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
+    await page.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; if (fn === 'apply' && failApply > 0) { failApply--; return { ng: 'Exception: Service Spreadsheets timed out' }; } if (fn === 'boot' && failBoot > 0) { failBoot--; return { ng: 'Service invoked too many times for one user per minute' }; } try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
     await page.addInitScript(() => {
       window.TOI_POLL_MS = 400; window.TOI_POLL_JIT = 0;
       const mk = (okf, ngf) => new Proxy({}, { get: (t, k) => {
@@ -247,6 +247,89 @@ function makeGas() {
   ok(itemReads === 0, 'シールだけの 書きこみでは 付箋の シートを 読まない');
   await ta.click('[data-act=mode][data-k=starOut][data-v=off]');
   await busy.close();
+
+  // データが 勝手に 消えない（サーバー）
+  {
+  // ① setup を もう一度 実行しても 版は もどらない
+  const vBefore = G.props.ver;
+  G.ctx.setup();
+  ok(G.props.ver === vBefore && Number(vBefore) > 0, 'setup を もう一度 実行しても 版が 0 に もどらない');
+  // ② 同じ班の 2人が 同じ 付箋の 別の 項目を ほぼ同時に 変えても 両方 のこる
+  const nid2 = 'safe1';
+  G.as('a01' + D, 'apply', [{ up: [{ id: nid2, kind: 'note', team: 'A-1', face: 'front', x: 2, y: 30, text: 'もとの 文' }], del: [], star: [] }]);
+  G.as('a02' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { text: 'B が 直した 文' }, u: [] }], del: [], star: [] }]);
+  G.as('a01' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { x: 9 }, u: [] }], del: [], star: [] }]);  // A は 古い 画面のまま 動かした
+  const got1 = JSON.parse(G.sheets.items.data.find(r => r[0] === nid2)[3]);
+  ok(got1.text === 'B が 直した 文' && got1.x === 9, '同じ 付箋を 2人が 別々に 変えても 両方 のこる（文は 消えない）');
+  r = G.as('b01' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { text: 'x' }, u: [] }], del: [], star: [] }]);
+  ok(r.rejected.includes(nid2) && JSON.parse(G.sheets.items.data.find(x => x[0] === nid2)[3]).text === 'B が 直した 文', 'ほかの班は 変えられない');
+  r = G.as('a01' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { team: 'B-1', author: 'x' }, u: ['text'] }], del: [], star: [] }]);
+  const got2 = JSON.parse(G.sheets.items.data.find(x => x[0] === nid2)[3]);
+  ok(got2.team === 'A-1' && got2.author === 'a01' + D && got2.text === undefined, '班・書いた人は 変えられない（文を 消すのは 自分の 班なら できる）');
+  // ④ 消した 付箋を 同じ班なら もどせる（やり直し）
+  G.as('a01' + D, 'apply', [{ up: [], del: [nid2], star: [] }]);
+  r = G.as('a01' + D, 'apply', [{ up: [{ id: nid2, kind: 'note', team: 'A-1', face: 'front', x: 9, y: 30, text: 'もどした 文' }], del: [], star: [] }]);
+  ok(r.rejected.length === 0 && !G.sheets.items.data.find(x => x[0] === nid2)[5], '消した 付箋を 同じ班なら もどせる');
+  r = G.as('b01' + D, 'apply', [{ up: [{ id: nid2, kind: 'note', team: 'A-1', face: 'gift', x: 1, y: 1, text: 'x' }], del: [], star: [] }]);
+  ok(JSON.parse(G.sheets.items.data.find(x => x[0] === nid2)[3]).text === 'もどした 文', 'ほかの班は その 付箋を 書きかえられない');
+  // ⑦ 先生の 完全削除：中身を 消し、重なりは 単独に、矢印・シール・コメントも 消す。児童は もどせない
+  G.as('a01' + D, 'apply', [{ up: [{ id: 'kid1', kind: 'note', team: 'A-1', face: 'front', x: 9, y: 30, text: '下の 付箋', stackOf: nid2 }, { id: 'arw1', kind: 'arrow', team: 'A-1', face: 'front', from: nid2, to: ids[0] }], del: [], star: [] }]);
+  G.as('a02' + D, 'apply', [{ up: [], del: [], star: [{ noteId: nid2, k: 'thumb', rd: 0, on: true }] }]);
+  r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], purge: [nid2] }]);
+  ok(r.rejected.length === 1, '児童は 完全削除できない');
+  const vp = G.props.ver;
+  r = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], purge: [nid2] }]);
+  const prow = G.sheets.items.data.find(x => x[0] === nid2), kid = JSON.parse(G.sheets.items.data.find(x => x[0] === 'kid1')[3]);
+  ok(r.rejected.length === 0 && prow[5] === true && !prow[3].includes('もどした') && JSON.parse(prow[3]).purged && kid.stackOf === undefined && G.sheets.items.data.find(x => x[0] === 'arw1')[5] === true, '先生は 付箋を 完全に 消せる（文は のこらない・重なりは 単独に・矢印も 消える）');
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': Number(vp) } }]);
+  ok(r.items.some(x => x.id === nid2 && x.del) && !r.stars.some(s => s.noteId === nid2 && s.on), '完全削除は 児童の 画面に「消えた」と 届き、シールも 消える');
+  r = G.as('a01' + D, 'apply', [{ up: [{ id: nid2, kind: 'note', team: 'A-1', face: 'front', x: 1, y: 1, text: 'もどす' }], del: [], star: [] }]);
+  ok(r.rejected.includes(nid2), '先生が 完全に 消した 付箋は 児童が もどせない');
+  }
+
+  // データが 勝手に 消えない（画面から）
+  {
+  // ② 古い 画面の 子が 動かしても、別の 子が 直した 文は のこる
+  await a01.click('.face[data-face=front]'); await a02.click('.face[data-face=front]');
+  const sid = await a01.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 30, y: 2, text: 'はじめ', author: me }); }); return id; });
+  await settle();
+  await a02.evaluate(id => commit(() => { item(id).text = 'B が 直した'; }), sid);
+  await a01.evaluate(id => commit(() => { item(id).x = 33; }), sid);   // a01 は まだ「はじめ」の 画面
+  await settle(); await settle();
+  const sv = JSON.parse(G.sheets.items.data.find(r => r[0] === sid)[3]);
+  ok(sv.text === 'B が 直した' && sv.x === 33 && (await a01.evaluate(id => item(id).text, sid)) === 'B が 直した', '古い 画面の 子が 動かしても、別の 子が 直した 文は 消えない（画面にも 届く）');
+  // ③ もとに もどす（Ctrl+Z）は 自分が 変えた 項目だけ
+  await a01.evaluate(id => commit(() => { item(id).y = 9; }), sid);
+  await settle();
+  await a02.evaluate(id => commit(() => { item(id).text = 'B が もう一度 直した'; }), sid);
+  await settle(); await settle();
+  await a01.evaluate(() => undo());
+  await settle(); await settle();
+  const sv2 = JSON.parse(G.sheets.items.data.find(r => r[0] === sid)[3]);
+  ok(sv2.y === 2 && sv2.text === 'B が もう一度 直した', 'もとに もどす は 自分が 変えた 項目だけ（ほかの 子の 文は のこる）');
+  // ④ 書いて → もどす（消える）→ やり直す で 付箋が もどる
+  const rid = await a01.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 30, y: 8, text: 'やり直しの 付箋', author: me }); }); return id; });
+  await settle();
+  await a01.evaluate(() => undo()); await settle();
+  await a01.evaluate(() => redo()); await settle(); await settle();
+  const rr = G.sheets.items.data.find(r => r[0] === rid);
+  ok(rr && rr[5] === false && JSON.parse(rr[3]).text === 'やり直しの 付箋', '書いて → もどす → やり直す で 付箋が もどる');
+  // ⑤ 通信が 切れている 間に 書いて 閉じても、次に 開いた 時に 送る
+  const lost = await open('a02' + D);
+  failApply = 50;
+  const lid = await lost.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 40, y: 2, text: '切れている 間の 付箋', author: me }); }); return id; });
+  await sleep(800);
+  ok(!G.sheets.items.data.some(r => r[0] === lid), '（準備）通信が 切れていて まだ 届いていない');
+  const ctxL = lost.context(); const again2 = await ctxL.newPage();
+  await lost.close();
+  failApply = 0;
+  await again2.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; try { return { ok: G.as('a02' + D, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
+  await again2.addInitScript(() => { window.TOI_POLL_MS = 400; window.TOI_POLL_JIT = 0; const mk = (okf, ngf) => new Proxy({}, { get: (t, k) => { if (k === 'withSuccessHandler') return f => mk(f, ngf); if (k === 'withFailureHandler') return f => mk(okf, f); return (...a) => { window.__gas(k, a).then(r => setTimeout(() => (r.ng ? ngf && ngf(new Error(r.ng)) : okf && okf(r.ok)), 0)); }; } }); window.google = { script: { run: mk(null, null) } }; });
+  await again2.goto(FILE); await again2.waitForSelector('.head, .gal');
+  await sleep(1500);
+  ok(G.sheets.items.data.some(r => r[0] === lid && JSON.parse(r[3]).text === '切れている 間の 付箋'), '通信が 切れている 間に 書いて 閉じても、次に 開いた 時に 送られる');
+  await again2.close();
+  }
 
   // 先生の 一覧
   await ta.click('[data-act=ttab][data-k=list]');

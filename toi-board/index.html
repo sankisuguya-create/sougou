@@ -218,7 +218,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 6, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 7, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -330,7 +330,13 @@ function commit(fn, noHist){
   var b = snap(); fn(); check();
   if(!noHist) remember(b);
   var ops = {up:[], del:[], star:[], cmt:[], modes:null}, now = {}, st = {}, cm = {};
-  S.items.forEach(function(x){ now[x.id] = 1; var j = JSON.stringify(x); if(b.m[x.id] !== j) ops.up.push(JSON.parse(j)); });
+  S.items.forEach(function(x){
+    now[x.id] = 1; var j = JSON.stringify(x);
+    if(b.m[x.id] === j) return;
+    if(!b.m[x.id]){ ops.up.push(JSON.parse(j)); return; }  // 新しい 付箋は まるごと
+    var d = diffKeys(JSON.parse(b.m[x.id]), x);         // すでに ある 付箋は 変わった 項目だけ（同じ班の 子の 変更を 上書きしない）
+    ops.up.push({id:x.id, team:x.team, p:d.p, u:d.u});
+  });
   Object.keys(b.m).forEach(function(id){ if(!now[id]) ops.del.push(id); });
   S.stars.forEach(function(s){
     var k = skey(s) + '|' + s.viewer; st[k] = 1;
@@ -343,6 +349,13 @@ function commit(fn, noHist){
   Platform.push(ops);
   render();
 }
+/* 2つの 付箋の ちがう 項目：p＝新しい 値、u＝なくなった 項目 */
+function diffKeys(a, b){
+  var p = {}, u = [];
+  Object.keys(b).forEach(function(k){ if(JSON.stringify(a[k]) !== JSON.stringify(b[k])) p[k] = b[k]; });
+  Object.keys(a).forEach(function(k){ if(!(k in b)) u.push(k); });
+  return {p:p, u:u};
+}
 /* 変わった 付箋・シールだけ 前と後を 覚える（ほかの人の 変更は 巻き戻さない）。モードは 対象外 */
 function remember(b){
   var a = snap(), e = {before:{m:{}, st:{}, cm:{}}, after:{m:{}, st:{}, cm:{}}}, n = 0;
@@ -353,10 +366,16 @@ function remember(b){
   hist.undo.push(e); if(hist.undo.length > 50) hist.undo.shift();
   hist.redo = [];
 }
-function putBack(state){
+function putBack(state, other){
   Object.keys(state.m).forEach(function(id){
-    S.items = S.items.filter(function(x){ return x.id !== id; });
-    if(state.m[id]) S.items.push(JSON.parse(state.m[id]));
+    var to = state.m[id] ? JSON.parse(state.m[id]) : null, from = other && other.m[id] ? JSON.parse(other.m[id]) : null, cur = item(id);
+    if(!to){ S.items = S.items.filter(function(x){ return x.id !== id; }); return; }  // 書いた のを もどす
+    if(!from || !cur){ if(!cur) S.items.push(to); return; }                          // 消した のを もどす
+    // 直した のを もどす：自分が 変えた 項目だけ
+    Object.keys(to).concat(Object.keys(from)).forEach(function(k){
+      if(JSON.stringify(to[k]) === JSON.stringify(from[k])) return;
+      if(k in to) cur[k] = to[k]; else delete cur[k];
+    });
   });
   Object.keys(state.st).forEach(function(k){
     S.stars = S.stars.filter(function(s){ return skey(s) + '|' + s.viewer !== k; });
@@ -371,11 +390,11 @@ function putBack(state){
 }
 function undo(){
   var e = hist.undo.pop(); if(!e){ toast('もどせる 操作は ありません'); return; }
-  ui.sheet = null; commit(function(){ putBack(e.before); }, true); hist.redo.push(e); toast('もとに もどしました');
+  ui.sheet = null; commit(function(){ putBack(e.before, e.after); }, true); hist.redo.push(e); toast('もとに もどしました');
 }
 function redo(){
   var e = hist.redo.pop(); if(!e){ toast('やり直せる 操作は ありません'); return; }
-  ui.sheet = null; commit(function(){ putBack(e.after); }, true); hist.undo.push(e); toast('やり直しました');
+  ui.sheet = null; commit(function(){ putBack(e.after, e.before); }, true); hist.undo.push(e); toast('やり直しました');
 }
 function check(){
   S.items.forEach(function(x){
@@ -797,6 +816,7 @@ function viewSheet(){
       kids.forEach(function(k){ h += '<div class="one">' + noteHTML(k, {inline:true}) + (canEdit() ? '<div class="row"><button class="btn" data-act="totop" data-id="' + k.id + '">いちばん 上に する</button><button class="btn" data-act="unstack" data-id="' + k.id + '">とりだす</button></div>' : '') + '</div>'; });
       h += '</div>';
     }
+    if(isTeacher()) h += '<div class="row" style="margin-top:16px"><button class="btn danger" data-act="purge" data-id="' + n.id + '">' + (ui.armed === 'purge' ? 'もう一度 押すと 完全に 消えます（もどせません）' : 'この 付箋を 完全に 消す') + '</button></div>';
     h += '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
   } else if(s.type === 'cmt'){
     var cn = item(s.id), mc2 = myComment(s.id);
@@ -1212,6 +1232,18 @@ document.addEventListener('click', function(e){
   if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; Platform.watch(ui.viewTeam); render(); return; }
   if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; Platform.watch(null); render(); return; }
   if(act === 'tsort'){ ui.trashSort = b.getAttribute('data-v'); render(); return; }
+  if(act === 'purge'){
+    if(!isTeacher()) return;
+    if(ui.armed !== 'purge'){ ui.armed = 'purge'; render(); setTimeout(function(){ if(ui.armed === 'purge'){ ui.armed = false; render(); } }, 4000); return; }
+    ui.armed = false; ui.sheet = null;
+    /* 先生だけ：付箋と その シール・コメントを 消す。重なっていた 付箋は 単独に、つながる 矢印は 消す */
+    S.items.forEach(function(x){ if(x.stackOf === id){ delete x.stackOf; var p = freeSpot(x.team, x.face); x.x = p.x; x.y = p.y; } });
+    S.items = S.items.filter(function(x){ return x.id !== id && !(x.kind === 'arrow' && (x.from === id || x.to === id)); });
+    S.stars = S.stars.filter(function(x){ return x.noteId !== id; });
+    S.comments = (S.comments || []).filter(function(x){ return x.noteId !== id; });
+    Platform.push({up:[], del:[], star:[], cmt:[], purge:[id]});
+    toast('付箋を 完全に 消しました'); render(); return;
+  }
   if(act === 'ttab'){ ui.ttab = b.getAttribute('data-k'); if(ui.ttab === 'tally') ui.tRound = 0; render(); window.scrollTo(0, 0); return; }
   if(act === 'modes-off'){
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); MODES.forEach(function(x){ mm[x.k] = x.scoped ? 'off' : false; }); });
