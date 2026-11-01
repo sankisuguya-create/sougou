@@ -211,7 +211,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 5, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 6, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -493,6 +493,8 @@ function visibleFaces(){
   if(isTeacher() || isMine()) return FACES;
   return FACES.filter(function(f){ return (f.k === 'front' && reach('view', boardTeam())) || (f.k === 'gift' && canPropose()); });
 }
+/* シール貼り画面で 見る 班（シール（班の外）が 入っている 時だけ） */
+function galleryTeams(){ if(!S || isTeacher() || !modeOn(M().starOut)) return []; return SPOTS.filter(function(s){ return s.team !== myTeam() && reach('starOut', s.team); }).map(function(s){ return s.team; }); }
 function lookable(){ return SPOTS.filter(function(s){ return s.team !== myTeam() && (reach('view', s.team) || reach('propose', s.team)); }); }
 
 /* ===== 絵 ===== */
@@ -892,7 +894,7 @@ function viewTeacher(){
   if(ui.tview === 'tally') return viewTally();
   var cs = classes(), tm = S.modes[ui.tCls] || blankModes();
   var h = '<div class="teacher"><h2>モード</h2>';
-  if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童に「ページを 更新して」と 伝えてください。更新するまで 前の モードの 画面の ままです（できない 操作は はねられます）。</div>';
+  if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童の 画面に 10秒ほどで 届きます（ページの 更新は いりません）。</div>';
   h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '">' + c + '組</button>'; }).join('') + '</div>';
   MODES.forEach(function(x){
     h += '<div class="mode"><span style="min-width:150px;font-weight:700">' + x.label + '</span>';
@@ -1271,7 +1273,7 @@ var TRIAL_STEPS = [
     '「CSV を ダウンロード」で 書いた人の 番号つきの 記録']},
   {who:'teacher', title:'④ 児童の 画面の 設定を 変える（先生）', items:[
     'モード：共同閲覧・アイデア提案・シール（班の中／外）を 組ごとに「切／同じ組／学年」で 決める',
-    '本番では 変えたら「ページを 更新して」と 合図（体験版では すぐ 反映）',
+    '本番では 児童の 画面に 10秒ほどで 届く（ページの 更新は いらない。体験版では すぐ 反映）',
     '「第2回を はじめる」で 見合い会の 回を 進める（シール・持ち分・見てほしい付箋が 回ごとに なる）',
     '上の「見本の 切り替え」で 児童に して、変わった 画面を たしかめる']}
 ];

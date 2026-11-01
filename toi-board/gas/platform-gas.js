@@ -1,25 +1,35 @@
 'PLATFORM_BEGIN';
 /* GAS版の 保存。build.cjs が ../index.html の PLATFORM 区間を これに 差し替える。
-   軽さを 優先：
-   ・モードは 開いた時に 1回 読むだけ。変えたら 先生が「ページを 更新して」と 合図する。
-   ・児童は 約10秒（±3秒）ごとに 自分の班（と 今 見ている 班）の 版だけを 確かめる。
-     ほかの班で 何が 起きても、自分に 関係が なければ サーバーは シートを 読まない。
-   ・書く：変更の 差分を 250ms ためて apply へ。届くまで 自分の 変更は 上書きしない（pend）。
+   約90人が 同時に つかう 前提で 軽くする：
+   ・モード・回は ふだんの 確認で 届く（版が 変わった 時だけ）。ページの 開き直しは いらない
+     （全員が 一斉に 開き直すと、同時に 動かせる 処理の 上限（約30）を こえるため）。
+   ・児童は 約10秒（±3秒）ごとに 自分の班（と 今 見ている 班、シール貼りの 時は その 班たち）の 版だけを 確かめる。
+     版は キャッシュで まとめて 引くので、変化が なければ シートは 読まない。
+   ・書く：付箋は 250ms、シール・コメントは 1.5秒 ためて まとめて 送る（書きこみの 回数を へらす）。
+   ・開く・確かめるに 失敗したら、1〜5秒の ばらばらな 間を おいて やり直す（一斉の やり直しを 防ぐ）。
    ・タブが 裏の 間は 確かめない。 */
 var Platform = (function(){
   var POLL = window.TOI_POLL_MS || 10000, JIT = window.TOI_POLL_JIT == null ? 3000 : window.TOI_POLL_JIT;
-  var role = '', own = '', watching = null, tv = {}, all = 0, got = {};
-  var pend = {}, q = blank(), timer = null, busy = false, pollT = null, errs = 0, polling = false, again = false;
+  var SEAL_WAIT = window.TOI_SEAL_WAIT == null ? 1500 : window.TOI_SEAL_WAIT;
+  var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '';
+  var pend = {}, q = blank(), timer = null, due = 0, busy = false, pollT = null, errs = 0, polling = false, again = false;
   function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, modes:null}; }
   function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !x.modes; }
   function net(t){ var el = document.getElementById('net'); if(el) el.textContent = t; }
+  function backoff(){ return 1000 + Math.random() * 4000; }
   function run(name, args, ok, ng){
     var r = google.script.run
       .withSuccessHandler(function(x){ errs = 0; net(''); ok(x); })
       .withFailureHandler(function(e){ errs++; net('つながりにくい ようです（' + errs + '）。そのまま つづけて だいじょうぶ'); if(ng) ng(e); });
     r[name].apply(r, args);
   }
-  function schedule(ms){ clearTimeout(timer); timer = setTimeout(send, ms == null ? 250 : ms); }
+  /* 早く 送る ほうを 優先（付箋の 変更が あれば シールの 待ちより 先に 送る） */
+  function schedule(ms){
+    ms = ms == null ? 250 : ms;
+    var at = Date.now() + ms;
+    if(timer && due && due <= at) return;
+    clearTimeout(timer); due = at; timer = setTimeout(function(){ timer = null; due = 0; send(); }, ms);
+  }
   function send(){
     if(busy || empty(q)) return;
     busy = true;
@@ -37,8 +47,9 @@ var Platform = (function(){
       Object.keys(sent.star).forEach(function(id){ if(!(id in q.star)) delete pend['*' + id]; });
       Object.keys(sent.cmt).forEach(function(id){ if(!(id in q.cmt)) delete pend['#' + id]; });
       if(r && r.rejected && r.rejected.length){
-        toast('先生の モードが かわりました。ページを 更新してね');
-        if(own) tv[own] = 0; if(watching) tv[watching] = 0; all = 0;
+        // モードや 回が 先に 変わっていた：最新の モードと 班の 中身を 取り直す
+        toast('うまく 送れなかったので、さいしんの 画面に します');
+        mver = ''; if(own) tv[own] = 0; if(watching) tv[watching] = 0; all = 0;
         pull();
       }
       if(!empty(q)) schedule(0);
@@ -50,14 +61,15 @@ var Platform = (function(){
       Object.keys(sent.star).forEach(function(k){ if(!(k in q.star)) q.star[k] = sent.star[k]; });
       Object.keys(sent.cmt).forEach(function(k){ if(!(k in q.cmt)) q.cmt[k] = sent.cmt[k]; });
       if(!q.modes) q.modes = sent.modes;
-      schedule(Math.min(30000, 2000 * errs));
+      schedule(Math.min(30000, 2000 * errs + backoff()));
     });
   }
   function request(){
     if(role === 'teacher') return {all:all};
     var t = {}; t[own] = tv[own] || 0;
     if(watching && watching !== own) t[watching] = tv[watching] || 0;
-    return {teams:t};
+    (typeof galleryTeams === 'function' ? galleryTeams() : []).forEach(function(g){ if(!(g in t)) t[g] = tv[g] || 0; });
+    return {teams:t, mv:mver};
   }
   function pull(){
     if(polling){ again = true; return; }
@@ -65,9 +77,13 @@ var Platform = (function(){
     run('poll', [request()], function(r){
       polling = false;
       if(!r.same){
+        var gotModes = r.mver !== undefined && String(r.mver) !== mver;
+        if(r.mver !== undefined) mver = String(r.mver);
         if(r.tv) Object.keys(r.tv).forEach(function(t){ tv[t] = r.tv[t]; got[t] = 1; });
         if(r.all) all = r.all;
         mergeRemote(r, pend);
+        // モードが 変わって シール貼りの 班が ふえたら、すぐ 取りに行く
+        if(gotModes && typeof galleryTeams === 'function' && galleryTeams().some(function(g){ return !got[g]; })) again = true;
       }
       if(again){ again = false; pull(); }
     }, function(){ polling = false; });
@@ -76,28 +92,42 @@ var Platform = (function(){
     clearTimeout(pollT);
     pollT = setTimeout(function(){ if(!document.hidden) pull(); loop(); }, Math.max(1000, POLL + (Math.random() * 2 - 1) * JIT));
   }
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) pull(); });
+  /* 画面を はなれる 時は、ためている 書きこみを すぐ 送る（1.5秒 ためている 間に 閉じても 消えない） */
+  function flush(){ if(!empty(q)){ clearTimeout(timer); timer = null; due = 0; send(); } }
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) flush(); else pull(); });
+  window.addEventListener('pagehide', flush);
   return {
     demo:false,
     start:function(cb){
-      run('boot', [], function(r){
-        if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
-        if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
-        role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all;
-        cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
-        loop();
-      }, function(e){
-        document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + String(e && e.message || e).replace(/[<>&]/g, '') + '</p>';
-      });
+      var tries = 0;
+      (function boot(){
+        run('boot', [], function(r){
+          if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
+          if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
+          role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
+          cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+          loop();
+        }, function(e){
+          var msg = String(e && e.message || e);
+          // 名簿に ない 等は やり直しても かわらない。それ以外（混雑 など）は 間を おいて やり直す
+          if(/NOT_IN_ROSTER|NO_EMAIL/.test(msg) || ++tries > 8){
+            document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + msg.replace(/[<>&]/g, '') + '</p>';
+            return;
+          }
+          net('つながるのを まっています（' + tries + '）');
+          setTimeout(boot, backoff() * Math.min(tries, 3));
+        });
+      })();
     },
     push:function(ops){
       if(!ops) return;
+      var onlySeal = !ops.up.length && !ops.del.length && !ops.modes;
       ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
       ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
       ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k + '|' + (s.rd == null ? 1 : s.rd); q.star[key] = s; pend['*' + key] = 1; });
       (ops.cmt || []).forEach(function(c){ q.cmt[c.noteId] = c; pend['#' + c.noteId] = 1; });
       if(ops.modes) q.modes = ops.modes;
-      schedule();
+      schedule(onlySeal ? SEAL_WAIT : 250);
     },
     /* ほかの班を 開いた時だけ その班を 取りに行く（児童） */
     watch:function(team){
@@ -106,7 +136,8 @@ var Platform = (function(){
       if(watching){ tv[watching] = 0; got[watching] = 0; pull(); }
     },
     loading:function(team){ return role !== 'teacher' && team === watching && !got[team]; },
-    setMe:function(){}
+    setMe:function(){},
+    state:function(){ return {mver:mver, tv:tv, polling:polling, role:role}; }
   };
 })();
 'PLATFORM_END';
