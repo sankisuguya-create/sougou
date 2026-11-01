@@ -96,9 +96,13 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .cnt{position:absolute;right:-7px;bottom:-6px;font-size:14px;font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:3px #1A1A1A;paint-order:stroke fill;text-shadow:0 0 1px #1A1A1A;white-space:nowrap;pointer-events:none;transform:none}
 .show.old{background:#8A8F98}
 /* 班の中の いいね：ふつうの シールの 半分の 大きさで、付箋の 文の 上に */
-.likes{display:flex;align-items:center;gap:2px;height:16px;margin:-4px 0 2px;font-size:11px;font-weight:700;color:var(--sub)}
-.likes img{width:15px;height:15px}
-.likes.mine b{color:var(--cat-1)}
+.likes{display:flex;align-items:center;gap:7px;height:16px;margin:-4px 0 2px}
+/* いいねは メンバーごとの 色＋形（色だけに たよらない）。親指の 形を その色で ぬる */
+.lk{position:relative;display:inline-block;width:15px;height:15px}
+.th{display:block;width:15px;height:15px;background:var(--c);-webkit-mask:var(--thumb) center/contain no-repeat;mask:var(--thumb) center/contain no-repeat}
+.lk b{position:absolute;right:-4px;bottom:-5px;font-size:9px;line-height:1;color:var(--c);-webkit-text-stroke:2px #fff;paint-order:stroke fill}
+.mates{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--sub);margin-left:12px}
+.mates span{font-weight:700}
 .show{position:absolute;left:8px;top:-14px;background:#0F5EA8;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px}
 /* シール貼り（ほかの班）画面 */
 .gal{padding:12px 16px 80px}
@@ -499,7 +503,23 @@ function mergeRemote(r, pend){
   afterRemote();
 }
 function cmtOf(c){ return {noteId:c.noteId, viewer:c.viewer, text:String(c.text || '')}; }
-function starOf(s){ var o = {noteId:s.noteId, viewer:s.viewer, k:kindOf(s), rd:rdOf(s)}; if(s.x != null){ o.x = s.x; o.y = s.y; o.r = s.r; } return o; }
+/* 班の メンバーの 色と 形（番号順。最大5人）。色は 検証ずみ（強度2色覚でも 区別できる）、形を かさねる */
+var MEMBER = [{c:'#0F5EA8', m:'●'}, {c:'#C86A00', m:'▲'}, {c:'#6E4310', m:'■'}, {c:'#7A7F86', m:'◆'}, {c:'#1A1A1A', m:'★'}];
+function matesOf(team){
+  if(S.mates && S.mates[team]) return S.mates[team];
+  return S.roster.filter(function(c){ return c.team === team; }).sort(function(a, b){ return a.no - b.no; }).map(function(c, i){ return {slot:i, no:c.no, id:c.id}; });
+}
+function slotOf(s, team){
+  if(s.slot != null) return s.slot;
+  var m = matesOf(team).filter(function(x){ return x.id === s.viewer; })[0];
+  return m ? m.slot : 0;
+}
+function mateLabel(s, team){ var m = matesOf(team).filter(function(x){ return x.slot === slotOf(s, team); })[0]; return m ? m.no + 'ばん' : ''; }
+function matesHTML(team){
+  var ms = matesOf(team); if(!ms.length) return '';
+  return '<span class="mates">いいねの いろ：' + ms.map(function(x){ var m = MEMBER[x.slot % MEMBER.length]; return '<span style="color:' + m.c + '">' + m.m + x.no + 'ばん' + (x.id === me ? '（じぶん）' : '') + '</span>'; }).join('') + '</span>';
+}
+function starOf(s){ var o = {noteId:s.noteId, viewer:s.viewer, k:kindOf(s), rd:rdOf(s)}; if(s.slot != null) o.slot = s.slot; if(s.x != null){ o.x = s.x; o.y = s.y; o.r = s.r; } return o; }
 function afterRemote(){
   if(ui.viewTeam && !reach('view', ui.viewTeam) && !reach('propose', ui.viewTeam)){ ui.viewTeam = null; Platform.watch(null); }
   if(ui.sheet && ui.sheet.id && !item(ui.sheet.id) && ui.sheet.type !== 'write') ui.sheet = null;
@@ -593,7 +613,7 @@ function noteHTML(n, opt){
   var layers = '', kids = stackOf(n.id).length;
   for(var i = Math.min(kids, 4); i >= 1; i--) layers += '<div class="layer" style="transform:translate(' + (i*3) + 'px,' + (i*3) + 'px) rotate(' + (i % 2 ? 1.2 : -0.8) + 'deg)"></div>';
   var cm = commentsOf(n.id); if(!isTeacher() && n.team !== myTeam()) cm = cm.filter(function(c){ return c.viewer === me; });
-  var lk = likesOf(n.id), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes' + (lk.some(function(x){ return x.viewer === me; }) ? ' mine' : '') + '" data-likes="' + n.id + '">' + sealImg('thumb', 15) + (lk.length >= 2 ? '<b>×' + lk.length + '</b>' : '') + '</div>' : '';
+  var lk = likesOf(n.id).slice().sort(function(a, b){ return slotOf(a, n.team) - slotOf(b, n.team); }), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes" data-likes="' + n.id + '">' + lk.map(function(x){ var m = MEMBER[slotOf(x, n.team) % MEMBER.length]; return '<span class="lk" style="--c:' + m.c + '" title="' + esc(mateLabel(x, n.team)) + '"><i class="th"></i><b>' + m.m + '</b></span>'; }).join('') + '</div>' : '';
   var cicon = cm.length && !opt.inline ? '<div class="cicon" data-cmts="' + n.id + '" title="コメントを 見る">💬' + (cm.length >= 2 ? cm.length : '') + '</div>' : '';
   /* 自分の班（と先生）は 種類ごとに「×N」。ほかの班では 自分が 貼った 種類だけ（数は 出さない） */
   var st = starsOf(n.id), all = showCount(n), stars = '';
@@ -776,6 +796,7 @@ function viewChild(){
       + '<button class="btn" data-act="home">じぶんの 班に もどる</button></div>';
   }
   if(ui.face === 'trash') h += '<div class="tools">' + trashSortHTML() + '</div>';
+  else if(mine && ui.face === 'front') h += '<div class="tools" style="padding-left:88px">' + matesHTML(team) + '</div>';
   var bar = '';
   if(mine && ui.face !== 'trash'){
     bar = '<div class="tbar">'
@@ -1398,7 +1419,8 @@ function csv(){
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], {type:'text/csv'})); a.download = 'toiboard.csv'; a.click();
 }
 
-Platform.start(function(s, who, spots, info){ S = s; S.comments = S.comments || []; me = who;
+document.documentElement.style.setProperty('--thumb', 'url("' + SEAL_IMG.thumb + '")');
+Platform.start(function(s, who, spots, info){ S = s; S.comments = S.comments || []; me = who; if(info && info.mates){ S.mates = {}; S.mates[info.team] = info.mates; }
   if(TRIAL && !S.items.length){ trialSeed(); trialGo(0); return; }
   if(TRIAL) ui.trialStep = 0; if(spots) SPOTS = spots; if(info && info.cls) ui.tCls = info.cls; var c = child(me); if(!c && classes().indexOf(ui.tCls) < 0) ui.tCls = classes()[0]; render(); });
 </script>

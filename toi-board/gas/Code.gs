@@ -83,6 +83,16 @@ function spots_(){
     return {team:cls + '-' + no, cls:cls, no:no, name:String(r[2])};
   });
 }
+/* 班の 中の 番号順（いいねの 色・形）。メール → {team, slot, no} */
+function slots_(){
+  var c = cache_().get('slots'); if(c) return JSON.parse(c);
+  var by = {};
+  rows_(SH.roster).forEach(function(r){ if(r[0] === '') return; var t = String(r[1]).trim() + '-' + Number(r[2]); (by[t] = by[t] || []).push({id:low_(r[0]), no:Number(r[3])}); });
+  var m = {};
+  Object.keys(by).forEach(function(t){ by[t].sort(function(a, b){ return a.no - b.no; }).forEach(function(x, i){ m[x.id] = {team:t, slot:i, no:x.no}; }); });
+  cache_().put('slots', JSON.stringify(m), 21600);
+  return m;
+}
 function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
 function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
@@ -128,6 +138,9 @@ function boot(){
     spots_().forEach(function(s){ if(s.team !== u.team && reach_(u, modes, 'starOut', s.team)) spec[s.team] = 0; });
     p = pull_(u, spec); p.tv = tv;
   }
+  if(u.role === 'child'){
+    var sl = slots_(); u.mates = Object.keys(sl).filter(function(k){ return sl[k].team === u.team; }).map(function(k){ return {slot:sl[k].slot, no:sl[k].no, id:k === u.id ? u.id : 'm' + sl[k].slot}; }).sort(function(a, b){ return a.slot - b.slot; });
+  }
   p.api = API_VER; p.trialUrl = ScriptApp.getService().getUrl() + '?trial=1'; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
@@ -172,6 +185,7 @@ function pull_(u, spec){
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
     var o = {noteId:String(r[1]), k:String(r[6] || 'star'), rd:r[8] === '' || r[8] == null ? 1 : Number(r[8]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    if(o.k === 'thumb' && (u.role === 'teacher' || team === u.team)){ var sv = slots_()[viewer]; if(sv) o.slot = sv.slot; }
     if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
     stars.push(o);
   });
@@ -318,5 +332,5 @@ function clamp_(v, a, b){ v = Number(v); return isNaN(v) ? a : Math.max(a, Math.
 /* 名簿・先生・スポットを 直したら 実行（覚えを 消す） */
 function clearWhoCache(){
   var keys = rows_(SH.roster).concat(rows_(SH.teachers)).map(function(r){ return 'who:' + low_(r[0]); });
-  cache_().removeAll(keys.concat(['modes']));
+  cache_().removeAll(keys.concat(['modes', 'slots']));
 }

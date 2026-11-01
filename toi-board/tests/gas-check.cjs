@@ -213,6 +213,8 @@ function makeGas() {
   ok(r.rejected.length === 1, 'ほかの班の 付箋には いいねは つけられない');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.some(s => s.k === 'thumb' && s.rd === 0), 'いいねは 回に 関係ない（rd=0）');
+  ok(r.stars.some(s => s.k === 'thumb' && s.slot === 1) && JSON.stringify(G.as('a01' + D, 'boot').me.mates.map(m => [m.slot, m.no])) === '[[0,1],[1,2]]', 'いいねには 班の 中の 番号順（色・形）が つき、メンバーの 番号が 届く（メールは 届かない）');
+  ok(!JSON.stringify(G.as('a01' + D, 'boot').me.mates).includes('a02'), 'ほかの メンバーの メールは 届かない');
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
