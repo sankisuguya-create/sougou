@@ -181,12 +181,18 @@ var GLINT = {
   circle:'<path d="M9 12.5q1.6-4 6-5.2" /><circle cx="8.3" cy="15.8" r="1"/>',
   bolt:'<path d="M13.2 14.2q1.4-2.6 3.6-4.6" /><circle cx="11.9" cy="16.4" r=".9"/>'
 };
+/* 固有色は 似た2色の グラデーション（左上が明るく 右下が濃い：光の向きと そろえる） */
+var STICKER_COLORS = {
+  '#E0A43A':['#F6CB5C', '#D98F22'],
+  '#C8322E':['#E8574A', '#B32326']
+};
 function sticker(shape, color, size){
-  var d = SHAPES[shape];
+  var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
     + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3.25" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
     + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3.25" stroke-linejoin="round"/>'
-    + '<path d="' + d + '" fill="' + color + '"/>'
+    + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
+    + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>'
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
