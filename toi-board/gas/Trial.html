@@ -548,7 +548,7 @@ function noteHTML(n, opt){
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, j = jit(n.id + K.k), r = j.r;
-      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>';
+      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = shownNow(n) ? '<div class="show">見てほしい</div>' : shownBefore(n) ? '<div class="show old">第' + showRound(n) + '回</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
@@ -755,8 +755,8 @@ function viewSheet(){
       + '<div class="hits">' + (hits.length ? hits.map(function(n){
           var cs = kindCounts(n), lk = likesOf(n.id).length;
           return '<button class="hcard' + (n.done ? ' done' : '') + '" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span><span class="meta">'
-            + (lk ? '<span class="sc">' + sealImg('thumb', 16) + (lk >= 2 ? '×' + lk : '') + '</span>' : '')
-            + USE_KINDS.map(function(K){ var c = cs[KINDS.indexOf(K)]; return c ? '<span class="sc">' + sealImg(K.k, 20) + (c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>' : ''; }).join('')
+            + (lk ? '<span class="sc">' + sealImg('thumb', 16) + (lk >= 2 ? '<b class="cnt">' + lk + '</b>' : '') + '</span>' : '')
+            + USE_KINDS.map(function(K){ var c = cs[KINDS.indexOf(K)]; return c ? '<span class="sc">' + sealImg(K.k, 20) + (c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>' : ''; }).join('')
             + '<span class="tag">' + faceLabel(n.face) + (n.stackOf ? '・重なり' : '') + '</span><span class="tag">' + fmtDate(writtenAt(n)) + '</span></span></button>';
         }).join('') : '<p>見つかりません</p>') + '</div>';
   } else if(s.type === 'teams'){

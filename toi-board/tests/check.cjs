@@ -185,10 +185,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(sCirc.y >= textBox - 2, 'シールは 文字に かからない');
   const cb = await page.locator(`[data-stars="${c}"] [data-kind=star] .cnt`).boundingBox(), ib = await page.locator(`[data-stars="${c}"] [data-kind=star] img`).boundingBox();
   const cx = cb.x + cb.width / 2, cy = cb.y + cb.height / 2;
-  ok(cx > ib.x + ib.width / 2 && cy > ib.y + ib.height / 2 && cb.x < ib.x + ib.width && cb.y < ib.y + ib.height, '「×7」は シールの 右下に 重ねて 出る');
-  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=pick]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
+  ok(cx > ib.x + ib.width / 2 && cy > ib.y + ib.height / 2 && cb.x < ib.x + ib.width && cb.y < ib.y + ib.height, '数（7）は シールの 右下に 重ねて 出る（×は つけない）');
+  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star] .cnt`)).trim() === '7' && await page.locator(`[data-stars="${c}"] [data-kind=pick]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
-  ok(!(await page.textContent(`[data-stars="${c}"]`)).includes('×'), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
+  ok(!(await page.locator(`[data-stars="${c}"] .cnt`).count()), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
   await page.click('[data-act=home]');
 
   // 班1 の いただきもの：班名だけ

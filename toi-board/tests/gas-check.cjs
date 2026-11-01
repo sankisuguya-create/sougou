@@ -167,7 +167,7 @@ function makeGas() {
   await b01.mouse.click(bb.x + 150, bb.y + 90);
   G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
   await sleep(1600); await settle();  // シールは 1.5秒 ためて 送る
-  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star]`)).includes('×2') && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
+  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star] .cnt`)).trim() === '2' && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.length === 3 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer) && s.x === undefined), '貼った人は 記号に なり、場所は 本人にしか 届かない');
   await reload(b01);
