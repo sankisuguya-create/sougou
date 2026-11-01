@@ -1260,7 +1260,8 @@ var TRIAL_STEPS = [
     '左下の ＋ で 付箋を 書く。書く 画面の「？のたね」を 押すと 言葉が 入る',
     '付箋を ドラッグで うごかす。ほかの 付箋の 上に 落とすと 重なる（タップ →「いちばん 上に する」）',
     '付箋を タップ →「調査済み」「見てほしい付箋に する」「うらがわへ」など',
-    '左の 道具：やじるし（2まいを 順に タップ）・わく・さがす・もどす（Ctrl+Z）',
+    '付箋を タップ →「いいね（班の中）」。いいねは 付箋の 右に、メンバーごとの 色で つく',
+    '左の 道具：やじるし（2まいを 順に タップ）・わく（タイトルを ドラッグで 辺の 上を うごかせる）・さがす（新しい順・あいうえお順など）・もどす（Ctrl+Z）',
     '上の タブで うらがわ・いただきもの・ゴミばこを 見る']},
   {who:'A05', title:'② シール貼り（児童）', items:[
     '先生が「シール（班の外）」を 入れた 時の 画面です（今は A組 2はんの 児童）',
@@ -1306,6 +1307,15 @@ function trialSeed(){
   a1[2].done = true; a1[2].doneBy = 'たろう';
   a1[3].stackOf = a1[2].id;
   S.items.push({id:nid(), kind:'note', team:'A-1', face:'gift', x:1, y:1, text:'ホームベースは だれが ふむの？', author:'A09', fromTeam:'A-3', t:Date.now()});
+  // 班の中の いいね（メンバーごとの 色）、枠（タイトルつき）と 矢印、ゴミばこ、書いた日の ちがい
+  ['A01','A02','A03'].forEach(function(v, i){ S.stars.push({noteId:a1[0].id, viewer:v, k:'thumb', rd:0}); if(i) S.stars.push({noteId:a1[1].id, viewer:v, k:'thumb', rd:0}); });
+  S.stars.push({noteId:a1[4].id, viewer:'A04', k:'thumb', rd:0});
+  var day = 86400000, now = Date.now();
+  S.items.filter(function(x){ return x.team === 'A-1' && x.kind === 'note'; }).forEach(function(x, i){ x.t = now - (6 - i) * day; });
+  S.items.push({id:nid(), kind:'frame', team:'A-1', face:'front', x:0, y:15, w:17, h:8, text:'本命こうほ', lp:0.62});
+  a1[4].x = 1; a1[4].y = 16;
+  S.items.push({id:nid(), kind:'arrow', team:'A-1', face:'front', from:a1[0].id, to:a1[1].id});
+  [['ホームベースは 何こ あるの？', 3], ['あした 見に いける？', 2]].forEach(function(p){ S.items.push({id:nid(), kind:'note', team:'A-1', face:'trash', x:1, y:1, text:p[0], author:'A02', t:now - p[1] * day}); });
   S.modes.A.view = 'class'; S.modes.A.propose = 'class';
   Platform.push(null);
 }
