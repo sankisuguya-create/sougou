@@ -87,6 +87,17 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(s.items.some(x => x.kind === 'frame'), '枠を おける');
   await page.screenshot({ path: SHOTS + '/3-arrow-frame.png' });
 
+  // 見てほしい付箋
+  await page.click(`#board .note[data-id="${c}"]`);
+  await page.click(`[data-act=showcase][data-id="${c}"]`);
+  await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
+  await page.click(`#board .note[data-id="${e}"]`);
+  await page.click(`[data-act=showcase][data-id="${e}"]`);
+  await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
+  s = await st();
+  ok(s.items.find(x => x.id === c).showcase && s.items.find(x => x.id === e).showcase, '「見てほしい付箋」を 設定できる');
+  ok(await page.isVisible(`#board .note[data-id="${c}"] .show`), '見てほしい付箋に しるしが 出る');
+
   // 権限：モードが切ってある間
   await who('c05');
   ok(!(await page.isVisible('[data-act=look]')), '共同閲覧が 切ってあれば ほかの班は 見られない');
@@ -96,42 +107,73 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=seed]');
   await page.click('[data-act=mode][data-k=view]');
   await page.click('[data-act=mode][data-k=propose]');
-  await page.click('[data-act=mode][data-k=starOut]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
-  // 別の班の児童
+  // 別の班の児童：共同閲覧・提案
   await who('c05');
   await page.click('[data-act=look][data-t="1"]');
   ok(await page.isVisible('text=1はん「阪急西宮北口」を 見ています'), '共同閲覧で ほかの班を 見られる');
   ok(!(await page.isVisible('.face[data-face=back]')) && !(await page.isVisible('.face[data-face=trash]')), 'ほかの班の うらがわ・ゴミばこは 見えない');
   ok(!(await page.isVisible('[data-act=frame]')), 'ほかの班の ボードは 動かせない');
-  // シール（班の外）上限なし・1まいの付箋に1人1まい
-  await page.click(`#board .note[data-id="${c}"]`);
-  await page.click(`[data-act=star][data-id="${c}"]`);
-  await page.click(`#board .note[data-id="${e}"]`);
-  await page.click(`[data-act=star][data-id="${e}"]`);
-  s = await st();
-  ok(s.stars.filter(x => x.viewer === 'c05').length === 2, 'シール（班の外）を 何まいでも 貼れる');
-  for (const v of ['c06', 'c07', 'c08', 'c09', 'c10', 'c11']) { await page.evaluate(v => { const s = JSON.parse(localStorage.getItem('toiboard.v2')); s.stars.push({ noteId: s.items.find(x => x.text === 'ホームベースは 本物なの？').id, viewer: v }); localStorage.setItem('toiboard.v2', JSON.stringify(s)); }, v); }
-  await page.reload(); await page.click('[data-act=look][data-t="1"]');
-  ok((await page.textContent(`[data-stars="${c}"]`)).includes('×7'), '同じシールは「×7」と まとまる');
-  // 提案
   await page.click('.face[data-face=gift]');
   await page.click('[data-act=add]'); await page.fill('#w-text', 'ホームベースは だれが ふむの？'); await page.click('[data-act=w-save]');
   s = await st();
   const g = s.items.find(x => x.fromTeam === 2);
   ok(g && g.team === 1 && g.face === 'gift', 'アイデア提案で ほかの班の いただきものに 貼れる');
-  // 自分の班へ シール（班の中）は 切ってあるので 出ない
   await page.click('[data-act=home]');
   const own = (await st()).items.find(x => x.team === 2 && x.face === 'front');
   await page.click(`#board .note[data-id="${own.id}"]`);
   ok(!(await page.isVisible(`[data-act=star][data-id="${own.id}"]`)), 'シール（班の中）が 切ってあれば 自分の班には 貼れない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
+  // 先生が シール（班の外）を 入れる → 全児童が シール貼り画面へ（別タブにも届く）
+  const p3 = await ctx.newPage(); await p3.goto(FILE); await p3.selectOption('#who', 'c20');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut]');
+  await p3.waitForTimeout(300);
+  ok(await p3.isVisible('text=シールを 貼ろう'), '先生が シール（班の外）を 入れると 別タブの児童画面も 切り替わる');
+  await p3.close();
+  await who('c05');
+  ok(await page.isVisible('text=シールを 貼ろう'), 'シール貼り画面に 切り替わる');
+  ok(await page.isVisible(`.big[data-id="${c}"]`) && await page.isVisible(`.big[data-id="${e}"]`), 'ほかの班の 見てほしい付箋が 大きく 出る');
+  ok(!(await page.isVisible(`.big[data-id="${own.id}"]`)), '自分の班の 付箋は 出ない');
+  ok(await page.locator('.kpick img').count() === 3 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
+  await page.waitForTimeout(1800); // 直前の通知が消えて 描き直されるのを 待つ
+  await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
+  const bigC = await page.locator(`.big[data-id="${c}"]`).boundingBox();
+  await page.mouse.click(bigC.x + 180, bigC.y + 130);
+  await page.click('[data-act=kind][data-k=circle]');
+  await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
+  Object.assign(bigC, await page.locator(`.big[data-id="${c}"]`).boundingBox());
+  await page.mouse.click(bigC.x + 50, bigC.y + 140);
+  await page.mouse.click(bigC.x + 120, bigC.y + 150);
+  s = await st();
+  const mineC = s.stars.filter(x => x.viewer === 'c05' && x.noteId === c);
+  ok(mineC.length === 2 && mineC.every(x => x.x > 0 && x.y > 0), 'タップした 場所に シールが 貼れる（種類ごとに 1まい）');
+  ok(await page.isVisible('text=この シールは もう 貼って あります'), '同じ種類を 2まい目は 貼れない');
+  await page.screenshot({ path: SHOTS + '/5-gallery.png' });
+  await page.click(`.big[data-id="${c}"] .seal >> nth=0`);
+  await page.click('[data-act=peel]');
+  s = await st();
+  ok(s.stars.filter(x => x.viewer === 'c05' && x.noteId === c).length === 1, 'はがせる');
+  // ほかの子の シールは 見えない
+  await page.evaluate(id => { const s = JSON.parse(localStorage.getItem('toiboard.v2')); for (const v of ['c06','c07','c08','c09','c10','c11']) s.stars.push({ noteId: id, viewer: v, k: 'star', x: 50, y: 50, r: 0 }); localStorage.setItem('toiboard.v2', JSON.stringify(s)); }, c);
+  await page.reload();
+  ok(await page.locator(`.big[data-id="${c}"] .seal`).count() === 1, 'シール貼り画面では ほかの子の シールは 見えない');
+  await page.click('[data-act=kind][data-k=star]');
+  await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
+  const bigC2 = await page.locator(`.big[data-id="${c}"]`).boundingBox();
+  await page.mouse.click(bigC2.x + 200, bigC2.y + 40);
+
+  // 先生が 切ると もどる・集計は 班のボードに 種類別「×N」
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut]');
+  await who('c01');
+  ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
+  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=circle]`).count() === 1, '班のボードでは 種類ごとに まとめて 出る（★×7 など）');
+
   // 班1 の いただきもの：班名だけ
   await who('c01'); await page.click('.face[data-face=gift]');
   ok(await page.isVisible('text=2はんから') && !(await page.isVisible('text=5ばん')), 'いただきものは 班名だけ 出る');
-  await page.screenshot({ path: SHOTS + '/5-gift.png' });
+  await page.screenshot({ path: SHOTS + '/6-gift.png' });
 
   // 別タブへ モードが 届く
   const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'c09');
