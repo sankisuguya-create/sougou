@@ -29,6 +29,7 @@ function makeGas() {
     return sh;
   }
   const ss = {
+    getName: () => 'といボード（模擬）',
     getSheetByName: n => sheets[n] || null,
     insertSheet: n => (sheets[n] = Sheet(n))
   };
@@ -39,7 +40,7 @@ function makeGas() {
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
     Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
-    HtmlService: {},
+    HtmlService: {}, Logger: { log: () => {} },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/x/s/ID/exec' }) },
     JSON, Date, Number, String, Math, Error, Object
   };
@@ -71,14 +72,14 @@ function makeGas() {
   const reload = async p => { await p.reload(); await p.waitForSelector('.head, .teacher, .gal'); };
 
   const browser = await chromium.launch();
-  const calls = {}; let failBoot = 0, failApply = 0;
+  const calls = {}; let failBoot = 0, failApply = 0, bootErr = '';
   const errors = [];
   async function open(email, w = 1366) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 768 } });
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error' || m.type() === 'assert') errors.push(email + ': ' + m.text()); });
     page.on('pageerror', e => errors.push(email + ': ' + e));
-    await page.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; if (fn === 'apply' && failApply > 0) { failApply--; return { ng: 'Exception: Service Spreadsheets timed out' }; } if (fn === 'boot' && failBoot > 0) { failBoot--; return { ng: 'Service invoked too many times for one user per minute' }; } try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
+    await page.exposeFunction('__gas', (fn, args) => { calls[fn] = (calls[fn] || 0) + 1; if (fn === 'apply' && failApply > 0) { failApply--; return { ng: 'Exception: Service Spreadsheets timed out' }; } if (fn === 'boot' && failBoot > 0) { failBoot--; return { ng: 'Service invoked too many times for one user per minute' }; } if (fn === 'boot' && bootErr) { return { ng: bootErr }; } try { return { ok: G.as(email, fn, args) }; } catch (e) { return { ng: String(e.message) }; } });
     await page.addInitScript(() => {
       window.TOI_POLL_MS = 400; window.TOI_POLL_JIT = 0;
       const mk = (okf, ngf) => new Proxy({}, { get: (t, k) => {
@@ -89,7 +90,7 @@ function makeGas() {
       window.google = { script: { run: mk(null, null) } };
     });
     await page.goto(FILE);
-    await page.waitForSelector('.head, .teacher, .gal');
+    await page.waitForFunction(() => document.querySelector('.head, .teacher, .gal') || (document.getElementById('app') || {}).textContent.includes('ひらけません'));
     return page;
   }
   const write = async (p, t) => { await p.click('[data-act=add]'); await p.fill('#w-text', t); await p.press('#w-text', 'Enter'); };
@@ -356,6 +357,20 @@ function makeGas() {
   G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
   const crow = G.sheets.comments.data.find(x => x[1] === ids[0] && x[3] === 'b01' + D);
   ok(crow && crow[5] === false && crow[4] === '', '先生は コメントを 1つずつ 消せる（文も のこらない）');
+  }
+
+  // 開けない 時は 理由を 出す／シートが 足りなくても 開ける
+  {
+  delete G.sheets.comments;
+  const okb = G.as('a01' + D, 'boot');
+  ok(okb.me && G.sheets.comments && G.sheets.comments.data[0][0] === 'key', 'シートが 足りなくても 開ける（その場で 作る）');
+  bootErr = "TypeError: Cannot read properties of null (reading 'getLastRow')";
+  const bc0 = calls.boot || 0, t0 = Date.now();
+  const e1 = await open('a05' + D);
+  ok(await e1.isVisible('text=ひらけません') && await e1.isVisible("text=getLastRow") && await e1.isVisible('text=selfCheck') && (calls.boot - bc0) === 1 && Date.now() - t0 < 3000, '設定の まちがいの エラーは やり直さず すぐ 理由と 調べ方を 出す');
+  await e1.close();
+  bootErr = '';
+  ok(/スプレッドシートに つながっているか：はい/.test(G.as('ta@edu.nishi.or.jp', 'selfCheck')), 'selfCheck で 原因を しらべられる');
   }
 
   // 先生の 一覧

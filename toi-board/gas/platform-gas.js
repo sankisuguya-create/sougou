@@ -141,11 +141,16 @@ var Platform = (function(){
         }, function(e){
           var msg = String(e && e.message || e);
           // 名簿に ない 等は やり直しても かわらない。それ以外（混雑 など）は 間を おいて やり直す
-          if(/NOT_IN_ROSTER|NO_EMAIL/.test(msg) || ++tries > 8){
-            document.getElementById('app').innerHTML = '<p style="padding:24px;font-size:20px;font-weight:700">ひらけません：' + msg.replace(/[<>&]/g, '') + '</p>';
+          // 混雑・通信の エラーだけ やり直す。それ以外（設定の まちがい など）は やり直しても 直らないので すぐ 理由を 出す
+          var busyErr = /too many|invoked|timed? ?out|timeout|lock|rate|quota|network|failed to fetch|unavailable|503|429|サーバー|混雑/i.test(msg);
+          if(!busyErr || ++tries > 8){
+            document.getElementById('app').innerHTML = '<div style="padding:24px;font-size:18px;line-height:1.7"><p style="font-size:22px;font-weight:700">ひらけません</p>'
+              + '<p>理由：<b>' + msg.replace(/[<>&]/g, '') + '</b></p>'
+              + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
+            net('');
             return;
           }
-          net('つながるのを まっています（' + tries + '）');
+          net('つながるのを まっています（' + tries + '）：' + msg.slice(0, 60));
           setTimeout(boot, backoff() * Math.min(tries, 3));
         });
       })();
