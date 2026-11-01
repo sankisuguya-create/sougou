@@ -16,12 +16,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(FILE); await page.evaluate(() => localStorage.clear()); await page.reload();
   const who = v => page.selectOption('#who', v);
-  const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v2')));
+  const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v3')));
   const write = async t => { await page.click('[data-act=add]'); await page.fill('#w-text', t); await page.press('#w-text', 'Enter'); };
   const box = async id => page.locator(`#board .note[data-id="${id}"]`).boundingBox();
   const dragTo = async (id, x, y) => { const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
 
-  await who('c01');
+  await who('A01');
   for (const q of ['どうして うめたの？', 'いつ なくなったの？', 'ホームベースは 本物なの？', 'だれが きめたの？']) await write(q);
   let s = await st();
   ok(s.items.filter(x => x.kind === 'note' && x.face === 'front').length === 4, '付箋を4まい 表がわに貼れる');
@@ -86,7 +86,6 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   s = await st();
   ok(s.items.some(x => x.kind === 'frame'), '枠を おける');
   await page.screenshot({ path: SHOTS + '/3-arrow-frame.png' });
-
   // 見てほしい付箋
   await page.click(`#board .note[data-id="${c}"]`);
   await page.click(`[data-act=showcase][data-id="${c}"]`);
@@ -99,45 +98,48 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible(`#board .note[data-id="${c}"] .show`), '見てほしい付箋に しるしが 出る');
 
   // 権限：モードが切ってある間
-  await who('c05');
+  await who('A05');
   ok(!(await page.isVisible('[data-act=look]')), '共同閲覧が 切ってあれば ほかの班は 見られない');
 
   // 先生：見本・モード
   await who('teacher');
   await page.click('[data-act=seed]');
-  await page.click('[data-act=mode][data-k=view]');
-  await page.click('[data-act=mode][data-k=propose]');
+  await page.click('[data-act=mode][data-k=view][data-v=class]');
+  await page.click('[data-act=mode][data-k=propose][data-v=class]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
   // 別の班の児童：共同閲覧・提案
-  await who('c05');
-  await page.click('[data-act=look][data-t="1"]');
+  await who('A05');
+  await page.click('[data-act=look][data-t="A-1"]');
   ok(await page.isVisible('text=1はん「阪急西宮北口」を 見ています'), '共同閲覧で ほかの班を 見られる');
   ok(!(await page.isVisible('.face[data-face=back]')) && !(await page.isVisible('.face[data-face=trash]')), 'ほかの班の うらがわ・ゴミばこは 見えない');
   ok(!(await page.isVisible('[data-act=frame]')), 'ほかの班の ボードは 動かせない');
   await page.click('.face[data-face=gift]');
   await page.click('[data-act=add]'); await page.fill('#w-text', 'ホームベースは だれが ふむの？'); await page.click('[data-act=w-save]');
   s = await st();
-  const g = s.items.find(x => x.fromTeam === 2);
-  ok(g && g.team === 1 && g.face === 'gift', 'アイデア提案で ほかの班の いただきものに 貼れる');
+  const g = s.items.find(x => x.fromTeam === 'A-2');
+  ok(g && g.team === 'A-1' && g.face === 'gift', 'アイデア提案で ほかの班の いただきものに 貼れる');
   await page.click('[data-act=home]');
-  const own = (await st()).items.find(x => x.team === 2 && x.face === 'front');
+  const own = (await st()).items.find(x => x.team === 'A-2' && x.face === 'front');
   await page.click(`#board .note[data-id="${own.id}"]`);
   ok(!(await page.isVisible(`[data-act=star][data-id="${own.id}"]`)), 'シール（班の中）が 切ってあれば 自分の班には 貼れない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
-  // 先生が シール（班の外）を 入れる → 全児童が シール貼り画面へ（別タブにも届く）
-  const p3 = await ctx.newPage(); await p3.goto(FILE); await p3.selectOption('#who', 'c20');
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut]');
+  // 先生が シール（班の外）を 同じ組で 入れる → A組の 児童が シール貼り画面へ（別タブにも届く）
+  const p3 = await ctx.newPage(); await p3.goto(FILE); await p3.selectOption('#who', 'A20');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=class]');
   await p3.waitForTimeout(300);
   ok(await p3.isVisible('text=シールを 貼ろう'), '先生が シール（班の外）を 入れると 別タブの児童画面も 切り替わる');
   await p3.close();
-  await who('c05');
+  await who('B01');
+  ok(!(await page.isVisible('text=シールを 貼ろう')), 'ほかの組（B組）は 切り替わらない');
+  await who('A05');
   ok(await page.isVisible('text=シールを 貼ろう'), 'シール貼り画面に 切り替わる');
   ok(await page.isVisible(`.big[data-id="${c}"]`) && await page.isVisible(`.big[data-id="${e}"]`), 'ほかの班の 見てほしい付箋が 大きく 出る');
   ok(!(await page.isVisible(`.big[data-id="${own.id}"]`)), '自分の班の 付箋は 出ない');
+  ok(!(await page.locator('.gteam:has-text("組）")').count()), '「同じ組」なら ほかの組の 班は 出ない');
   ok(await page.locator('.kpick img').count() === 3 && !(await page.locator('.gal svg').count()), 'シールは 画像で 出る（SVGを その場で 描かない）');
-  await page.waitForTimeout(1800); // 直前の通知が消えて 描き直されるのを 待つ
+  await page.waitForTimeout(1800);
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   const bigC = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC.x + 180, bigC.y + 130);
@@ -147,16 +149,15 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.mouse.click(bigC.x + 50, bigC.y + 140);
   await page.mouse.click(bigC.x + 120, bigC.y + 150);
   s = await st();
-  const mineC = s.stars.filter(x => x.viewer === 'c05' && x.noteId === c);
+  const mineC = s.stars.filter(x => x.viewer === 'A05' && x.noteId === c);
   ok(mineC.length === 2 && mineC.every(x => x.x > 0 && x.y > 0), 'タップした 場所に シールが 貼れる（種類ごとに 1まい）');
   ok(await page.isVisible('text=この シールは もう 貼って あります'), '同じ種類を 2まい目は 貼れない');
   await page.screenshot({ path: SHOTS + '/5-gallery.png' });
   await page.click(`.big[data-id="${c}"] .seal >> nth=0`);
   await page.click('[data-act=peel]');
   s = await st();
-  ok(s.stars.filter(x => x.viewer === 'c05' && x.noteId === c).length === 1, 'はがせる');
-  // ほかの子の シールは 見えない
-  await page.evaluate(id => { const s = JSON.parse(localStorage.getItem('toiboard.v2')); for (const v of ['c06','c07','c08','c09','c10','c11']) s.stars.push({ noteId: id, viewer: v, k: 'star', x: 50, y: 50, r: 0 }); localStorage.setItem('toiboard.v2', JSON.stringify(s)); }, c);
+  ok(s.stars.filter(x => x.viewer === 'A05' && x.noteId === c).length === 1, 'はがせる');
+  await page.evaluate(id => { const s = JSON.parse(localStorage.getItem('toiboard.v3')); for (const v of ['A06','A07','A08','A09','A10','A11']) s.stars.push({ noteId: id, viewer: v, k: 'star', x: 50, y: 50, r: 0 }); localStorage.setItem('toiboard.v3', JSON.stringify(s)); }, c);
   await page.reload();
   ok(await page.locator(`.big[data-id="${c}"] .seal`).count() === 1, 'シール貼り画面では ほかの子の シールは 見えない');
   await page.click('[data-act=kind][data-k=star]');
@@ -164,23 +165,74 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const bigC2 = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC2.x + 200, bigC2.y + 40);
 
-  // 先生が 切ると もどる・集計は 班のボードに 種類別「×N」
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut]');
-  await who('c01');
+  // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
-  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=circle]`).count() === 1, '班のボードでは 種類ごとに まとめて 出る（★×7 など）');
+  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=circle]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
+  await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
+  ok(!(await page.textContent(`[data-stars="${c}"]`)).includes('×'), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
+  await page.click('[data-act=home]');
 
   // 班1 の いただきもの：班名だけ
-  await who('c01'); await page.click('.face[data-face=gift]');
+  await who('A01'); await page.click('.face[data-face=gift]');
   ok(await page.isVisible('text=2はんから') && !(await page.isVisible('text=5ばん')), 'いただきものは 班名だけ 出る');
   await page.screenshot({ path: SHOTS + '/6-gift.png' });
 
   // 別タブへ モードが 届く
-  const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'c09');
-  await who('teacher'); await page.click('[data-act=mode][data-k=view]');
+  const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'A09');
+  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=off]'); await page.click('[data-act=mode][data-k=propose][data-v=off]');
   await p2.waitForTimeout(300);
   ok(!(await p2.isVisible('[data-act=look]')), '先生の モード切り替えが 別タブに すぐ届く');
 
+  // 組をまたぐ：A組で学年にすると B組の班が 見え、B組は 自分の組の設定（切）のまま
+  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=grade]');
+  await who('A05');
+  ok(await page.isVisible('[data-act=teams]'), '学年にすると「ほかの組」が 出る');
+  await page.click('[data-act=teams]'); await page.click('[data-act=look][data-t="B-3"]');
+  ok(await page.isVisible('text=B組3はん「御前浜・香櫨園浜」を 見ています'), 'ほかの組の班を 見られる');
+  await who('B01');
+  ok(!(await page.isVisible('[data-act=look]')), 'モードは 組ごと（B組は 切のまま）');
+  // 先生の 意見の一覧
+  await who('teacher');
+  ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
+  const tsv = await page.evaluate(() => opinionTSV());
+  const lines = tsv.split('\n');
+  ok(lines[0].split('\t').length === 13 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  await page.click('[data-act=fcls][data-c=B]');
+  ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
+  await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
+  // 検索：児童は 自分の班だけ。ことば・シールで しぼり、タップで その付箋へ 飛ぶ
+  await who('A01');
+  await page.click('[data-act=search]');
+  await page.fill('#s-text', 'どうして');
+  const hitTexts = await page.$$eval('.hits .hit .t', els => els.map(e => e.textContent));
+  const mineAll = await page.evaluate(() => S.items.filter(x => x.kind === 'note' && x.team === 'A-1').map(x => x.text));
+  ok(hitTexts.length > 0 && hitTexts.every(t => t.includes('どうして') && mineAll.includes(t)), '児童の 検索は 自分の班の 付箋だけ・ことばで しぼれる');
+  ok(!(await page.evaluate(() => searchHits(myTeam(), 'どうして').some(n => n.team !== 'A-1'))), 'ほかの班の 付箋は 検索に 出ない');
+  await page.fill('#s-text', '');
+  await page.click('[data-act=s-kind][data-k=any]');
+  const starHits = await page.$$eval('.hits .hit', els => els.length);
+  const starred = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && S.stars.some(s => s.noteId === x.id)).length);
+  ok(starHits === starred && starHits > 0, 'シールが ある 付箋だけに しぼれる');
+  await page.click('[data-act=s-kind][data-k=circle]');
+  const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'circle')).length);
+  ok(await page.locator('.hits .hit').count() === circ && circ > 0, 'シールの 種類で しぼれる');
+  await page.click('[data-act=s-kind][data-k=""]');
+  await page.fill('#s-text', 'うめた');
+  await page.click('.hits .hit');
+  ok(await page.isVisible('.face.on[data-face=back]') && await page.isVisible('.note.flash'), 'タップすると その付箋の 面（うらがわ）へ 移り 光る');
+  await page.screenshot({ path: SHOTS + '/8-search.png' });
+  // 先生：学年の 全部を ことば・シールで しぼる（表と コピーに 効く）
+  await who('teacher');
+  await page.click('[data-act=fcls][data-c=all]');
+  await page.fill('#t-q', '灯台');
+  const tq = await page.evaluate(() => opinionTSV().split('\n').slice(1));
+  ok(tq.length >= 0 && tq.every(l => l.includes('灯台')), '先生の 一覧を ことばで しぼれる');
+  await page.fill('#t-q', '');
+  await page.click('[data-act=fkind][data-k=star]');
+  const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
+  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

@@ -4,6 +4,7 @@
 
 - `index.html` … v2 ダッシュボード式（現行）
 - `v1-lanes.html` … v1 レーン式（参考）
+- `gas/` … GAS版（本番）。手順は [gas/README.md](gas/README.md)
 
 ## 見本の動かし方
 `index.html` をブラウザで開き、上の「見本の切り替え」で先生／児童を切り替える（本番は Google アカウントで自動判定）。
@@ -13,6 +14,7 @@
 保存は localStorage（同じブラウザの別タブに即時反映）。本番は GAS ＋スプレッドシートへ（`Platform` 層のみ交換）。
 
 ## 検査
-`NODE_PATH=$(npm root -g) node tests/check.cjs`
+`NODE_PATH=$(npm root -g) node tests/check.cjs`（見本）
+`node gas/build.cjs && NODE_PATH=$(npm root -g) node tests/gas-check.cjs`（GAS版を模擬で）
 
 設計の理由は [docs/design.md](docs/design.md)。児童の実名・学級情報はこのリポジトリに置かない。
