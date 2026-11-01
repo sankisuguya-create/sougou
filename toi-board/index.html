@@ -97,6 +97,9 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .peel{position:absolute;right:-30px;top:-30px;min-height:40px;padding:0 10px;border:2px solid var(--ink);border-radius:99px;background:#fff;font-size:14px;font-weight:700;white-space:nowrap;z-index:5}
 @keyframes stick{0%{transform:scale(1.5) rotate(var(--r))}60%{transform:scale(.9) rotate(var(--r))}100%{transform:scale(1) rotate(var(--r))}}
 .seal.new{animation:stick .28s ease-out}
+.gteam .left{display:inline-flex;gap:10px;align-items:center;margin-left:14px;font-size:14px;font-weight:700;color:var(--sub)}
+.gteam .lk{display:inline-flex;align-items:center;gap:2px}
+.gteam .lk.none{opacity:.3}
 .frame{border:3px dashed var(--cat-3);border-radius:10px;background:rgba(251,227,180,.12)}
 .frame .label{position:absolute;left:8px;top:-15px;background:#fff;padding:0 6px;font-weight:700;font-size:16px;color:var(--cat-3);min-width:40px;min-height:24px}
 .frame .grip{position:absolute;right:-14px;bottom:-14px;width:32px;height:32px;border-radius:50%;background:#fff;border:3px solid var(--cat-3)}
@@ -383,6 +386,10 @@ var KINDS = [
   {k:'bolt',   name:'ひらめき',            row:1, col:1},
   {k:'thumb',  name:'分かった',            row:1, col:2}
 ];
+/* 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで（4種類×2＝8まいが その班への 持ち分）。同じ付箋に 同じ種類は 1まい */
+var STAR_PER_TEAM = 2;
+function usedIn(team, k){ return S.stars.filter(function(s){ var n = item(s.noteId); return s.viewer === me && kindOf(s) === k && n && n.team === team; }).length; }
+function leftIn(team, k){ return Math.max(0, STAR_PER_TEAM - usedIn(team, k)); }
 /* シール貼り画面で 選べるのは use の 4種類だけ（ほかは 予備。データは 読める） */
 var USE_KINDS = KINDS.filter(function(K){ return K.use; });
 function slotStyle(K){ var cols = K.row ? 3 : 4, w = 100 / cols; return 'left:' + (w * K.col + w / 2).toFixed(2) + '%;bottom:' + (K.row ? 36 : 4) + 'px'; }
@@ -512,7 +519,10 @@ function viewGallery(){
   teams.forEach(function(sp){
     var notes = S.items.filter(function(x){ return x.team === sp.team && x.kind === 'note' && x.showcase && x.face === 'front' && !x.stackOf; });
     if(!notes.length) return; any = true;
-    h += '<h2 class="gteam">' + esc(sp.name) + (sp.cls !== myCls() ? '（' + sp.cls + '組）' : '') + '</h2><div class="gnotes">';
+    h += '<h2 class="gteam">' + esc(sp.name) + (sp.cls !== myCls() ? '（' + sp.cls + '組）' : '') + '<span class="left" data-left="' + sp.team + '">のこり ' + USE_KINDS.map(function(K){
+        var l = leftIn(sp.team, K.k);
+        return '<span class="lk' + (l ? '' : ' none') + '" data-kind="' + K.k + '">' + sealImg(K.k, 22) + '<b>' + l + '</b></span>';
+      }).join('') + '</span></h2><div class="gnotes">';
     notes.forEach(function(n){
       var mine = S.stars.filter(function(x){ return x.noteId === n.id && x.viewer === me && x.x != null; });
       h += '<div class="big" data-act="big" data-id="' + n.id + '">' + esc(n.text) + mine.map(function(x){
@@ -826,6 +836,7 @@ document.addEventListener('click', function(e){
   if(act === 'star'){
     var n = item(id); if(!n || !canStar(n)) return;
     var had = starsOf(id).some(function(s){ return s.viewer === me && (s.k || 'star') === 'star'; });
+    if(!had && !leftIn(n.team, 'star')){ ui.sheet = null; toast('この 班には もう 面白い！を 2まい 貼りました'); return; }
     ui.sheet = null; if(!had) ui.pop = id;
     commit(function(){
       if(had) S.stars = S.stars.filter(function(s){ return !(s.noteId === id && s.viewer === me && (s.k || 'star') === 'star'); });
@@ -841,7 +852,8 @@ document.addEventListener('click', function(e){
     if(e.target.closest('.seal')) return;
     if(ui.selSeal){ ui.selSeal = null; render(); return; }
     var nn = item(id), kind = ui.kind || 'star'; if(!nn || !canStar(nn)) return;
-    if(starsOf(id).some(function(x){ return x.viewer === me && x.k === kind; })){ toast('この シールは もう 貼って あります'); return; }
+    if(starsOf(id).some(function(x){ return x.viewer === me && x.k === kind; })){ toast('この 付箋には もう 同じ シールを 貼って あります'); return; }
+    if(!leftIn(nn.team, kind)){ toast('この 班には もう ' + KINDS.filter(function(K){ return K.k === kind; })[0].name + ' を 2まい 貼りました'); return; }
     var r = b.getBoundingClientRect();
     /* シールは 付箋の 下の 帯（文字の 下）に 貼る。横は タップした 場所、縦は 帯の 中に おさめる */
     var sx = Math.max(12, Math.min(88, (e.clientX - r.left) / r.width * 100));

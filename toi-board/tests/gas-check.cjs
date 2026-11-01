@@ -174,6 +174,15 @@ function makeGas() {
   ok(r.stars.length === 2 && r.stars.every(s => s.viewer === 'b01' + D), 'ほかの班の 付箋は 自分の シールだけ 届く');
   await b01.screenshot({ path: SHOTS + '/g3-gallery.png' });
 
+  // 持ち分（サーバー）：1つの班に 種類ごとに 2まいまで
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[1], k: 'pick', on: true }, { noteId: 'ax0', k: 'pick', on: true }] }]);
+  G.as('a01' + D, 'apply', [{ up: ['az1', 'az2'].map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 30 + i * 8, y: 1, text: 'もう1まい' + i })), del: [], star: [] }]);
+  const aNotes = G.as('ta@edu.nishi.or.jp', 'poll', [{ all: 0 }]).items.filter(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front').map(x => x.id);
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 3).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  ok(aNotes.length >= 3 && r.rejected.length === 1 && r.rejected[0] === '*' + aNotes[2] + '|wow', 'サーバーも 同じ班への 同じ種類の 3まい目を はねる');
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
+  ok(r.rejected.length === 0, 'はがせば また 貼れる');
+
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());

@@ -17,6 +17,7 @@ var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
 var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
+var STAR_PER_TEAM = 2;  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
 function doGet(){
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -224,7 +225,11 @@ function apply(ops){
 
     if(ops.star && ops.star.length){
       var ssh = sheet_(SH.stars), srows = rows_(SH.stars), sidx = {}, sapp = [];
-      srows.forEach(function(r, i){ sidx[String(r[0])] = i; });
+      var have = {};  // 班|種類 → 自分が 貼っている 枚数
+      srows.forEach(function(r, i){
+        sidx[String(r[0])] = i;
+        if(low_(r[3]) === u.id && r[4]) have[r[2] + '|' + (r[6] || 'star')] = (have[r[2] + '|' + (r[6] || 'star')] || 0) + 1;
+      });
       // 書いたばかりの 行も 含めて 付箋の班を 引く
       var teamOf = {};
       rows_(SH.items).forEach(function(r){ if(!r[5]) teamOf[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
@@ -232,7 +237,11 @@ function apply(ops){
         var nId = String(s.noteId), t = teamOf[nId];
         var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
         var k = STAR_KINDS.indexOf(s.k) >= 0 ? s.k : 'star';
+        var key0 = nId + '|' + k + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k);
+        if(ok && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
         if(!ok){ rejected.push('*' + nId + '|' + k); return; }
+        if(s.on && !was) have[hk] = (have[hk] || 0) + 1;
+        if(!s.on && was) have[hk] = (have[hk] || 1) - 1;
         // 貼った 場所（シール貼り画面）：% と 傾き
         var pos = s.x == null ? '' : JSON.stringify({x:clamp_(s.x, 0, 100), y:clamp_(s.y, 0, 100), r:clamp_(s.r, -30, 30)});
         var key = nId + '|' + k + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v, k, pos];

@@ -151,7 +151,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   s = await st();
   const mineC = s.stars.filter(x => x.viewer === 'A05' && x.noteId === c);
   ok(mineC.length === 2 && mineC.every(x => x.x > 0 && x.y > 0), 'タップした 場所に シールが 貼れる（種類ごとに 1まい）');
-  ok(await page.isVisible('text=この シールは もう 貼って あります'), '同じ種類を 2まい目は 貼れない');
+  ok(await page.isVisible('text=この 付箋には もう 同じ シールを 貼って あります'), '同じ種類を 2まい目は 貼れない');
   const textBottom = await page.$eval(`.big[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild); return r.getBoundingClientRect().bottom; });
   const sealTops = await page.$$eval(`.big[data-id="${c}"] .seal`, els => els.map(e => e.getBoundingClientRect().top));
   ok(sealTops.length === 2 && sealTops.every(t => t >= textBottom - 2), 'シールは 付箋の 下の 帯に 貼られ、文字に かからない');
@@ -167,6 +167,18 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   const bigC2 = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC2.x + 200, bigC2.y + 40);
+
+  // 持ち分：1つの班に 種類ごとに 2まいまで
+  ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('1'), '班ごとの のこりの まい数が 出る（★ のこり1）');
+  const third = await page.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 40, y: 1, text: '3まいめの 付箋', author: 'A01', showcase: true }); }); return id; });
+  await page.reload();
+  await page.click('[data-act=kind][data-k=star]');
+  for (const id of [e, third]) { await page.locator(`.big[data-id="${id}"]`).scrollIntoViewIfNeeded(); const bx = await page.locator(`.big[data-id="${id}"]`).boundingBox(); await page.mouse.click(bx.x + 120, bx.y + 60); await page.waitForTimeout(150); }
+  s = await st();
+  const starA1 = s.stars.filter(x => x.viewer === 'A05' && x.k === 'star' && s.items.find(n => n.id === x.noteId).team === 'A-1');
+  ok(starA1.length === 2 && await page.isVisible('text=この 班には もう 面白い！ を 2まい 貼りました'), '同じ班に 同じ種類は 3まい目を 貼れない');
+  ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('0') && (await page.textContent('[data-left="A-3"] [data-kind=star]')).includes('2'), 'のこりは 班ごとに 数える（ほかの班は 2まい のこる）');
+  await page.evaluate(id => commit(() => { S.items = S.items.filter(x => x.id !== id); S.stars = S.stars.filter(x => x.noteId !== id); }), third);
 
   // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
