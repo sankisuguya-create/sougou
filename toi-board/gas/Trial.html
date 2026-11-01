@@ -129,7 +129,11 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .gteam .lk{display:inline-flex;align-items:center;gap:2px}
 .gteam .lk.none{opacity:.3}
 .frame{border:3px dashed var(--cat-3);border-radius:10px;background:rgba(251,227,180,.12)}
-.frame .label{position:absolute;left:8px;top:-15px;background:#fff;padding:0 6px;font-weight:700;font-size:16px;color:var(--cat-3);min-width:40px;min-height:24px}
+.frame .label{position:absolute;left:8px;top:-15px;background:#fff;padding:2px 8px;font-weight:700;font-size:16px;color:var(--cat-3);min-width:40px;min-height:28px;border:2px solid var(--cat-3);border-radius:8px;white-space:nowrap;touch-action:none;cursor:grab;z-index:2}
+.frame .label.onedge{transform:translate(-50%,-50%)}
+.frame .label.dragging{cursor:grabbing;box-shadow:0 4px 10px rgba(0,0,0,.25)}
+.tsug{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.tsug .btn{min-height:48px;border-color:var(--cat-3);color:var(--cat-3)}
 .frame .grip{position:absolute;right:-14px;bottom:-14px;width:32px;height:32px;border-radius:50%;background:#fff;border:3px solid var(--cat-3)}
 .empty{position:absolute;left:40px;top:40px;color:var(--sub);font-size:18px}
 
@@ -496,9 +500,28 @@ function noteHTML(n, opt){
   return '<div class="item note' + (n.done ? ' done' : '') + (stars ? ' has-seal' + (oneRow ? ' one' : '') : '') + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '"' + tip + ' style="' + pos + '">'
     + layers + esc(n.text) + from + cicon + show + stars + '</div>';
 }
+/* 枠の タイトルの 位置：枠の 辺の 上を 一周 0〜1 で もつ（左上から 時計まわり） */
+function edgePoint(W, H, lp){
+  var P = 2*(W + H), t = ((lp % 1) + 1) % 1 * P;
+  if(t <= W) return {x:t, y:0};
+  if(t <= W + H) return {x:W, y:t - W};
+  if(t <= 2*W + H) return {x:W - (t - W - H), y:H};
+  return {x:0, y:H - (t - 2*W - H)};
+}
+function edgeParam(W, H, px, py){
+  var cx = Math.max(0, Math.min(W, px)), cy = Math.max(0, Math.min(H, py)), P = 2*(W + H);
+  var d = [Math.abs(py), Math.abs(W - px), Math.abs(H - py), Math.abs(px)], m = d.indexOf(Math.min.apply(null, d));
+  var t = m === 0 ? cx : m === 1 ? W + cy : m === 2 ? W + H + (W - cx) : 2*W + H + (H - cy);
+  return t / P;
+}
+function labelStyle(f, W, H){
+  if(f.lp == null) return '';
+  var p = edgePoint(W, H, f.lp); return ' style="left:' + p.x.toFixed(1) + 'px;top:' + p.y.toFixed(1) + 'px"';
+}
+var FRAME_TITLES = ['調べるのが難しい', '答えが見つからなかった', 'いま調べている', 'ヘルプミー！', 'つぎ調べようかな', '本命こうほ'];
 function frameHTML(f){
   return '<div class="item frame" data-id="' + f.id + '" style="left:' + (f.x*GRID) + 'px;top:' + (f.y*GRID) + 'px;width:' + (f.w*GRID) + 'px;height:' + (f.h*GRID) + 'px">'
-    + '<div class="label">' + esc(f.text || '') + '</div>' + (canEdit() ? '<div class="grip" data-grip="' + f.id + '"></div>' : '') + '</div>';
+    + '<div class="label' + (f.lp == null ? '' : ' onedge') + '" data-label="' + f.id + '"' + labelStyle(f, f.w*GRID, f.h*GRID) + '>' + esc(f.text || '') + '</div>' + (canEdit() ? '<div class="grip" data-grip="' + f.id + '"></div>' : '') + '</div>';
 }
 function center(x){
   if(x.kind === 'frame') return {x:(x.x + x.w/2)*GRID, y:(x.y + x.h/2)*GRID};
@@ -725,6 +748,7 @@ function viewSheet(){
   } else if(s.type === 'frame'){
     var f = item(s.id);
     h += '<h2>枠</h2><input id="f-text" class="btn" style="width:100%;font-size:18px" placeholder="枠の 名前（なくてもよい）" value="' + esc(f.text || '') + '">'
+      + '<div class="tsug">' + FRAME_TITLES.map(function(t){ return '<button class="btn" data-act="f-sug" data-t="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>'
       + '<div class="row"><button class="btn primary" data-act="f-save" data-id="' + f.id + '">きめる</button><button class="btn" data-act="del" data-id="' + f.id + '">枠を けす</button></div>';
   } else if(s.type === 'arrow'){
     h += '<h2>矢印</h2><div class="row"><button class="btn" data-act="del" data-id="' + s.id + '">矢印を けす</button><button class="btn" data-act="close">やめる</button></div>';
@@ -882,7 +906,8 @@ document.addEventListener('pointerdown', function(e){
   var el = grip ? grip.parentNode : e.target.closest('#board .item');
   if(!el) return;
   var x = item(el.getAttribute('data-id')); if(!x) return;
-  drag = {id:x.id, el:el, sx:e.clientX, sy:e.clientY, ox:x.x, oy:x.y, ow:x.w, oh:x.h, moved:false, grip:!!grip, cicon:!!e.target.closest('.cicon')};
+  var lab = x.kind === 'frame' && !grip ? e.target.closest('[data-label]') : null;
+  drag = {id:x.id, el:el, sx:e.clientX, sy:e.clientY, ox:x.x, oy:x.y, ow:x.w, oh:x.h, moved:false, grip:!!grip, cicon:!!e.target.closest('.cicon'), label:lab};
   try{ el.setPointerCapture(e.pointerId); }catch(err){}
 });
 document.addEventListener('pointermove', function(e){
@@ -891,6 +916,14 @@ document.addEventListener('pointermove', function(e){
   if(!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
   if(!canEdit() || ui.tool === 'arrow' || ui.face === 'trash') return;
   drag.moved = true;
+  if(drag.label){
+    /* タイトルは 枠の 辺の 上だけを うごく */
+    var fr = drag.el.getBoundingClientRect(), W0 = drag.ow*GRID, H0 = drag.oh*GRID;
+    drag.lp = edgeParam(W0, H0, e.clientX - fr.left, e.clientY - fr.top);
+    var ep = edgePoint(W0, H0, drag.lp);
+    drag.label.classList.add('onedge', 'dragging'); drag.label.style.left = ep.x + 'px'; drag.label.style.top = ep.y + 'px';
+    return;
+  }
   if(drag.grip){
     drag.el.style.width = Math.max(4*GRID, Math.min((boardCols() - clampX(drag.ox, drag.ow) - 1)*GRID, drag.ow*GRID + dx)) + 'px';
     drag.el.style.height = Math.max(3*GRID, drag.oh*GRID + dy) + 'px';
@@ -913,6 +946,7 @@ document.addEventListener('pointerup', function(e){
   if(!x){ render(); return; } // 動かしている間に 同期で 消えた
   if(!d.moved){ if(d.cicon){ ui.sheet = {type:'cmts', id:x.id}; render(); return; } tapItem(x); return; }
   var dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+  if(d.label){ commit(function(){ x.lp = Math.round(d.lp * 1000) / 1000; }); return; }
   if(d.grip){ commit(function(){ x.w = Math.max(4, Math.min(boardCols() - clampX(d.ox, d.ow) - 1, Math.round(d.ow + dx/GRID))); x.h = Math.max(3, Math.round(d.oh + dy/GRID)); }); return; }
   var f = x.kind === 'note' ? faceAt(e) : null;
   var t = x.kind === 'note' ? noteAt(boardPoint(e), d.id) : null;
@@ -1005,6 +1039,7 @@ document.addEventListener('click', function(e){
     commit(function(){ S.items.push({id:nid(), kind:'frame', team:myTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
     return;
   }
+  if(act === 'f-sug'){ var fi = document.getElementById('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
   if(act === 'f-save'){ var v = document.getElementById('f-text').value; ui.sheet = null; commit(function(){ item(id).text = v; }); return; }
   if(act === 'del'){ ui.sheet = null; commit(function(){ dropArrows(id); S.items = S.items.filter(function(x){ return x.id !== id; }); }); return; }
   if(act === 'star'){

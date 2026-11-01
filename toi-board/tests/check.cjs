@@ -466,6 +466,33 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.evaluate(() => localStorage.getItem('toiboard.v3')) === realBefore, '体験の データは 本番の 保存場所に 入らない');
   await tp.close();
   }
+  {
+  // 枠：タイトル案ボタン／タイトルを 辺の 上で ドラッグ
+  await who('A01'); await page.click('.face[data-face=front]');
+  await page.evaluate(() => { const sc = document.querySelector('.wrap'); sc.scrollTop = 0; });
+  await page.click('[data-act=frame]');
+  const fid = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
+  await page.click(`#board .frame[data-id="${fid}"] .label`);
+  ok(await page.locator('.tsug .btn').count() === 6 && await page.isVisible('.tsug .btn:has-text("ヘルプミー！")'), '枠の 設定に タイトル案が 6つ ある');
+  await page.click('.tsug .btn:has-text("本命こうほ")');
+  ok(await page.inputValue('#f-text') === '本命こうほ', 'タイトル案を 押すと 欄に 入る');
+  await page.click('[data-act=f-save]');
+  const fb = await page.locator(`#board .frame[data-id="${fid}"]`).boundingBox();
+  const lb = await page.locator(`#board .frame[data-id="${fid}"] .label`).boundingBox();
+  await page.mouse.move(lb.x + 10, lb.y + lb.height / 2); await page.mouse.down();
+  await page.mouse.move(lb.x + 40, lb.y + 30, { steps: 4 });
+  await page.mouse.move(fb.x + fb.width + 30, fb.y + fb.height * 0.6, { steps: 10 }); await page.mouse.up();
+  const fr = (await st()).items.find(x => x.id === fid);
+  const lb2 = await page.locator(`#board .frame[data-id="${fid}"] .label`).boundingBox(), fb2 = await page.locator(`#board .frame[data-id="${fid}"]`).boundingBox();
+  const cx = lb2.x + lb2.width / 2, cy = lb2.y + lb2.height / 2;
+  ok(fr.lp > 0.25 && fr.lp < 0.5 && Math.abs(cx - (fb2.x + fb2.width)) < 6 && fr.x === (await page.evaluate(id => item(id).x, fid)), 'タイトルを ドラッグすると 枠の 辺（右の 辺）の 上に うつる（枠は 動かない）');
+  await page.mouse.move(cx, cy); await page.mouse.down();
+  await page.mouse.move(cx - 20, cy + 20, { steps: 4 });
+  await page.mouse.move(fb2.x + fb2.width * 0.5, fb2.y + fb2.height + 40, { steps: 10 }); await page.mouse.up();
+  const fr2 = (await st()).items.find(x => x.id === fid);
+  ok(fr2.lp > 0.5 && fr2.lp < 0.75, '下の 辺にも うつせる（辺から はなれた ところで はなしても 辺に すいつく）');
+  await page.screenshot({ path: SHOTS + '/15-frame.png' });
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
