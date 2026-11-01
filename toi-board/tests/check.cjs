@@ -152,6 +152,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const mineC = s.stars.filter(x => x.viewer === 'A05' && x.noteId === c);
   ok(mineC.length === 2 && mineC.every(x => x.x > 0 && x.y > 0), 'タップした 場所に シールが 貼れる（種類ごとに 1まい）');
   ok(await page.isVisible('text=この シールは もう 貼って あります'), '同じ種類を 2まい目は 貼れない');
+  const textBottom = await page.$eval(`.big[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild); return r.getBoundingClientRect().bottom; });
+  const sealTops = await page.$$eval(`.big[data-id="${c}"] .seal`, els => els.map(e => e.getBoundingClientRect().top));
+  ok(sealTops.length === 2 && sealTops.every(t => t >= textBottom - 2), 'シールは 付箋の 下の 帯に 貼られ、文字に かからない');
   await page.screenshot({ path: SHOTS + '/5-gallery.png' });
   await page.click(`.big[data-id="${c}"] .seal >> nth=0`);
   await page.click('[data-act=peel]');
@@ -169,6 +172,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
+  const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
+  ok(sb.y > nb.y + nb.height / 2, 'ボードの シールの まとめは 付箋の 下に 出る');
   ok((await page.textContent(`[data-stars="${c}"] [data-kind=star]`)).includes('×7') && await page.locator(`[data-stars="${c}"] [data-kind=circle]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   ok(!(await page.textContent(`[data-stars="${c}"]`)).includes('×'), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
