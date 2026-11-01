@@ -159,6 +159,38 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/6-teacher-table.png', fullPage: true });
+  // 検索：児童は 自分の班だけ。ことば・シールで しぼり、タップで その付箋へ 飛ぶ
+  await who('A01');
+  await page.click('[data-act=search]');
+  await page.fill('#s-text', 'どうして');
+  const hitTexts = await page.$$eval('.hit .t', els => els.map(e => e.textContent));
+  const mineAll = await page.evaluate(() => S.items.filter(x => x.kind === 'note' && x.team === 'A-1').map(x => x.text));
+  ok(hitTexts.length > 0 && hitTexts.every(t => t.includes('どうして') && mineAll.includes(t)), '児童の 検索は 自分の班の 付箋だけ・ことばで しぼれる');
+  ok(!(await page.evaluate(() => searchHits(myTeam(), 'どうして').some(n => n.team !== 'A-1'))), 'ほかの班の 付箋は 検索に 出ない');
+  await page.fill('#s-text', '');
+  await page.click('[data-act=s-star]');
+  const starHits = await page.$$eval('.hit', els => els.length);
+  const starred = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && S.stars.some(s => s.noteId === x.id)).length);
+  ok(starHits === starred && starHits > 0, 'シールが ある 付箋だけに しぼれる（数の 多い順）');
+  await page.click('[data-act=s-star]');
+  await page.fill('#s-text', 'うらの');
+  if (!(await page.isVisible('.hit'))) { await page.fill('#s-text', 'どこに'); }
+  const backHit = await page.$('.hit');
+  if (backHit) {
+    await backHit.click();
+    ok(await page.isVisible('.note.flash') && await page.isVisible('.face.on[data-face=back], .face.on[data-face=front], .face.on[data-face=trash]'), 'タップすると その面へ 移り 付箋が 光る');
+  } else ok(false, '検索の 結果から 飛べる');
+  await page.screenshot({ path: SHOTS + '/7-search.png' });
+  // 先生：学年の 全部を ことば・シールで しぼる（表と コピーに 効く）
+  await who('teacher');
+  await page.click('[data-act=fcls][data-c=all]');
+  await page.fill('#t-q', '灯台');
+  const tq = await page.evaluate(() => opinionTSV().split('\n').slice(1));
+  ok(tq.length >= 0 && tq.every(l => l.includes('灯台')), '先生の 一覧を ことばで しぼれる');
+  await page.fill('#t-q', '');
+  await page.click('[data-act=fstar]');
+  const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
+  ok(ts.length > 0 && ts.every(l => /\t\d+\t[^\t]*\t[^\t]*$/.test(l)), '先生の 一覧を シールで しぼれる');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

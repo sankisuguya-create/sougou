@@ -104,6 +104,12 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 .ttable td.text{min-width:260px}
 .filters{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0}
 .ctabs{display:flex;gap:6px;margin:6px 0}
+.sbox{width:100%;font:inherit;font-size:20px;padding:10px;border:2px solid var(--ink);border-radius:10px}
+.hits{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.hit{display:flex;gap:10px;align-items:center;border:2px solid var(--line);border-radius:12px;padding:8px 10px;background:#fff;text-align:left;min-height:56px}
+.hit .t{flex:1;font-size:18px;font-weight:700}
+.hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
+.note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
 <div id="app"></div>
 <div id="net" class="net"></div>
@@ -253,6 +259,25 @@ function afterRemote(){
   render();
 }
 
+/* ===== 検索（端末の中だけで 探す。児童は 自分の班だけ） ===== */
+function searchHits(team, q, starOnly){
+  q = String(q || '').trim();
+  var words = q ? q.split(/[\s　]+/) : [];
+  return S.items.filter(function(n){
+    if(n.kind !== 'note' || (team && n.team !== team)) return false;
+    if(starOnly && !starsOf(n.id).length) return false;
+    return words.every(function(w){ return String(n.text).indexOf(w) >= 0; });
+  }).sort(function(a, b){ return starsOf(b.id).length - starsOf(a.id).length; });
+}
+function gotoNote(id){
+  var n = item(id); if(!n) return;
+  var top = n.stackOf ? item(n.stackOf) || n : n;
+  ui.sheet = null; ui.face = top.face; ui.flash = top.id; ui.viewTeam = null;
+  render();
+  var sc = document.querySelector('.wrap'); if(sc){ sc.scrollLeft = Math.max(0, top.x*GRID - 60); sc.scrollTop = Math.max(0, top.y*GRID - 60); }
+  setTimeout(function(){ if(ui.flash === top.id){ ui.flash = null; render(); } }, 2500);
+}
+
 /* 何ができるか（不変条件はここに集める） */
 function canEdit(){ return isMine(); }
 function canPropose(){ return !isTeacher() && boardTeam() !== myTeam() && reach('propose', boardTeam()); }
@@ -321,7 +346,7 @@ function noteHTML(n, opt){
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
   var pick = n.pick ? '<div class="pick">' + n.pick + '</div>' : '';
   var pos = opt.inline ? '' : 'left:' + (n.x*GRID) + 'px;top:' + (n.y*GRID) + 'px;';
-  return '<div class="item note' + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
+  return '<div class="item note' + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
     + layers + esc(n.text) + pick + mark + from + stars + '</div>';
 }
 function frameHTML(f){
@@ -407,7 +432,8 @@ function viewChild(){
   if(mine && ui.face !== 'trash'){
     h += '<button class="btn primary" data-act="add">＋ 付箋</button>'
       + '<button class="btn' + (ui.tool === 'arrow' ? ' on' : '') + '" data-act="tool" data-t="arrow">→ 矢印</button>'
-      + '<button class="btn" data-act="frame">□ 枠</button>';
+      + '<button class="btn" data-act="frame">□ 枠</button>'
+      + '<button class="btn" data-act="search">🔍 さがす</button>';
     h += '<span class="hint">' + (ui.tool === 'arrow' ? (ui.arrowFrom ? 'つなぐ 先を タップ' : 'はじめの 付箋を タップ') : '付箋は ドラッグで うごかせます。上に 重ねると まとまります。') + '</span>';
   }
   var L = lookable();
@@ -427,6 +453,18 @@ function viewSheet(){
     h += '<h2>' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
       + '<textarea id="w-text" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
       + '<div class="row"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
+  } else if(s.type === 'search'){
+    var hits = searchHits(myTeam(), s.q, s.star);
+    h += '<h2>じぶんの 班の 付箋を さがす</h2>'
+      + '<input id="s-text" class="sbox" placeholder="ことばで さがす（なくてもよい）" value="' + esc(s.q || '') + '">'
+      + '<div class="row"><button class="btn' + (s.star ? ' on' : '') + '" data-act="s-star">' + ICON.star.replace('<svg', '<svg width="28" height="28" style="vertical-align:middle"') + ' シールが ある 付箋だけ</button></div>'
+      + '<div class="hits">' + (hits.length ? hits.slice(0, 60).map(function(n){
+          var c = starsOf(n.id).length;
+          return '<button class="hit" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span>'
+            + (c ? '<span>' + ICON.star.replace('<svg', '<svg width="24" height="24" style="vertical-align:middle"') + (c >= 2 ? '×' + c : '') + '</span>' : '')
+            + '<span class="w">' + faceLabel(n.face) + (n.stackOf ? '・重なりの中' : '') + '</span></button>';
+        }).join('') : '<p>見つかりません</p>') + '</div>'
+      + '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
   } else if(s.type === 'teams'){
     var L = lookable().filter(function(x){ return x.cls !== myCls(); }), cs = {};
     L.forEach(function(x){ (cs[x.cls] = cs[x.cls] || []).push(x); });
@@ -471,8 +509,9 @@ function classes(){ var o = []; SPOTS.forEach(function(s){ if(o.indexOf(s.cls) <
 function faceLabel(k){ return FACES.filter(function(f){ return f.k === k; })[0].label; }
 /* 意見の一覧（1行＝付箋1まい）。書いた児童は 入れない（外部AIに 個人を 渡さない） */
 function opinionRows(){
+  var hit = {}; searchHits(null, ui.fQ, ui.fStar).forEach(function(n){ hit[n.id] = 1; });
   var rows = S.items.filter(function(n){
-    return n.kind === 'note' && (ui.fCls === 'all' || clsOf(n.team) === ui.fCls)
+    return n.kind === 'note' && hit[n.id] && (ui.fCls === 'all' || clsOf(n.team) === ui.fCls)
       && (ui.fFace === 'all' ? n.face !== 'trash' : n.face === ui.fFace);
   });
   var order = {}; SPOTS.forEach(function(s, i){ order[s.team] = i; });
@@ -507,6 +546,8 @@ function viewTeacher(){
   var rows = opinionRows();
   h += '<h2>意見の 一覧（' + rows.length + 'まい）</h2><div class="filters">組：<span class="seg">' + ['all'].concat(cs).map(function(c){ return '<button class="' + (ui.fCls === c ? 'on' : '') + '" data-act="fcls" data-c="' + c + '">' + (c === 'all' ? '全部' : c + '組') + '</button>'; }).join('') + '</span>'
     + '面：<span class="seg">' + [{k:'front',label:'表がわ'},{k:'back',label:'うらがわ'},{k:'gift',label:'いただきもの'},{k:'all',label:'ゴミばこ以外'}].map(function(f){ return '<button class="' + (ui.fFace === f.k ? 'on' : '') + '" data-act="fface" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span>'
+    + '</div><div class="filters"><input id="t-q" class="sbox" style="max-width:420px" placeholder="ことばで さがす" value="' + esc(ui.fQ || '') + '">'
+    + '<button class="btn' + (ui.fStar ? ' on' : '') + '" data-act="fstar">' + ICON.star.replace('<svg', '<svg width="24" height="24" style="vertical-align:middle"') + ' シールが ある 付箋だけ</button>'
     + '<button class="btn primary" data-act="copy">表を コピー（Gemini・スプレッドシートに 貼れる）</button></div>';
   h += '<div class="ttable"><table><tr>' + OP_HEAD.map(function(x){ return '<th>' + x + '</th>'; }).join('') + '</tr>'
     + rows.map(function(r){ return '<tr>' + r.map(function(v, i){ return '<td' + (i === 4 ? ' class="text"' : '') + '>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
@@ -687,6 +728,10 @@ document.addEventListener('click', function(e){
     if(!parent || !stackOf(parent.id).length) ui.sheet = null;
     render(); return;
   }
+  if(act === 'search'){ ui.sheet = {type:'search', q:'', star:false}; render(); setTimeout(function(){ var t = document.getElementById('s-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 's-star'){ ui.sheet.star = !ui.sheet.star; render(); return; }
+  if(act === 'goto'){ gotoNote(id); return; }
+  if(act === 'fstar'){ ui.fStar = !ui.fStar; render(); return; }
   if(act === 'teams'){ ui.sheet = {type:'teams'}; render(); return; }
   if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; Platform.watch(ui.viewTeam); render(); return; }
   if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; Platform.watch(null); render(); return; }
@@ -711,6 +756,13 @@ document.addEventListener('click', function(e){
 document.addEventListener('change', function(e){
   if(e.target.id === 'who'){ me = e.target.value; Platform.setMe(me); ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'}; render(); }
 });
+/* 文字で さがす：変換中は 描き直さない（日本語入力が こわれるため） */
+function onSearchInput(el){
+  if(el.id === 's-text' && ui.sheet && ui.sheet.type === 'search'){ ui.sheet.q = el.value; render(); }
+  if(el.id === 't-q'){ ui.fQ = el.value; render(); }
+}
+document.addEventListener('input', function(e){ if(!e.isComposing) onSearchInput(e.target); });
+document.addEventListener('compositionend', function(e){ onSearchInput(e.target); });
 document.addEventListener('keydown', function(e){
   if(e.target.id === 'w-text' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
     e.preventDefault(); var s = document.querySelector('[data-act=w-save]'); if(s) s.click();
