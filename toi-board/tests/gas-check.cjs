@@ -133,7 +133,8 @@ function makeGas() {
   await reload(b01);
   ok(await b01.isVisible('[data-act=teams]'), 'B組を 学年に すると 「ほかの組」が 出る');
   await b01.click('[data-act=teams]'); await b01.click('[data-act=look][data-t="A-1"]');
-  ok(await b01.isVisible('text=よみこんでいます'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」');
+  // 模擬の サーバーは すぐ 返すので、まだ 読みこみ中なら「よみこんでいます」、もう 届いていれば 付箋が 出ていれば よい
+  ok(await b01.isVisible('text=よみこんでいます') || await b01.isVisible('#board .note'), 'ほかの班を 開くと 取りに行く間は「よみこんでいます」（届けば 付箋）');
   await settle();
   ok(await b01.isVisible('#board .note:has-text("どうして 北口なの？")'), 'ほかの組の 班の 表がわを 見られる');
   r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
