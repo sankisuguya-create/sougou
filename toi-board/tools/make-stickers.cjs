@@ -4,18 +4,23 @@ const SRC = String.raw`
 var SHAPES = {
   star:(function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 6.8 : 13, a = -Math.PI/2 + i*Math.PI/5; p.push((16 + r*Math.cos(a)).toFixed(2) + ' ' + (17 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
   circle:'M16 4a12 12 0 1 1 0 24a12 12 0 1 1 0-24Z',
-  bolt:'M20 3L6 18h8.5l-3.5 11l15-17h-8.5l2.5-9Z'
+  bolt:'M20 3L6 18h8.5l-3.5 11l15-17h-8.5l2.5-9Z',
+  // いいね（分かった）：親指を立てた手＋袖
+  thumb:'M11.5 15L15.2 6.8Q16.6 3.6 18.8 5Q20.4 6.2 19.6 9.2L18.6 13H25.6Q28.7 13 28.2 16.2L26.7 25Q26.2 28.2 23.1 28.2H11.5ZM4.6 14.6H9.6V28.6H4.6Z'
 };
+var DETAIL = { thumb:'<path d="M20.5 18.4H27.2M20.5 23H26.4" stroke="#1A1A1A" stroke-width="1" stroke-linecap="round" fill="none"/>' };
 var GLINT = {
   star:'<path d="M6.9 14.3L10.8 13.6" />',
   circle:'<path d="M9 12.5q1.6-4 6-5.2" /><circle cx="8.4" cy="15.6" r="1.15" stroke="none"/>',
-  bolt:'<path d="M16.6 9.6L12.4 14.1" />'
+  bolt:'<path d="M16.6 9.6L12.4 14.1" />',
+  thumb:'<path d="M14.4 13.2L16.5 8.8" />'
 };
 /* 固有色は 明るい／パステルな 2色の グラデーション。黒っぽい色は使わない。種類ごとに 色の系統を分ける（左上が明るく 右下が濃い：光の向きと そろえる） */
 var STICKER_COLORS = {
   '#E0A43A':['#FFF27A', '#FFAE4D'],  // 星（しりたい！）：レモン → アプリコット
   '#FF8FB5':['#FFC2D6', '#FF7AAE'],  // 円（予備）：さくら → ピンク
-  '#7CC4FF':['#B2F0FF', '#7FA8FF']   // 稲妻（予備）：水色 → そら色
+  '#7CC4FF':['#B2F0FF', '#7FA8FF'],  // 稲妻（予備）：水色 → そら色
+  '#8EDB8A':['#DDF8A8', '#6CCB8E']   // いいね（分かった）：ライム → ミント
 };
 function sticker(shape, color, size){
   var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
@@ -28,11 +33,12 @@ function sticker(shape, color, size){
     + '<defs><clipPath id="c' + gid + '"><path d="' + d + '"/></clipPath><filter id="f' + gid + '" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.3"/></filter></defs>'
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
+    + (DETAIL[shape] || '')
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
 }
 `;
-const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF']];
+const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF'], ['thumb', '#8EDB8A']];
 const SIZE = 128; // 表示は最大 64px 程度。2倍密度の画面でも足りる大きさ
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: SIZE, height: SIZE } });
