@@ -331,6 +331,33 @@ function makeGas() {
   await again2.close();
   }
 
+  // 学習が 止まらない（サーバー）
+  {
+  // 1つの 変な 書きこみで ほかの 書きこみが 止まらない
+  const big = 'あ'.repeat(6000);
+  r = G.as('a01' + D, 'apply', [{ up: [
+    { id: 'bad1', kind: 'note', team: 'A-1', face: 'front', x: 1, y: 40, text: 'ふつう', junk: { deep: big } },
+    { id: 'ok1', kind: 'note', team: 'A-1', face: 'front', x: 9, y: 40, text: 'い'.repeat(500) }
+  ], del: [], star: [] }]);
+  const okRow = G.sheets.items.data.find(x => x[0] === 'ok1');
+  ok(r.rejected.includes('bad1') && okRow && JSON.parse(okRow[3]).text.length === 200, '大きすぎる 付箋は その1まいだけ はねて、ほかは 保存（長い 文は 200字まで）');
+  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで
+  const sh = ['sh1', 'sh2', 'sh3', 'sh4', 'sh5'];
+  r = G.as('a02' + D, 'apply', [{ up: sh.map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 1 + i * 8, y: 46, text: '見て' + i })), del: [], star: [] }]);
+  const rdA = JSON.parse(G.sheets.modes.data.find(x => x[0] === 'A')[1]).round || 1;
+  const already = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
+  r = G.as('a02' + D, 'apply', [{ up: sh.map(id => ({ id, team: 'A-1', p: { showcase: rdA }, u: [] })), del: [], star: [] }]);
+  const nowShown = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
+  ok(nowShown === Math.max(4, already) && r.rejected.length === sh.length - Math.max(0, 4 - already), '見てほしい付箋は 1つの 班で 今の 回に 4まいまで（サーバーでも）');
+  // 先生は コメントを 1つずつ 消せる、児童は 消せない
+  G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ふさわしくない ことば', on: true }] }]);
+  r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
+  ok(r.rejected.includes('cmtDel'), '児童は ほかの 子の コメントを 消せない');
+  G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
+  const crow = G.sheets.comments.data.find(x => x[1] === ids[0] && x[3] === 'b01' + D);
+  ok(crow && crow[5] === false && crow[4] === '', '先生は コメントを 1つずつ 消せる（文も のこらない）');
+  }
+
   // 先生の 一覧
   await ta.click('[data-act=ttab][data-k=list]');
   await ta.click('[data-act=fface][data-f=all]');

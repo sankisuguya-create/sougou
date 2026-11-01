@@ -184,6 +184,7 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 .ttable td.text{min-width:260px}
 .filters{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0}
 .ctabs{display:flex;gap:6px;margin:6px 0}
+.warn{margin:8px 0;padding:8px 12px;border-left:4px solid #C86A00;background:#FFF4D6;font-weight:700}
 .ttabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:0 0 10px;flex-wrap:wrap}
 .ttab{min-height:48px;padding:0 18px;border:2px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;background:transparent;font-weight:700;font-size:16px;color:var(--sub);margin-bottom:-2px}
 .ttab.on{background:#fff;border-color:var(--line);color:var(--ink)}
@@ -541,6 +542,7 @@ var KINDS = [
 ];
 /* 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで（4種類×2＝8まいが その班への 持ち分）。同じ付箋に 同じ種類は 1まい */
 var STAR_PER_TEAM = 2;
+var SHOW_PER_TEAM = 4;  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで（指導案の「4つ選ぶ」）
 function usedIn(team, k){ var r = curRound(team); return S.stars.filter(function(s){ var n = item(s.noteId); return s.viewer === me && kindOf(s) === k && rdOf(s) === r && n && n.team === team; }).length; }
 function leftIn(team, k){ return Math.max(0, STAR_PER_TEAM - usedIn(team, k)); }
 /* シール貼り画面で 選べるのは use の 4種類だけ（ほかは 予備。データは 読める） */
@@ -770,7 +772,7 @@ function viewSheet(){
   if(s.type === 'write'){
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
       + '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes" style="margin-left:auto">？のたね</button></div>'
-      + '<textarea id="w-text" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
+      + '<textarea id="w-text" maxlength="200" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
       + '<div class="row"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
     var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return !s.face || n.face === s.face; }), s.sort || 'new');
@@ -822,7 +824,7 @@ function viewSheet(){
   } else if(s.type === 'cmt'){
     var cn = item(s.id), mc2 = myComment(s.id);
     h += '<h2>コメントを 書く</h2><p>「' + esc(cn.text) + '」へ（だれが 書いたかは 相手に 見えません）</p>'
-      + '<textarea id="c-text" placeholder="ひとこと（100字まで）">' + esc(mc2 ? mc2.text : '') + '</textarea>'
+      + '<textarea id="c-text" maxlength="100" placeholder="ひとこと（100字まで）">' + esc(mc2 ? mc2.text : '') + '</textarea>'
       + '<div class="row"><button class="btn primary" data-act="c-save" data-id="' + s.id + '">おくる</button>'
       + (mc2 ? '<button class="btn danger" data-act="c-del" data-id="' + s.id + '">けす</button>' : '') + '<button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'cmts'){
@@ -830,15 +832,16 @@ function viewSheet(){
     if(!isTeacher() && tn.team !== myTeam()) list = list.filter(function(c){ return c.viewer === me; });
     h += '<h2>「' + esc(tn.text) + '」への コメント（' + list.length + '）</h2><div class="clist">' + list.map(function(c){
         var w = isTeacher() ? child(c.viewer) : null;
-        return '<div class="c">' + esc(c.text) + (w ? '<small>' + teamLabel(w.team) + ' ' + w.no + 'ばん</small>' : c.viewer === me ? '<small>じぶん</small>' : '') + '</div>';
+        return '<div class="c">' + esc(c.text) + (w ? '<small>' + teamLabel(w.team) + ' ' + w.no + 'ばん</small>' : c.viewer === me ? '<small>じぶん</small>' : '')
+          + (isTeacher() ? '<button class="btn danger" style="min-height:40px;margin-top:4px" data-act="cmt-purge" data-id="' + tn.id + '" data-v="' + esc(c.viewer) + '">この コメントを 消す</button>' : '') + '</div>';
       }).join('') + '</div><div class="row"><button class="btn" data-act="close">とじる</button></div>';
   } else if(s.type === 'done'){
     h += '<h2>調査済みに する</h2><p>「' + esc(item(s.id).text) + '」を しらべたのは だれ？（書かなくても よい。2人以上なら「・」で つなぐ）</p>'
-      + '<input id="d-text" class="sbox" placeholder="名前（なくても よい）">'
+      + '<input id="d-text" class="sbox" maxlength="40" placeholder="名前（なくても よい）">'
       + '<div class="row"><button class="btn primary" data-act="d-save" data-id="' + s.id + '">きめる</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'frame'){
     var f = item(s.id);
-    h += '<h2>枠</h2><input id="f-text" class="btn" style="width:100%;font-size:18px" placeholder="枠の 名前（なくてもよい）" value="' + esc(f.text || '') + '">'
+    h += '<h2>枠</h2><input id="f-text" class="btn" maxlength="40" style="width:100%;font-size:18px" placeholder="枠の 名前（なくてもよい）" value="' + esc(f.text || '') + '">'
       + '<div class="tsug">' + FRAME_TITLES.map(function(t){ return '<button class="btn" data-act="f-sug" data-t="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>'
       + '<div class="row"><button class="btn primary" data-act="f-save" data-id="' + f.id + '">きめる</button><button class="btn danger" data-act="del" data-id="' + f.id + '">枠を けす</button></div>';
   } else if(s.type === 'arrow'){
@@ -941,6 +944,8 @@ function viewTeacher(){
     + '<button class="btn" data-act="round-next">' + (ui.armed === 'round' ? 'もう一度 押すと 第' + (rd + 1) + '回に なります' : '第' + (rd + 1) + '回を はじめる') + '</button>'
     + '<span>シール・持ち分・見てほしい付箋が 回ごとに なります（前の 回の 数は 一覧に のこります）</span></div>';
   h += '<p style="color:var(--sub);font-size:14px">「同じ組」は ' + ui.tCls + '組の中だけ、「学年」は ほかの組の 班にも 届きます。' + ui.tCls + '組の 児童が できることだけを 決めます。</p>';
+    var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
+    if(noShow.length) h += '<p class="warn">⚠ 第' + (tm.round || 1) + '回の 見てほしい付箋が まだ ない 班：' + noShow.map(function(sp){ return sp.no + 'はん'; }).join('・') + '（シール（班の外）を 入れても、この 班の 付箋は 出ません）</p>';
     var anyOn = MODES.some(function(x){ return modeOn(tm[x.k]); });
     h += '<div class="row"><button class="btn" data-act="modes-off"' + (anyOn ? '' : ' disabled') + '>' + ui.tCls + '組を ぜんぶ 切に もどす</button></div>';
     return h + '</div>';
@@ -1168,7 +1173,11 @@ document.addEventListener('click', function(e){
     });
     return;
   }
-  if(act === 'showcase'){ var sx0 = item(id); if(!sx0 || shownBefore(sx0)) return; commit(function(){ sx0.showcase = shownNow(sx0) ? 0 : curRound(sx0.team); }); return; }
+  if(act === 'showcase'){
+    var sx0 = item(id); if(!sx0 || shownBefore(sx0)) return;
+    if(!shownNow(sx0) && S.items.filter(function(x){ return x.team === sx0.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }).length >= SHOW_PER_TEAM){ toast('見てほしい付箋は ' + SHOW_PER_TEAM + 'まいまで（どれかを はずしてから）'); return; }
+    commit(function(){ sx0.showcase = shownNow(sx0) ? 0 : curRound(sx0.team); }); return;
+  }
   if(act === 'kind'){ ui.kind = b.getAttribute('data-k'); ui.selSeal = null; render(); return; }
   if(act === 'peel'){ var pk = b.getAttribute('data-key').split('|'); ui.selSeal = null; var pr = curRound((item(pk[0]) || {}).team); commit(function(){ S.stars = S.stars.filter(function(x){ return !(x.noteId === pk[0] && x.viewer === me && x.k === pk[1] && rdOf(x) === pr); }); }); return; }
   if(act === 'seal'){ var key = b.getAttribute('data-key'); ui.selSeal = ui.selSeal === key ? null : key; render(); return; }
@@ -1233,6 +1242,13 @@ document.addEventListener('click', function(e){
   if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; Platform.watch(ui.viewTeam); render(); return; }
   if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; Platform.watch(null); render(); return; }
   if(act === 'tsort'){ ui.trashSort = b.getAttribute('data-v'); render(); return; }
+  if(act === 'cmt-purge'){
+    if(!isTeacher()) return;
+    var cv = b.getAttribute('data-v');
+    S.comments = (S.comments || []).filter(function(c){ return !(c.noteId === id && c.viewer === cv); });
+    Platform.push({up:[], del:[], star:[], cmt:[], cmtDel:[{noteId:id, viewer:cv}]});
+    toast('コメントを 消しました'); render(); return;
+  }
   if(act === 'purge'){
     if(!isTeacher()) return;
     if(ui.armed !== 'purge'){ ui.armed = 'purge'; render(); setTimeout(function(){ if(ui.armed === 'purge'){ ui.armed = false; render(); } }, 4000); return; }

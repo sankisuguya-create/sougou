@@ -18,7 +18,8 @@ var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
 var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
-var STAR_PER_TEAM = 2;  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
+var STAR_PER_TEAM = 2;
+var SHOW_PER_TEAM = 4;  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで（指導案の「4つ選ぶ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
 /* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
 function doGet(e){
@@ -233,6 +234,14 @@ function apply(ops){
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
     var appends = [], touched = false, teams = {}, purged = {};
 
+    /* 見てほしい付箋が 多すぎないか（この 書きこみで ふえる 時だけ 数える） */
+    function tooManyShow(id, team, o, old){
+      var rd = roundOf_(modes, team), now0 = o.showcase === true ? 1 : Number(o.showcase) || 0, was0 = old ? (old.showcase === true ? 1 : Number(old.showcase) || 0) : 0;
+      if(now0 !== rd || was0 === rd) return false;
+      var n = 0;
+      irows.forEach(function(r){ if(r[5] || String(r[1]) !== team || String(r[0]) === id) return; var q = null; try{ q = JSON.parse(r[3]); }catch(e){} if(q && (q.showcase === true ? 1 : Number(q.showcase) || 0) === rd && q.face === 'front') n++; });
+      return n >= SHOW_PER_TEAM;
+    }
     function writeRow(id, row){
       if(index[id] !== undefined){ ish.getRange(index[id] + 2, 1, 1, row.length).setValues([row]); irows[index[id]] = row; }
       else { appends.push(row); index[id] = -1; }
@@ -241,7 +250,7 @@ function apply(ops){
     }
 
     var KEEP = ['id', 'team', 'author', 'fromTeam'];  // 変わった 項目として 送られても 変えない
-    (ops.up || []).forEach(function(x){
+    (ops.up || []).forEach(guard_(rejected, function(x){ return String(x && x.id || ''); }, function(x){
       var id = String(x && x.id || '');
       if(x && x.p && typeof x.p === 'object'){
         // 変わった 項目だけ：いまの 付箋に 重ねる（ほかの 項目は さわらない）
@@ -252,8 +261,9 @@ function apply(ops){
         Object.keys(x.p).forEach(function(k){ if(KEEP.indexOf(k) < 0) cur[k] = x.p[k]; });
         (x.u || []).forEach(function(k){ if(KEEP.indexOf(k) < 0) delete cur[k]; });
         if(KINDS.indexOf(cur.kind) < 0 || FACE_KEYS.indexOf(cur.face) < 0){ rejected.push(id); return; }
-        if(typeof cur.text === 'string') cur.text = cur.text.slice(0, 200);
-        writeRow(id, [id, cur.team, cur.face, JSON.stringify(cur), v, false, u.id, now]);
+        var before0 = null; try{ before0 = JSON.parse(er[3]); }catch(e){}
+        if(tooManyShow(id, String(er[1]), cur, before0)){ rejected.push(id); return; }
+        writeRow(id, [id, cur.team, cur.face, cleanItem_(cur), v, false, u.id, now]);
         return;
       }
       if(!id || u.role !== 'child' || KINDS.indexOf(x.kind) < 0 || FACE_KEYS.indexOf(x.face) < 0){ rejected.push(id); return; }
@@ -277,18 +287,18 @@ function apply(ops){
         if(x.kind !== 'note' || x.face !== 'gift' || !reach_(u, modes, 'propose', x.team)){ rejected.push(id); return; }
         x.author = u.id; x.fromTeam = u.team;
       }
-      if(typeof x.text === 'string') x.text = x.text.slice(0, 200);
-      writeRow(id, [id, x.team, x.face, JSON.stringify(x), v, false, u.id, now]);
-    });
+      if(x.team === u.team && tooManyShow(id, x.team, x, old)){ rejected.push(id); return; }
+      writeRow(id, [id, x.team, x.face, cleanItem_(x), v, false, u.id, now]);
+    }));
 
-    (ops.del || []).forEach(function(id){
+    (ops.del || []).forEach(guard_(rejected, function(x){ return String(x); }, function(id){
       id = String(id);
       var i = index[id];
       if(i === undefined || i < 0 || u.role !== 'child' || String(irows[i][1]) !== u.team){ rejected.push(id); return; }
       var r = irows[i].slice(); r[4] = v; r[5] = true; r[6] = u.id; r[7] = now;
       writeRow(id, r);
-    });
-    (ops.purge || []).forEach(function(id){
+    }));
+    (ops.purge || []).forEach(guard_(rejected, function(x){ return '!' + String(x); }, function(id){
       id = String(id);
       var i = index[id];
       if(u.role !== 'teacher' || i === undefined || i < 0){ rejected.push('!' + id); return; }
@@ -302,7 +312,7 @@ function apply(ops){
         else if(o.kind === 'arrow' && (o.from === id || o.to === id)){ var d = r.slice(); d[4] = v; d[5] = true; d[6] = u.id; d[7] = now; writeRow(String(r[0]), d); }
       });
       purged[id] = 1;
-    });
+    }));
     if(appends.length) ish.getRange(ish.getLastRow() + 1, 1, appends.length, appends[0].length).setValues(appends);
 
     if(ops.star && ops.star.length){
@@ -316,7 +326,7 @@ function apply(ops){
       // 書いたばかりの 行も 含めて 付箋の班を 引く
       if(Object.keys(itput).length){ try{ cache_().putAll(itput, 21600); }catch(e){} itput = {}; }
       var teamOf = itemTeams_(ops.star.map(function(s){ return String(s.noteId); }));
-      ops.star.forEach(function(s){
+      ops.star.forEach(guard_(rejected, function(x){ return '*' + String(x && x.noteId); }, function(s){
         var nId = String(s.noteId), t = teamOf[nId];
         var like = s.k === 'thumb';  // 班の中の いいね：自分の班の 付箋だけ、モード・回・持ち分は 関係ない
         var ok = u.role === 'child' && t && t.face !== 'trash' && (like ? t.team === u.team : (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team)));
@@ -334,7 +344,7 @@ function apply(ops){
         if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { sapp.push(row); sidx[key] = -1; }
         touched = true; teams[t.team] = 1;
-      });
+      }));
       if(sapp.length) ssh.getRange(ssh.getLastRow() + 1, 1, sapp.length, sapp[0].length).setValues(sapp);
     }
 
@@ -343,7 +353,7 @@ function apply(ops){
       crows.forEach(function(r, i){ cidx[String(r[0])] = i; });
       if(Object.keys(itput).length){ try{ cache_().putAll(itput, 21600); }catch(e){} itput = {}; }
       cteam = itemTeams_(ops.cmt.map(function(c){ return String(c.noteId); }));
-      ops.cmt.forEach(function(c){
+      ops.cmt.forEach(guard_(rejected, function(x){ return '#' + String(x && x.noteId); }, function(c){
         var nId = String(c.noteId), t = cteam[nId];
         var ok = u.role === 'child' && t && t.team !== u.team && t.face !== 'trash' && reach_(u, modes, 'starOut', t.team);
         if(!ok){ rejected.push('#' + nId); return; }
@@ -351,8 +361,22 @@ function apply(ops){
         if(cidx[key] !== undefined && cidx[key] >= 0) csh.getRange(cidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { capp.push(row); cidx[key] = -1; }
         touched = true; teams[t.team] = 1;
-      });
+      }));
       if(capp.length) csh.getRange(csh.getLastRow() + 1, 1, capp.length, capp[0].length).setValues(capp);
+    }
+
+    if(ops.cmtDel && ops.cmtDel.length){
+      if(u.role !== 'teacher') rejected.push('cmtDel');
+      else {
+        var dsh = sheet_(SH.comments), drows = rows_(SH.comments);
+        ops.cmtDel.forEach(guard_(rejected, function(x){ return '#' + String(x && x.noteId); }, function(c){
+          drows.forEach(function(r, j){
+            if(String(r[1]) !== String(c.noteId) || low_(r[3]) !== low_(c.viewer) || !r[5]) return;
+            var row = r.slice(); row[4] = ''; row[5] = false; row[6] = v;
+            dsh.getRange(j + 2, 1, 1, row.length).setValues([row]); teams[String(r[2])] = 1; touched = true;
+          });
+        }));
+      }
     }
 
     if(Object.keys(purged).length){
@@ -398,6 +422,19 @@ function apply(ops){
   }
 }
 
+/* 1つの 書きこみで 失敗しても、その 1つだけ はねて 残りは 進める（1つの 変な 付箋で ずっと 保存できなくなるのを 防ぐ） */
+function guard_(rejected, keyOf, fn){
+  return function(x){ try{ fn(x); }catch(e){ rejected.push(keyOf(x)); } };
+}
+/* 付箋の 中身の 長さを 制限する（セルの 上限 5万字を こえて 書きこみが 止まるのを 防ぐ） */
+function cleanItem_(o){
+  if(typeof o.text === 'string') o.text = o.text.slice(0, o.kind === 'frame' ? 40 : 200);
+  if(typeof o.doneBy === 'string') o.doneBy = o.doneBy.slice(0, 40);
+  Object.keys(o).forEach(function(k){ if(typeof o[k] === 'string' && o[k].length > 400) o[k] = o[k].slice(0, 400); });
+  var j = JSON.stringify(o);
+  if(j.length > 4000) throw new Error('TOO_BIG');
+  return j;
+}
 function clamp_(v, a, b){ v = Number(v); return isNaN(v) ? a : Math.max(a, Math.min(b, v)); }
 
 /* 名簿・先生・スポットを 直したら 実行（覚えを 消す） */
