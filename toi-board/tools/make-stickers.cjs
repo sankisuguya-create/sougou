@@ -51,11 +51,30 @@ var PARTS = {
           x1:0, y1:0, x2:1, y2:1,
           stops:[[0,'#8C939E'],[0.35,'#3A3F47'],[0.55,'#A9B0BA'],[0.75,'#2E3238'],[1,'#5C636D']] }]
 };
+/* 手前に重ねる形（外形は 下の形と ひとつながりになり、重なった所の 下の形の輪郭は 隠れる） */
+var FRONT = {
+  // つるはしの刃の 左上の先に 黄色い 衝撃のギザギザ
+  pick:{ d:(function(){ var p = []; for(var i = 0; i < 16; i++){ var r = i % 2 ? 3.7 : 6.1, a = -Math.PI/2 + i*Math.PI/8; p.push((7.6 + r*Math.cos(a)).toFixed(2) + " " + (7.2 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
+         colors:['#FFF27A', '#FFC23A'], glint:'<path d="M5.2 6.2L6.4 4.8" />' }
+};
+// 柄の ツヤ（柄の 左上がわの 輪郭に 平行）
+GLINT.pick += rot('<path d="M14.5 15.5L14.5 25.5" />', 40, 16, 16.5);
+function frontLayer(F, gid){
+  var fid = gid + 'f';
+  return '<path d="' + F.d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
+    + '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + F.colors[0] + '"/><stop offset="1" stop-color="' + F.colors[1] + '"/></linearGradient>'
+    + '<clipPath id="c' + fid + '"><path d="' + F.d + '"/></clipPath></defs>'
+    + '<path d="' + F.d + '" fill="url(#' + fid + ')"/>'
+    + '<g clip-path="url(#c' + fid + ')"><path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
+    + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
+    + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
+}
 function sticker(shape, color, size){
   var d = SHAPES[shape], c = STICKER_COLORS[color] || [color, color], gid = 'g' + shape + color.replace('#', '');
+  var F = FRONT[shape], whole = F ? d + F.d : d;
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
-    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
-    + '<path d="' + d + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
+    + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
+    + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
     + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + (PARTS[shape] || []).map(function(pt, j){
@@ -70,6 +89,7 @@ function sticker(shape, color, size){
     + '<g clip-path="url(#c' + gid + ')"><path d="' + d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
     + '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + (DETAIL[shape] || '')
+    + (F ? frontLayer(F, gid) : '')
     + '<g fill="#fff" stroke="#fff" stroke-width="1.7" stroke-linecap="round" style="fill-opacity:1" filter="url(#f' + gid + ')">' + GLINT[shape].replace('<path', '<path fill="none"') + '</g>'
     + '</svg>';
 }
