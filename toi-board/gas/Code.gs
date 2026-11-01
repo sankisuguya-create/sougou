@@ -171,7 +171,7 @@ function pull_(u, spec){
     var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
-    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), rd:Number(r[8]) || 1, viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), rd:r[8] === '' || r[8] == null ? 1 : Number(r[8]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
     if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
     stars.push(o);
   });
@@ -239,7 +239,7 @@ function apply(ops){
       var have = {};  // 班|種類 → 自分が 貼っている 枚数
       srows.forEach(function(r, i){
         sidx[String(r[0])] = i;
-        var hk0 = r[2] + '|' + (r[6] || 'star') + '|' + (Number(r[8]) || 1);
+        var hk0 = r[2] + '|' + (r[6] || 'star') + '|' + (r[8] === '' || r[8] == null ? 1 : Number(r[8]));
         if(low_(r[3]) === u.id && r[4]) have[hk0] = (have[hk0] || 0) + 1;
       });
       // 書いたばかりの 行も 含めて 付箋の班を 引く
@@ -247,12 +247,13 @@ function apply(ops){
       rows_(SH.items).forEach(function(r){ if(!r[5]) teamOf[String(r[0])] = {team:String(r[1]), face:String(r[2])}; });
       ops.star.forEach(function(s){
         var nId = String(s.noteId), t = teamOf[nId];
-        var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
+        var like = s.k === 'thumb';  // 班の中の いいね：自分の班の 付箋だけ、モード・回・持ち分は 関係ない
+        var ok = u.role === 'child' && t && t.face !== 'trash' && (like ? t.team === u.team : (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team)));
         var k = STAR_KINDS.indexOf(s.k) >= 0 ? s.k : 'star';
         // 回は サーバーが 決める（その 付箋の 組の 今の 回）
-        var rd = t ? roundOf_(modes, t.team) : 1;
+        var rd = like ? 0 : (t ? roundOf_(modes, t.team) : 1);
         var key0 = nId + '|' + k + '|' + rd + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k + '|' + rd);
-        if(ok && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
+        if(ok && !like && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
         if(!ok){ rejected.push('*' + nId + '|' + k); return; }
         if(s.on && !was) have[hk] = (have[hk] || 0) + 1;
         if(!s.on && was) have[hk] = (have[hk] || 1) - 1;

@@ -94,7 +94,7 @@ var Platform = (function(){
       if(!ops) return;
       ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
       ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
-      ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k + '|' + (s.rd || 1); q.star[key] = s; pend['*' + key] = 1; });
+      ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k + '|' + (s.rd == null ? 1 : s.rd); q.star[key] = s; pend['*' + key] = 1; });
       (ops.cmt || []).forEach(function(c){ q.cmt[c.noteId] = c; pend['#' + c.noteId] = 1; });
       if(ops.modes) q.modes = ops.modes;
       schedule();

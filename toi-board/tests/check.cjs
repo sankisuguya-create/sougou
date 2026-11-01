@@ -223,21 +223,21 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A01');
   await page.click('[data-act=search]');
   await page.fill('#s-text', 'どうして');
-  const hitTexts = await page.$$eval('.hits .hit .t', els => els.map(e => e.textContent));
+  const hitTexts = await page.$$eval('.hits .hcard .t', els => els.map(e => e.textContent));
   const mineAll = await page.evaluate(() => S.items.filter(x => x.kind === 'note' && x.team === 'A-1').map(x => x.text));
   ok(hitTexts.length > 0 && hitTexts.every(t => t.includes('どうして') && mineAll.includes(t)), '児童の 検索は 自分の班の 付箋だけ・ことばで しぼれる');
   ok(!(await page.evaluate(() => searchHits(myTeam(), 'どうして').some(n => n.team !== 'A-1'))), 'ほかの班の 付箋は 検索に 出ない');
   await page.fill('#s-text', '');
   await page.click('[data-act=s-kind][data-k=any]');
-  const starHits = await page.$$eval('.hits .hit', els => els.length);
+  const starHits = await page.$$eval('.hits .hcard', els => els.length);
   const starred = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && S.stars.some(s => s.noteId === x.id)).length);
   ok(starHits === starred && starHits > 0, 'シールが ある 付箋だけに しぼれる');
   await page.click('[data-act=s-kind][data-k=pick]');
   const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'pick')).length);
-  ok(await page.locator('.hits .hit').count() === circ && circ > 0, 'シールの 種類で しぼれる');
+  ok(await page.locator('.hits .hcard').count() === circ && circ > 0, 'シールの 種類で しぼれる');
   await page.click('[data-act=s-kind][data-k=""]');
   await page.fill('#s-text', 'うめた');
-  await page.click('.hits .hit');
+  await page.click('.hits .hcard');
   ok(await page.isVisible('.face.on[data-face=back]') && await page.isVisible('.note.flash'), 'タップすると その付箋の 面（うらがわ）へ 移り 光る');
   await page.screenshot({ path: SHOTS + '/8-search.png' });
   // 先生：学年の 全部を ことば・シールで しぼる（表と コピーに 効く）
@@ -492,6 +492,40 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const fr2 = (await st()).items.find(x => x.id === fid);
   ok(fr2.lp > 0.5 && fr2.lp < 0.75, '下の 辺にも うつせる（辺から はなれた ところで はなしても 辺に すいつく）');
   await page.screenshot({ path: SHOTS + '/15-frame.png' });
+  }
+  {
+  // 検索：ポップアップ窓で 横5つずつ、ならびかえ
+  await who('A01'); await page.click('.face[data-face=front]');
+  for (const t of ['かきくけこ', 'あいうえお', 'さしすせそ']) { await page.click('.fab'); await page.fill('#w-text', t); await page.press('#w-text', 'Enter'); await page.waitForTimeout(5); }
+  await page.click('[data-act=search]');
+  const cards = await page.$$eval('.sheet.win .hits .hcard', els => els.map(e => e.getBoundingClientRect().top));
+  const firstRow = cards.filter(t => Math.abs(t - cards[0]) < 2).length;
+  ok(await page.isVisible('.sheet.win') && cards.length > 5 && firstRow === 5, '検索は ポップアップ窓で、付箋が 横5つずつ 下へ 並ぶ');
+  const texts = async () => page.$$eval('.hits .hcard .t', els => els.map(e => e.textContent));
+  let tx = await texts();
+  ok(tx.indexOf('さしすせそ') < tx.indexOf('かきくけこ'), 'はじめは 新しい順');
+  await page.click('[data-act=s-sort][data-k=old]'); tx = await texts();
+  ok(tx.indexOf('かきくけこ') < tx.indexOf('さしすせそ'), '古い順に できる');
+  await page.click('[data-act=s-sort][data-k=aiueo]'); tx = await texts();
+  ok(tx.indexOf('あいうえお') < tx.indexOf('かきくけこ') && tx.indexOf('かきくけこ') < tx.indexOf('さしすせそ'), 'あいうえお順に できる');
+  await page.click('[data-act=s-face][data-f=back]');
+  ok((await page.$$eval('.hits .hcard .tag:first-of-type', els => els.map(e => e.textContent))).every(t => t.startsWith('うらがわ')), '面で しぼれる');
+  await page.screenshot({ path: SHOTS + '/16-search.png' });
+  await page.keyboard.press('Escape');
+
+  // 班の中の いいね：自分の班の 付箋に、半分の 大きさで 文の 上に
+  const ln = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front' && x.text === 'あいうえお').id);
+  await page.click(`#board .note[data-id="${ln}"]`);
+  await page.click(`[data-act=like][data-id="${ln}"]`);
+  await who('A02'); await page.click('.face[data-face=front]');
+  await page.click(`#board .note[data-id="${ln}"]`); await page.click(`[data-act=like][data-id="${ln}"]`);
+  const lkb = await page.locator(`#board .note[data-id="${ln}"] .likes img`).boundingBox();
+  const textTop = await page.$eval(`#board .note[data-id="${ln}"]`, el => { const r = document.createRange(); const tn = [...el.childNodes].find(n => n.nodeType === 3); r.selectNodeContents(tn); return r.getBoundingClientRect().top; });
+  ok(lkb && Math.round(lkb.width) === 15 && lkb.y + lkb.height <= textTop + 1 && (await page.textContent(`#board .note[data-id="${ln}"] .likes`)).includes('×2'), 'いいねは 半分の 大きさ（15px）で 付箋の 文の 上に 出る（×2）');
+  ok(!(await page.isVisible(`#board .note[data-id="${ln}"] .stars [data-kind=thumb]`)), 'いいねは 下の シールの 列には 出ない');
+  await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
+  ok(!(await page.isVisible(`#board .note[data-id="${ln}"] .likes`)), 'ほかの班には いいねは 見えない');
+  await page.click('[data-act=home]');
   }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();

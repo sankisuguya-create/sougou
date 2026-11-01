@@ -206,6 +206,14 @@ function makeGas() {
 
   ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && await ta.isVisible('a[href$="/exec?trial=1"]'), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
 
+  // 班の中の いいね（サーバー）：自分の班の 付箋だけ、持ち分・回に 関係なく
+  r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
+  ok(r.rejected.length === 0, '自分の班の 付箋に いいねを つけられる');
+  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
+  ok(r.rejected.length === 1, 'ほかの班の 付箋には いいねは つけられない');
+  r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
+  ok(r.stars.some(s => s.k === 'thumb' && s.rd === 0), 'いいねは 回に 関係ない（rd=0）');
+
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());

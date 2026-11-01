@@ -95,6 +95,10 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 /* 数は シールの 右下に 重ねて 出す（横に 並べても 幅が 増えない） */
 .cnt{position:absolute;right:-7px;bottom:-6px;font-size:14px;font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:3px #1A1A1A;paint-order:stroke fill;text-shadow:0 0 1px #1A1A1A;white-space:nowrap;pointer-events:none;transform:none}
 .show.old{background:#8A8F98}
+/* 班の中の いいね：ふつうの シールの 半分の 大きさで、付箋の 文の 上に */
+.likes{display:flex;align-items:center;gap:2px;height:16px;margin:-4px 0 2px;font-size:11px;font-weight:700;color:var(--sub)}
+.likes img{width:15px;height:15px}
+.likes.mine b{color:var(--cat-1)}
 .show{position:absolute;left:8px;top:-14px;background:#0F5EA8;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px}
 /* シール貼り（ほかの班）画面 */
 .gal{padding:12px 16px 80px}
@@ -185,6 +189,16 @@ table.tally td.zero{color:#B8BCC2}
 table.tally th{text-align:center;font-size:12px}
 .sbox{width:100%;font:inherit;font-size:20px;padding:10px;border:2px solid var(--ink);border-radius:10px}
 .hits{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.sheet-bg.win{align-items:center}
+.sheet.win{width:min(1180px,96vw);border-radius:16px;max-height:92vh;display:flex;flex-direction:column}
+.sheet.win .hits{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;overflow-y:auto;padding:12px 6px 6px;flex:1;min-height:200px}
+.hcard{position:relative;display:flex;flex-direction:column;gap:6px;min-height:130px;padding:16px 10px 10px;border:0;border-radius:2px;background:var(--fill-b);box-shadow:0 2px 4px rgba(0,0,0,.18);text-align:left;font-size:16px;font-weight:700;line-height:1.4;word-break:break-all}
+.hcard.done{background:var(--done)}
+.hcard .t{flex:1}
+.hcard .meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;font-weight:400;color:var(--sub)}
+.hcard .tag{background:#fff;border-radius:99px;padding:1px 8px}
+.hcard .sc{position:relative;display:inline-flex}
+.sortbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:6px 0}
 .hit{display:flex;gap:10px;align-items:center;border:2px solid var(--line);border-radius:12px;padding:8px 10px;background:#fff;text-align:left;min-height:56px}
 .hit .t{flex:1;font-size:18px;font-weight:700}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
@@ -216,7 +230,6 @@ var SCOPES = [{k:'off', label:'切'}, {k:'class', label:'同じ組'}, {k:'grade'
 var MODES = [
   {k:'view',    label:'共同閲覧',          desc:'ほかの班の 表がわを 見られる',                 scoped:true},
   {k:'propose', label:'アイデア提案',      desc:'ほかの班の「いただきもの」に 付箋を 貼れる',   scoped:true},
-  {k:'starIn',  label:'シール（班の中）',  desc:'自分の班の 付箋に シールを 貼れる',           scoped:false},
   {k:'starOut', label:'シール（班の外）',  desc:'児童の画面が、ほかの班の「見てほしい付箋」に シールを 貼る画面に 切り替わる', scoped:true}
 ];
 function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
@@ -271,12 +284,15 @@ function item(id){ return S.items.filter(function(x){ return x.id === id; })[0];
 function stackOf(id){ return S.items.filter(function(x){ return x.stackOf === id; }); }
 function allStarsOf(id){ return S.stars.filter(function(s){ return s.noteId === id; }); }
 /* 今の 回の シールだけ */
-function starsOf(id){ var n = item(id), r = n ? curRound(n.team) : 1; return S.stars.filter(function(s){ return s.noteId === id && rdOf(s) === r; }); }
+function starsOf(id){ var n = item(id), r = n ? curRound(n.team) : 1; return S.stars.filter(function(s){ return s.noteId === id && kindOf(s) !== 'thumb' && rdOf(s) === r; }); }
+/* 班の中の いいね：回に 関係なく 1人 1まいの 付箋に 1つ */
+function likesOf(id){ return S.stars.filter(function(s){ return s.noteId === id && kindOf(s) === 'thumb'; }); }
+function canLike(n){ return !isTeacher() && n && n.kind === 'note' && n.team === myTeam() && n.face !== 'trash'; }
 function kindOf(s){ return s.k || 'star'; }
 /* 見合い会の 回：組ごとに 先生が 進める。シール・持ち分・見てほしい付箋は 回ごと */
 function roundOf(cls){ return (S.modes && S.modes[cls] && S.modes[cls].round) || 1; }
 function curRound(team){ return roundOf(clsOf(team)); }
-function rdOf(s){ return s.rd || 1; }
+function rdOf(s){ return s.rd == null ? 1 : s.rd; }
 function skey(s){ return s.noteId + '|' + kindOf(s) + '|' + rdOf(s); }
 function showRound(n){ return n.showcase === true ? 1 : (+n.showcase || 0); }
 function shownNow(n){ return showRound(n) > 0 && showRound(n) === curRound(n.team); }
@@ -415,16 +431,28 @@ function searchHits(team, q, kind){
   var words = q ? q.split(/[\s　]+/) : [];
   return S.items.filter(function(n){
     if(n.kind !== 'note' || (team && n.team !== team)) return false;
-    if(kind && !starsOf(n.id).some(function(s){ return kind === 'any' || kindOf(s) === kind; })) return false;
+    if(kind === 'thumb' && !likesOf(n.id).length) return false;
+    if(kind && kind !== 'thumb' && !starsOf(n.id).some(function(s){ return kind === 'any' || kindOf(s) === kind; })) return false;
     return words.every(function(w){ return String(n.text).indexOf(w) >= 0; });
   }).sort(function(a, b){ return kind ? cnt(b) - cnt(a) : 0; });
   function cnt(n){ return starsOf(n.id).filter(function(s){ return kind === 'any' || kindOf(s) === kind; }).length; }
 }
 function kindButtons(act, cur){
-  return [{k:'', label:'しぼらない'}, {k:'any', label:'どれか ある'}].concat(KINDS.map(function(K){ return {k:K.k, img:K.k}; })).map(function(o){
+  return [{k:'', label:'しぼらない'}, {k:'any', label:'どれか ある'}].concat(USE_KINDS.concat(KINDS.filter(function(K){ return K.k === 'thumb'; })).map(function(K){ return {k:K.k, img:K.k}; })).map(function(o){
     return '<button class="btn' + ((cur || '') === o.k ? ' on' : '') + '" data-act="' + act + '" data-k="' + o.k + '"' + (o.img ? ' aria-label="' + KINDS.filter(function(K){ return K.k === o.k; })[0].name + '"' : '') + '>' + (o.img ? sealImg(o.img, 28) : o.label) + '</button>';
   }).join('');
 }
+var SORTS = [{k:'new', label:'新しい順'}, {k:'old', label:'古い順'}, {k:'aiueo', label:'あいうえお順'}, {k:'seal', label:'シールが 多い順'}, {k:'like', label:'いいねが 多い順'}];
+function sortHits(list, k){
+  var a = list.slice();
+  if(k === 'new') a.sort(function(x, y){ return writtenAt(y) - writtenAt(x); });
+  else if(k === 'old') a.sort(function(x, y){ return writtenAt(x) - writtenAt(y); });
+  else if(k === 'aiueo') a.sort(function(x, y){ return JA.compare(String(x.text), String(y.text)); });
+  else if(k === 'seal') a.sort(function(x, y){ return starsOf(y.id).length - starsOf(x.id).length || writtenAt(y) - writtenAt(x); });
+  else if(k === 'like') a.sort(function(x, y){ return likesOf(y.id).length - likesOf(x.id).length || writtenAt(y) - writtenAt(x); });
+  return a;
+}
+function fmtDate(t){ if(!t) return ''; var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate(); }
 function gotoNote(id){
   var n = item(id); if(!n) return;
   var top = n.stackOf ? item(n.stackOf) || n : n;
@@ -461,7 +489,7 @@ var KINDS = [
   {k:'bulb',   name:'？出しの参考になる！', row:0, col:3, use:1},
   {k:'circle', name:'まる',                row:1, col:0},
   {k:'bolt',   name:'ひらめき',            row:1, col:1},
-  {k:'thumb',  name:'分かった',            row:1, col:2}
+  {k:'thumb',  name:'いいね（班の中）',    row:1, col:2}
 ];
 /* 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで（4種類×2＝8まいが その班への 持ち分）。同じ付箋に 同じ種類は 1まい */
 var STAR_PER_TEAM = 2;
@@ -483,11 +511,12 @@ function noteHTML(n, opt){
   var layers = '', kids = stackOf(n.id).length;
   for(var i = Math.min(kids, 4); i >= 1; i--) layers += '<div class="layer" style="transform:translate(' + (i*3) + 'px,' + (i*3) + 'px) rotate(' + (i % 2 ? 1.2 : -0.8) + 'deg)"></div>';
   var cm = commentsOf(n.id); if(!isTeacher() && n.team !== myTeam()) cm = cm.filter(function(c){ return c.viewer === me; });
+  var lk = likesOf(n.id), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes' + (lk.some(function(x){ return x.viewer === me; }) ? ' mine' : '') + '" data-likes="' + n.id + '">' + sealImg('thumb', 15) + (lk.length >= 2 ? '<b>×' + lk.length + '</b>' : '') + '</div>' : '';
   var cicon = cm.length && !opt.inline ? '<div class="cicon" data-cmts="' + n.id + '" title="コメントを 見る">💬' + (cm.length >= 2 ? cm.length : '') + '</div>' : '';
   /* 自分の班（と先生）は 種類ごとに「×N」。ほかの班では 自分が 貼った 種類だけ（数は 出さない） */
   var st = starsOf(n.id), all = showCount(n), stars = '';
   if(!all) st = st.filter(function(s){ return s.viewer === me; });
-  var used = KINDS.filter(function(K){ return st.some(function(x){ return kindOf(x) === K.k; }); });
+  var used = KINDS.filter(function(K){ return K.k !== 'thumb' && st.some(function(x){ return kindOf(x) === K.k; }); });
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, r = ((K.row * 4 + K.col) * 37 % 13) - 6;
@@ -498,7 +527,7 @@ function noteHTML(n, opt){
   var tip = n.done ? ' title="調査済み' + (n.doneBy ? '（しらべた人：' + esc(n.doneBy) + '）' : '') + '"' : '';
   var at = opt.pos || n, pos = opt.inline ? '' : 'left:' + (clampX(at.x)*GRID) + 'px;top:' + (at.y*GRID) + 'px;';
   return '<div class="item note' + (n.done ? ' done' : '') + (stars ? ' has-seal' + (oneRow ? ' one' : '') : '') + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '"' + tip + ' style="' + pos + '">'
-    + layers + esc(n.text) + from + cicon + show + stars + '</div>';
+    + layers + likes + esc(n.text) + from + cicon + show + stars + '</div>';
 }
 /* 枠の タイトルの 位置：枠の 辺の 上を 一周 0〜1 で もつ（左上から 時計まわり） */
 function edgePoint(W, H, lp){
@@ -681,24 +710,26 @@ function viewChild(){
 }
 
 function viewSheet(){
-  var s = ui.sheet, h = '<div class="sheet-bg" data-act="close"><div class="sheet">';
+  var s = ui.sheet, win = s.type === 'search', h = '<div class="sheet-bg' + (win ? ' win' : '') + '" data-act="close"><div class="sheet' + (win ? ' win' : '') + '">';
   if(s.type === 'write'){
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + (s.id ? '付箋を 直す' : s.gift ? teamLabel(boardTeam()) + 'へ アイデアを おくる' : '付箋を 書く') + '</h2>'
       + '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes" style="margin-left:auto">？のたね</button></div>'
       + '<textarea id="w-text" placeholder="問いを 書こう（手書き入力も つかえます）">' + esc(s.text || '') + '</textarea>'
       + '<div class="row"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
-    var hits = searchHits(myTeam(), s.q, s.kind);
-    h += '<h2>じぶんの 班の 付箋を さがす</h2>'
+    var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return !s.face || n.face === s.face; }), s.sort || 'new');
+    h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">じぶんの 班の 付箋を さがす（' + hits.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<input id="s-text" class="sbox" placeholder="ことばで さがす（なくてもよい）" value="' + esc(s.q || '') + '">'
-      + '<div class="row">シールで しぼる：' + kindButtons('s-kind', s.kind) + '</div>'
-      + '<div class="hits">' + (hits.length ? hits.slice(0, 60).map(function(n){
-          var cs = kindCounts(n);
-          return '<button class="hit" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span>'
-            + KINDS.map(function(K, i){ return cs[i] ? '<span class="sc">' + sealImg(K.k, 24) + (cs[i] >= 2 ? '<b class="cnt">×' + cs[i] + '</b>' : '') + '</span>' : ''; }).join('')
-            + '<span class="w">' + faceLabel(n.face) + (n.stackOf ? '・重なりの中' : '') + '</span></button>';
-        }).join('') : '<p>見つかりません</p>') + '</div>'
-      + '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
+      + '<div class="sortbar">ならびかえ：<span class="seg">' + SORTS.map(function(o){ return '<button class="' + ((s.sort || 'new') === o.k ? 'on' : '') + '" data-act="s-sort" data-k="' + o.k + '">' + o.label + '</button>'; }).join('') + '</span>'
+      + '面：<span class="seg">' + [{k:'', label:'ぜんぶ'}].concat(FACES).map(function(f){ return '<button class="' + ((s.face || '') === f.k ? 'on' : '') + '" data-act="s-face" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span></div>'
+      + '<div class="sortbar">シールで しぼる：' + kindButtons('s-kind', s.kind) + '</div>'
+      + '<div class="hits">' + (hits.length ? hits.map(function(n){
+          var cs = kindCounts(n), lk = likesOf(n.id).length;
+          return '<button class="hcard' + (n.done ? ' done' : '') + '" data-act="goto" data-id="' + n.id + '"><span class="t">' + esc(n.text) + '</span><span class="meta">'
+            + (lk ? '<span class="sc">' + sealImg('thumb', 16) + (lk >= 2 ? '×' + lk : '') + '</span>' : '')
+            + USE_KINDS.map(function(K){ var c = cs[KINDS.indexOf(K)]; return c ? '<span class="sc">' + sealImg(K.k, 20) + (c >= 2 ? '<b class="cnt">×' + c + '</b>' : '') + '</span>' : ''; }).join('')
+            + '<span class="tag">' + faceLabel(n.face) + (n.stackOf ? '・重なり' : '') + '</span><span class="tag">' + fmtDate(writtenAt(n)) + '</span></span></button>';
+        }).join('') : '<p>見つかりません</p>') + '</div>';
   } else if(s.type === 'teams'){
     var L = lookable().filter(function(x){ return x.cls !== myCls(); }), cs = {};
     L.forEach(function(x){ (cs[x.cls] = cs[x.cls] || []).push(x); });
@@ -710,7 +741,10 @@ function viewSheet(){
   } else if(s.type === 'note'){
     var n = item(s.id), kids = stackOf(n.id), ed = canEdit() && n.face !== 'trash';
     h += '<h2>' + esc(n.text) + '</h2>';
-    if(canStar(n)){
+    if(canLike(n)){
+      var liked = likesOf(n.id).some(function(x){ return x.viewer === me; });
+      h += '<div class="row"><button class="btn' + (liked ? ' on' : '') + '" data-act="like" data-id="' + n.id + '">' + sealImg('thumb', 24) + (liked ? ' いいねを はずす' : ' いいね（班の中）') + '</button></div>';
+    } else if(canStar(n) && n.team !== myTeam()){
       var on = starsOf(n.id).some(function(x){ return x.viewer === me && kindOf(x) === 'star'; });
       h += '<div class="row"><button class="btn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '">' + sealImg('star', 28) + (on ? ' シールを はがす' : ' 面白い！シールを はる') + '</button></div>';
     }
@@ -800,7 +834,7 @@ function roundSummary(n){
   return Object.keys(by).sort().map(function(r){ return '第' + r + '回 ' + KINDS.filter(function(K){ return by[r][K.k]; }).map(function(K){ return K.name + by[r][K.k]; }).join(' '); }).join(' ／ ');
 }
 var OP_HEAD = ['組','班','スポット','面','付箋','調査済み（しらべた人）','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元','コメント']);
-function kindCounts(n){ var st = starsOf(n.id); return KINDS.map(function(K){ return st.filter(function(x){ return kindOf(x) === K.k; }).length; }); }
+function kindCounts(n){ var st = starsOf(n.id); return KINDS.map(function(K){ return K.k === 'thumb' ? likesOf(n.id).length : st.filter(function(x){ return kindOf(x) === K.k; }).length; }); }
 function opinionTSV(){
   return [OP_HEAD].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
 }
@@ -1042,6 +1076,16 @@ document.addEventListener('click', function(e){
   if(act === 'f-sug'){ var fi = document.getElementById('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
   if(act === 'f-save'){ var v = document.getElementById('f-text').value; ui.sheet = null; commit(function(){ item(id).text = v; }); return; }
   if(act === 'del'){ ui.sheet = null; commit(function(){ dropArrows(id); S.items = S.items.filter(function(x){ return x.id !== id; }); }); return; }
+  if(act === 'like'){
+    var ln = item(id); if(!canLike(ln)) return;
+    var had2 = likesOf(id).some(function(x){ return x.viewer === me; });
+    ui.sheet = null;
+    commit(function(){
+      if(had2) S.stars = S.stars.filter(function(x){ return !(x.noteId === id && x.viewer === me && kindOf(x) === 'thumb'); });
+      else S.stars.push({noteId:id, viewer:me, k:'thumb', rd:0});
+    });
+    return;
+  }
   if(act === 'star'){
     var n = item(id); if(!n || !canStar(n)) return;
     var had = starsOf(id).some(function(s){ return s.viewer === me && (s.k || 'star') === 'star'; });
@@ -1110,6 +1154,8 @@ document.addEventListener('click', function(e){
     render(); return;
   }
   if(act === 'search'){ ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = document.getElementById('s-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 's-sort'){ ui.sheet.sort = b.getAttribute('data-k'); render(); return; }
+  if(act === 's-face'){ ui.sheet.face = b.getAttribute('data-f'); render(); return; }
   if(act === 's-kind'){ ui.sheet.kind = b.getAttribute('data-k'); render(); return; }
   if(act === 'goto'){ gotoNote(id); return; }
   if(act === 'fkind'){ ui.fKind = b.getAttribute('data-k'); render(); return; }
