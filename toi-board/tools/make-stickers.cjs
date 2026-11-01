@@ -38,7 +38,7 @@ var STICKER_COLORS = {
 };
 SHAPES.pick = rot('M2.6 13.2Q16 -4.4 29.4 13.2Q23 10.6 19 11.6L19 29Q19 31.4 16 31.4Q13 31.4 13 29L13 11.6Q9 10.6 2.6 13.2Z', 40, 16, 16.5);
 SHAPES.wow = (function(){ var p = []; for(var i = 0; i < 24; i++){ var r = i % 2 ? 11.2 : 14.6, a = -Math.PI/2 + i*Math.PI/12; p.push((16 + r*Math.cos(a)).toFixed(2) + ' ' + (16.5 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })();
-GLINT.pick = rot('<path d="M7.6 8.4Q10 6.2 13 5.2" />', 40, 16, 16.5);
+GLINT.pick = '';  // 刃（鉄）には ツヤを 入れない
 GLINT.wow = '<path d="M7.6 11.2L9.6 8.6" />';
 // 豆電球（自分の問い出しの参考になった！）：ガラス球＋口金（口金のすき間は黒の輪郭で埋まり、ねじ山に見える）
 SHAPES.bulb = 'M16 3Q26.2 3 26.2 13Q26.2 18.2 21.6 21.6L21.6 24L10.4 24L10.4 21.6Q5.8 18.2 5.8 13Q5.8 3 16 3ZM11 25.4L21 25.4L21 28Q21 30.8 16 30.8Q11 30.8 11 28Z';
@@ -58,14 +58,16 @@ var FRONT = {
          colors:['#FFF27A', '#FFC23A'], glint:'<path d="M5.2 6.2L6.4 4.8" />' }
 };
 // 柄の ツヤ（柄の 左上がわの 輪郭に 平行）
-GLINT.pick += rot('<path d="M15.3 18.2L15.3 24" />', 40, 16, 16.5);
-function frontLayer(F, gid){
+GLINT.pick += rot('<path d="M15.3 18.2L15.3 24" />', 40, 16, 16.5).replace('<path', '<path stroke-width="0.8"');
+function frontLayer(F, gid, body){
   var fid = gid + 'f';
   return '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + F.colors[0] + '"/><stop offset="1" stop-color="' + F.colors[1] + '"/></linearGradient>'
     + '<clipPath id="c' + fid + '"><path d="' + F.d + '"/></clipPath></defs>'
     + '<path d="' + F.d + '" fill="url(#' + fid + ')"/>'
+    // 本体（刃）の近くでは ギザギザの白い縁を 描かない（刃との境目に 縁の影響を 出さない）
+    + '<defs><mask id="n' + fid + '" maskUnits="userSpaceOnUse" x="-5" y="-5" width="43" height="43"><rect x="-5" y="-5" width="43" height="43" fill="#fff"/><path d="' + body + '" fill="#000" stroke="#000" stroke-width="3" stroke-linejoin="round"/></mask></defs><g mask="url(#n' + fid + ')">'
     + '<g clip-path="url(#c' + fid + ')"><path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" filter="url(#f' + gid + ')"/></g>'
-    + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
+    + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/></g>'
     + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
 }
 function sticker(shape, color, size){
@@ -74,7 +76,7 @@ function sticker(shape, color, size){
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '" style="vertical-align:middle"' : '') + ' aria-hidden="true">'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round" transform="translate(0.65 0.65)"/>'
     + '<path d="' + whole + '" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="2.3" stroke-linejoin="round"/>'
-    + (F ? frontLayer(F, gid) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
+    + (F ? frontLayer(F, gid, d) : '')   // 後ろに置く形（外形は 上の黒で ひとつながり）
     + '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset="1" stop-color="' + c[1] + '"/></linearGradient></defs>'
     + '<path d="' + d + '" fill="url(#' + gid + ')"/>'
     + (PARTS[shape] || []).map(function(pt, j){
