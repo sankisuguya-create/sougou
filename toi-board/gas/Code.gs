@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 6;
+var API_VER = 7;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -35,7 +35,9 @@ function setup(){
     var sh = ss.getSheetByName(n) || ss.insertSheet(n);
     if(sh.getLastRow() === 0) sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]);
   });
-  PropertiesService.getScriptProperties().setProperties({ver:'0'});
+  // 版が もう あれば さわらない（0 に もどすと、児童の 画面が 以後の 書きこみを 取りに 行かなくなる）
+  var pr = PropertiesService.getScriptProperties();
+  if(pr.getProperty('ver') === null) pr.setProperty('ver', '0');
 }
 
 /* ===== 読み書きの 道具 ===== */
@@ -226,10 +228,10 @@ function apply(ops){
   lock.waitLock(20000);
   try{
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
-    var needItems = (ops.up && ops.up.length) || (ops.del && ops.del.length);
+    var needItems = (ops.up && ops.up.length) || (ops.del && ops.del.length) || (ops.purge && ops.purge.length);
     var ish = needItems ? sheet_(SH.items) : null, irows = needItems ? rows_(SH.items) : [], index = {}, itput = {};
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
-    var appends = [], touched = false, teams = {};
+    var appends = [], touched = false, teams = {}, purged = {};
 
     function writeRow(id, row){
       if(index[id] !== undefined){ ish.getRange(index[id] + 2, 1, 1, row.length).setValues([row]); irows[index[id]] = row; }
@@ -238,8 +240,22 @@ function apply(ops){
       itput['it:' + id] = row[5] ? 'x|trash' : String(row[1]) + '|' + String(row[2]);
     }
 
+    var KEEP = ['id', 'team', 'author', 'fromTeam'];  // 変わった 項目として 送られても 変えない
     (ops.up || []).forEach(function(x){
       var id = String(x && x.id || '');
+      if(x && x.p && typeof x.p === 'object'){
+        // 変わった 項目だけ：いまの 付箋に 重ねる（ほかの 項目は さわらない）
+        var ri = index[id], er = ri !== undefined && ri >= 0 ? irows[ri] : null;
+        if(!er || er[5] || u.role !== 'child' || String(er[1]) !== u.team){ rejected.push(id); return; }
+        var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
+        if(!cur){ rejected.push(id); return; }
+        Object.keys(x.p).forEach(function(k){ if(KEEP.indexOf(k) < 0) cur[k] = x.p[k]; });
+        (x.u || []).forEach(function(k){ if(KEEP.indexOf(k) < 0) delete cur[k]; });
+        if(KINDS.indexOf(cur.kind) < 0 || FACE_KEYS.indexOf(cur.face) < 0){ rejected.push(id); return; }
+        if(typeof cur.text === 'string') cur.text = cur.text.slice(0, 200);
+        writeRow(id, [id, cur.team, cur.face, JSON.stringify(cur), v, false, u.id, now]);
+        return;
+      }
       if(!id || u.role !== 'child' || KINDS.indexOf(x.kind) < 0 || FACE_KEYS.indexOf(x.face) < 0){ rejected.push(id); return; }
       var ex = index[id] !== undefined && index[id] >= 0 ? irows[index[id]] : null;
       var old = null; if(ex){ try{ old = JSON.parse(ex[3]); }catch(e){} }
@@ -249,7 +265,10 @@ function apply(ops){
         x.author = old && old.author || u.id;
         if(old && old.fromTeam) x.fromTeam = old.fromTeam; else delete x.fromTeam;
       } else if(ex && ex[5]){
-        rejected.push(id); return;
+        // 消した 付箋を もどす（やり直し）：同じ班で、先生が 完全に 消した ものでは ない 時だけ
+        if(String(ex[1]) !== u.team || x.team !== u.team || (old && old.purged)){ rejected.push(id); return; }
+        x.author = old && old.author || u.id;
+        if(old && old.fromTeam) x.fromTeam = old.fromTeam; else delete x.fromTeam;
       } else if(x.team === u.team){
         if(x.face === 'gift'){ rejected.push(id); return; }
         x.author = u.id; delete x.fromTeam;
@@ -268,6 +287,21 @@ function apply(ops){
       if(i === undefined || i < 0 || u.role !== 'child' || String(irows[i][1]) !== u.team){ rejected.push(id); return; }
       var r = irows[i].slice(); r[4] = v; r[5] = true; r[6] = u.id; r[7] = now;
       writeRow(id, r);
+    });
+    (ops.purge || []).forEach(function(id){
+      id = String(id);
+      var i = index[id];
+      if(u.role !== 'teacher' || i === undefined || i < 0){ rejected.push('!' + id); return; }
+      var r0 = irows[i], o0 = {}; try{ o0 = JSON.parse(r0[3]); }catch(e){}
+      writeRow(id, [id, r0[1], r0[2], JSON.stringify({id:id, kind:o0.kind || 'note', team:String(r0[1]), face:String(r0[2]), purged:true}), v, true, u.id, now]);
+      // 重なっていた 付箋は 単独に もどし、つながる 矢印は 消す
+      irows.forEach(function(r, j){
+        if(r[5]) return;
+        var o = null; try{ o = JSON.parse(r[3]); }catch(e){} if(!o) return;
+        if(o.stackOf === id){ delete o.stackOf; writeRow(String(r[0]), [r[0], r[1], r[2], JSON.stringify(o), v, false, u.id, now]); }
+        else if(o.kind === 'arrow' && (o.from === id || o.to === id)){ var d = r.slice(); d[4] = v; d[5] = true; d[6] = u.id; d[7] = now; writeRow(String(r[0]), d); }
+      });
+      purged[id] = 1;
     });
     if(appends.length) ish.getRange(ish.getLastRow() + 1, 1, appends.length, appends[0].length).setValues(appends);
 
@@ -319,6 +353,17 @@ function apply(ops){
         touched = true; teams[t.team] = 1;
       });
       if(capp.length) csh.getRange(csh.getLastRow() + 1, 1, capp.length, capp[0].length).setValues(capp);
+    }
+
+    if(Object.keys(purged).length){
+      [[SH.stars, 1, 4, 5], [SH.comments, 1, 5, 6]].forEach(function(t){
+        var sh = sheet_(t[0]), rs = rows_(t[0]);
+        rs.forEach(function(r, j){
+          if(!purged[String(r[t[1]])] || !r[t[2]]) return;
+          var row = r.slice(); row[t[2]] = false; row[t[3]] = v; if(t[0] === SH.comments) row[4] = '';
+          sh.getRange(j + 2, 1, 1, row.length).setValues([row]); teams[String(r[2])] = 1; touched = true;
+        });
+      });
     }
 
     if(ops.modes){

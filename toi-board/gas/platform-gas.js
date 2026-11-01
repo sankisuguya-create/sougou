@@ -13,10 +13,20 @@ var Platform = (function(){
   var SEAL_WAIT = window.TOI_SEAL_WAIT == null ? 1500 : window.TOI_SEAL_WAIT;
   var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '';
   var pend = {}, q = blank(), timer = null, due = 0, busy = false, pollT = null, errs = 0, polling = false, again = false;
-  function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, modes:null}; }
-  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !x.modes; }
+  function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, purge:{}, modes:null}; }
+  function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !Object.keys(x.purge).length && !x.modes; }
   function net(t){ var el = document.getElementById('net'); if(el) el.textContent = t; }
   function backoff(){ return 1000 + Math.random() * 4000; }
+  /* 送り終わるまでの 変更を 端末にも 置く（通信が 切れたまま 閉じても、次に 開いた 時に 送り直す） */
+  var keepKey = '', inflight = null;
+  function keep(){
+    if(!keepKey) return;
+    try{
+      var all = JSON.parse(JSON.stringify(q));
+      if(inflight) ['up', 'del', 'star', 'cmt', 'purge'].forEach(function(t){ Object.keys(inflight[t]).forEach(function(k){ if(!(k in all[t])) all[t][k] = inflight[t][k]; }); });
+      if(empty(all)) localStorage.removeItem(keepKey); else localStorage.setItem(keepKey, JSON.stringify(all));
+    }catch(e){}
+  }
   function run(name, args, ok, ng){
     var r = google.script.run
       .withSuccessHandler(function(x){ errs = 0; net(''); ok(x); })
@@ -33,16 +43,17 @@ var Platform = (function(){
   function send(){
     if(busy || empty(q)) return;
     busy = true;
-    var sent = q; q = blank();
+    var sent = q; q = blank(); inflight = sent;
     var ops = {
       up:Object.keys(sent.up).map(function(k){ return sent.up[k]; }),
       del:Object.keys(sent.del),
       star:Object.keys(sent.star).map(function(k){ return sent.star[k]; }),
       cmt:Object.keys(sent.cmt).map(function(k){ return sent.cmt[k]; }),
+      purge:Object.keys(sent.purge),
       modes:sent.modes
     };
     run('apply', [ops], function(r){
-      busy = false;
+      busy = false; inflight = null; keep();
       Object.keys(sent.up).concat(Object.keys(sent.del)).forEach(function(id){ if(!q.up[id] && !q.del[id]) delete pend[id]; });
       Object.keys(sent.star).forEach(function(id){ if(!(id in q.star)) delete pend['*' + id]; });
       Object.keys(sent.cmt).forEach(function(id){ if(!(id in q.cmt)) delete pend['#' + id]; });
@@ -54,13 +65,22 @@ var Platform = (function(){
       }
       if(!empty(q)) schedule(0);
     }, function(){
-      busy = false;
+      busy = false; inflight = null;
       // 送れなかった 分を 戻す（あとから した 変更を 優先）
-      Object.keys(sent.up).forEach(function(k){ if(!q.up[k] && !q.del[k]) q.up[k] = sent.up[k]; });
+      Object.keys(sent.up).forEach(function(k){
+        var later = q.up[k], first = sent.up[k];
+        if(q.del[k]) return;
+        if(!later){ q.up[k] = first; return; }
+        // あとの 変更を 前の 変更に 重ねる（どちらも 失わない）
+        if(later.p && first.p){ Object.keys(first.p).forEach(function(f){ if(!(f in later.p)) later.p[f] = first.p[f]; }); }
+        else if(later.p && !first.p){ Object.keys(later.p).forEach(function(f){ first[f] = later.p[f]; }); (later.u || []).forEach(function(f){ delete first[f]; }); q.up[k] = first; }
+      });
+      Object.keys(sent.purge).forEach(function(k){ q.purge[k] = 1; });
       Object.keys(sent.del).forEach(function(k){ if(!q.up[k]) q.del[k] = 1; });
       Object.keys(sent.star).forEach(function(k){ if(!(k in q.star)) q.star[k] = sent.star[k]; });
       Object.keys(sent.cmt).forEach(function(k){ if(!(k in q.cmt)) q.cmt[k] = sent.cmt[k]; });
       if(!q.modes) q.modes = sent.modes;
+      keep();
       schedule(Math.min(30000, 2000 * errs + backoff()));
     });
   }
@@ -107,6 +127,15 @@ var Platform = (function(){
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
           cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
           loop();
+          // 前に 送れなかった 変更が 端末に あれば 送り直す
+          keepKey = 'toiboard.unsent.' + r.me.id;
+          try{
+            var old = JSON.parse(localStorage.getItem(keepKey) || 'null');
+            if(old && !empty(Object.assign(blank(), old))){
+              ['up', 'del', 'star', 'cmt', 'purge'].forEach(function(t){ Object.keys(old[t] || {}).forEach(function(k){ q[t][k] = old[t][k]; if(t === 'up' || t === 'del') pend[k] = 1; }); });
+              net('前に 送れなかった 変更を 送っています'); schedule(0);
+            }
+          }catch(e){}
         }, function(e){
           var msg = String(e && e.message || e);
           // 名簿に ない 等は やり直しても かわらない。それ以外（混雑 など）は 間を おいて やり直す
@@ -121,12 +150,20 @@ var Platform = (function(){
     },
     push:function(ops){
       if(!ops) return;
-      var onlySeal = !ops.up.length && !ops.del.length && !ops.modes;
-      ops.up.forEach(function(x){ q.up[x.id] = x; delete q.del[x.id]; pend[x.id] = 1; });
+      var onlySeal = !ops.up.length && !ops.del.length && !ops.modes && !(ops.purge || []).length;
+      ops.up.forEach(function(x){
+        var prev = q.up[x.id];
+        if(x.p && prev && prev.p){ Object.keys(x.p).forEach(function(k){ prev.p[k] = x.p[k]; }); prev.u = (prev.u || []).filter(function(k){ return !(k in x.p); }).concat(x.u || []); }
+        else if(x.p && prev && !prev.p){ Object.keys(x.p).forEach(function(k){ prev[k] = x.p[k]; }); (x.u || []).forEach(function(k){ delete prev[k]; }); }
+        else q.up[x.id] = x;
+        delete q.del[x.id]; pend[x.id] = 1;
+      });
       ops.del.forEach(function(id){ delete q.up[id]; q.del[id] = 1; pend[id] = 1; });
       ops.star.forEach(function(s){ var key = s.noteId + '|' + s.k + '|' + (s.rd == null ? 1 : s.rd); q.star[key] = s; pend['*' + key] = 1; });
       (ops.cmt || []).forEach(function(c){ q.cmt[c.noteId] = c; pend['#' + c.noteId] = 1; });
+      (ops.purge || []).forEach(function(id){ q.purge[id] = 1; });
       if(ops.modes) q.modes = ops.modes;
+      keep();
       schedule(onlySeal ? SEAL_WAIT : 250);
     },
     /* ほかの班を 開いた時だけ その班を 取りに行く（児童） */

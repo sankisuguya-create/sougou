@@ -97,7 +97,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
 
   // 先生：見本・モード
   await who('teacher');
-  await page.click('[data-act=seed]');
+  await page.click('[data-act=ttab][data-k=more]'); await page.click('[data-act=seed]'); await page.click('[data-act=ttab][data-k=mode]');
   await page.click('[data-act=mode][data-k=view][data-v=class]');
   await page.click('[data-act=mode][data-k=propose][data-v=class]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
@@ -212,6 +212,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(!(await page.isVisible('[data-act=look]')), 'モードは 組ごと（B組は 切のまま）');
   // 先生の 意見の一覧
   await who('teacher');
+  ok(await page.isVisible('.ttab.on:has-text("授業の 設定")') && await page.locator('.ttab').count() === 5, '先生画面は 用途ごとの タブに 分かれ、はじめは「授業の 設定」');
+  await page.click('[data-act=ttab][data-k=list]');
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
@@ -241,7 +243,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('.face.on[data-face=back]') && await page.isVisible('.note.flash'), 'タップすると その付箋の 面（うらがわ）へ 移り 光る');
   await page.screenshot({ path: SHOTS + '/8-search.png' });
   // 先生：学年の 全部を ことば・シールで しぼる（表と コピーに 効く）
-  await who('teacher');
+  await who('teacher'); await page.click('[data-act=ttab][data-k=list]');
   await page.click('[data-act=fcls][data-c=all]');
   await page.fill('#t-q', '灯台');
   const tq = await page.evaluate(() => opinionTSV().split('\n').slice(1));
@@ -438,14 +440,15 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   {
   // シールの 集計の ページ
   await who('teacher'); await page.click('[data-act=tcls][data-c=A]');
-  await page.click('[data-act=tally]');
+  await page.click('[data-act=ttab][data-k=tally]');
   ok(await page.isVisible('h2:has-text("シールの 集計")') && await page.locator('table.tally').count() > 0, '先生画面から シールの 集計の ページに 飛べる');
   await page.click('[data-act=tround][data-r="1"]');
   const t1 = await page.$$eval('table.tally tr', trs => trs.slice(1).map(tr => tr.textContent));
   ok(t1.length > 0, '回を えらんで 班ごと・付箋ごとの シールの 数が 見える');
   await page.screenshot({ path: SHOTS + '/13-tally.png', fullPage: true });
-  await page.click('[data-act=tally-back]');
-  ok(await page.isVisible('text=意見の 一覧'), '先生の 画面に もどれる');
+  await page.click('[data-act=ttab][data-k=list]');
+  ok(await page.isVisible('text=意見の 一覧'), 'タブで 一覧に もどれる');
+  await page.click('[data-act=ttab][data-k=more]');
   const href = await page.getAttribute('a:has-text("体験する")', 'href');
   ok(href && href.includes('trial=1'), '先生画面に「体験する」ボタンが ある');
 
@@ -536,6 +539,55 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   ok(!(await page.isVisible(`#board .note[data-id="${ln}"] .likes`)), 'ほかの班には いいねは 見えない');
   await page.click('[data-act=home]');
+  }
+  {
+  // 理念の チェック
+  // ・漢字は 日本語の 字形（描画に 使われた フォントに 中国語フォントが ない）
+  await who('A01'); await page.click('.face[data-face=front]');
+  const e0 = errors.length;
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
+  const fonts = new Set();
+  for (const sel of ['h1', '#board .note', '.tbtn', '.face']) {
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+    if (!nodeId) continue;
+    const r = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+    r.fonts.forEach(f => fonts.add(f.familyName));
+  }
+  const bad = [...fonts].filter(f => /WenQuanYi|SimSun|YaHei|PingFang|CJK SC|CJK TC|Zen Hei|Micro Hei/i.test(f));
+  ok(fonts.size > 0 && bad.length === 0 && await page.evaluate(() => document.documentElement.lang) === 'ja', '漢字は 日本語の フォントで 描く（' + [...fonts].join('・') + '）');
+  // CDP で 文書を 読むと file:// では ブラウザが この 警告を 出す（アプリの エラーでは ない）
+  for (let i = errors.length - 1; i >= e0; i--) if (/Unsafe attempt to load URL file:/.test(errors[i])) errors.splice(i, 1);
+  // ・消す 操作は 注意色
+  await page.click('[data-act=frame]');
+  const fid2 = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
+  await page.click(`#board .frame[data-id="${fid2}"] .label`);
+  const dc = await page.$eval('.sheet [data-act=del]', el => getComputedStyle(el).color);
+  ok(dc === 'rgb(192, 51, 10)' && !(await page.$eval('.sheet [data-act=del]', el => el.classList.contains('primary'))), '消す ボタンは 注意色（主操作の 強調は しない）');
+  await page.click('.sheet [data-act=del]');
+  // ・調査済みは 色だけに たよらない
+  await page.evaluate(() => commit(() => { const n = S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); n.done = true; }));
+  ok(await page.locator('#board .note.done .donemark:has-text("調査済み")').count() > 0, '調査済みは 緑に 加えて「✓ 調査済み」の 文字');
+  // ・先生：ひとおしで ぜんぶ 切に もどせる
+  await who('teacher');
+  await page.click('[data-act=mode][data-k=view][data-v=class]');
+  await page.click('[data-act=modes-off]');
+  const mA = await page.evaluate(() => S.modes.A);
+  ok(mA.view === 'off' && mA.propose === 'off' && mA.starOut === 'off' && await page.isDisabled('[data-act=modes-off]'), '先生は ひとおしで その組を ぜんぶ 切に もどせる');
+  }
+  {
+  // 先生は 付箋を 完全に 消せる（2回 押して 確定）
+  await who('teacher'); await page.click('[data-act=ttab][data-k=board]');
+  const pid = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).id);
+  await page.click(`#board .note[data-id="${pid}"]`);
+  await page.click(`[data-act=purge][data-id="${pid}"]`);
+  ok(await page.isVisible('text=もう一度 押すと 完全に 消えます（もどせません）') && await page.evaluate(id => !!item(id), pid), '完全削除は 1回目では 消えず、もどせないと 知らせる');
+  await page.click(`[data-act=purge][data-id="${pid}"]`);
+  const gone = await page.evaluate(id => !item(id) && !S.stars.some(s => s.noteId === id) && !S.comments.some(c => c.noteId === id), pid);
+  ok(gone && !(await page.isVisible(`#board .note[data-id="${pid}"]`)), '2回目で 付箋と その シール・コメントが 完全に 消える');
+  await who('A01');
+  ok(!(await page.isVisible('[data-act=purge]')), '児童には 完全削除の ボタンが ない');
   }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
