@@ -68,13 +68,13 @@ function frontLayer(F, gid){
     + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
 }
-/* 班の中の いいね：メンバーごとに グラデーションの 向きと 緑の 濃淡だけを 変える（絵は 同じ） */
+/* 班の中の いいね：メンバーごとに 色を 変える（緑・赤・青・黄・紫。絵と 光の 向きは 同じ） */
 var VARIANT = {
-  thumb1:{c:['#DDF8A8', '#6CCB8E'], v:[0, 0, 1, 1]},   // 左上 → 右下（元の いいね）
-  thumb2:{c:['#E8FAB0', '#3FA36B'], v:[0, 0, 0, 1]},   // 上 → 下（下が 濃い みどり）
-  thumb3:{c:['#D0F4B0', '#4DB8A4'], v:[0, 0, 1, 0]},   // 左 → 右（右が 青みどり）
-  thumb4:{c:['#F2F7A0', '#8CC45E'], v:[1, 0, 0, 1]},   // 右上 → 左下（黄みどり）
-  thumb5:{c:['#C8EEC0', '#2E8F6E'], v:[0.5, 1, 0.5, 0]} // 下 → 上（上が 深い みどり）
+  thumb1:{c:['#DDF8A8', '#6CCB8E'], v:[0, 0, 1, 1]},  // 緑（元の いいね）
+  thumb2:{c:['#FFC9C2', '#FF6F6F'], v:[0, 0, 1, 1]},  // 赤
+  thumb3:{c:['#B9E6FF', '#6A9CFF'], v:[0, 0, 1, 1]},  // 青
+  thumb4:{c:['#FFF58A', '#FFC93C'], v:[0, 0, 1, 1]},  // 黄
+  thumb5:{c:['#F0DEFF', '#AA80FF'], v:[0, 0, 1, 1]}   // 紫
 };
 function sticker(shape, color, size, variant){
   var V = VARIANT[variant] || null;
