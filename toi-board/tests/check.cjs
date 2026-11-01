@@ -435,6 +435,37 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const csvRow = await page.evaluate(id => roundSummary(item(id)), before.shown[0]);
   ok(/第1回/.test(csvRow), '前の 回の シールの 数は 一覧（CSV）に のこる');
   }
+  {
+  // シールの 集計の ページ
+  await who('teacher'); await page.click('[data-act=tcls][data-c=A]');
+  await page.click('[data-act=tally]');
+  ok(await page.isVisible('h2:has-text("シールの 集計")') && await page.locator('table.tally').count() > 0, '先生画面から シールの 集計の ページに 飛べる');
+  await page.click('[data-act=tround][data-r="1"]');
+  const t1 = await page.$$eval('table.tally tr', trs => trs.slice(1).map(tr => tr.textContent));
+  ok(t1.length > 0, '回を えらんで 班ごと・付箋ごとの シールの 数が 見える');
+  await page.screenshot({ path: SHOTS + '/13-tally.png', fullPage: true });
+  await page.click('[data-act=tally-back]');
+  ok(await page.isVisible('text=意見の 一覧'), '先生の 画面に もどれる');
+  const href = await page.getAttribute('a:has-text("体験する")', 'href');
+  ok(href && href.includes('trial=1'), '先生画面に「体験する」ボタンが ある');
+
+  // 体験版：本番と 別の 保存場所に 見本の データ、①〜④の 案内
+  const realBefore = await page.evaluate(() => localStorage.getItem('toiboard.v3'));
+  const tp = await ctx.newPage();
+  tp.on('pageerror', e => errors.push('trial: ' + e));
+  await tp.goto(FILE + '?trial=1');
+  await tp.waitForSelector('.trial');
+  ok(await tp.isVisible('.trial b:has-text("① ボードで 付箋を 編集する")') && await tp.locator('#board .note').count() >= 4 && await tp.isVisible('.fab'), '① 児童の ボード（見本の 付箋つき）から 始まる');
+  await tp.click('.trial [data-act=trial-go][data-n="1"]');
+  ok(await tp.isVisible('text=シールを 貼ろう') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
+  await tp.click('.trial [data-act=trial-go][data-n="2"]');
+  ok(await tp.isVisible('h2:has-text("シールの 集計")') && (await tp.$$eval('table.tally td.num:not(.zero)', els => els.length)) > 0, '③ 先生の 集計（見本の シールが 入っている）');
+  await tp.click('.trial [data-act=trial-go][data-n="3"]');
+  ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
+  await tp.screenshot({ path: SHOTS + '/14-trial.png' });
+  ok(await page.evaluate(() => localStorage.getItem('toiboard.v3')) === realBefore, '体験の データは 本番の 保存場所に 入らない');
+  await tp.close();
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

@@ -20,8 +20,10 @@ var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 var STAR_PER_TEAM = 2;  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
-function doGet(){
-  return HtmlService.createHtmlOutputFromFile('Index')
+/* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
+function doGet(e){
+  var trial = e && e.parameter && e.parameter.trial;
+  return HtmlService.createHtmlOutputFromFile(trial ? 'Trial' : 'Index')
     .setTitle('といボード')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -126,7 +128,7 @@ function boot(){
     spots_().forEach(function(s){ if(s.team !== u.team && reach_(u, modes, 'starOut', s.team)) spec[s.team] = 0; });
     p = pull_(u, spec); p.tv = tv;
   }
-  p.api = API_VER; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
+  p.api = API_VER; p.trialUrl = ScriptApp.getService().getUrl() + '?trial=1'; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
 function mapOf_(t, v){ var m = {}; m[t] = v; return m; }

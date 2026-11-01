@@ -40,6 +40,7 @@ function makeGas() {
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
     Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
     HtmlService: {},
+    ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/x/s/ID/exec' }) },
     JSON, Date, Number, String, Math, Error, Object
   };
   vm.createContext(ctx);
@@ -202,6 +203,8 @@ function makeGas() {
   ok(r.rejected.length === 0, '回が 進むと 同じ班に また 2まい 貼れる（持ち分が もどる）');
   r = G.as('b05' + D, 'poll', [{ teams: { 'B-2': 0, 'A-1': 0 } }]);
   ok(r.stars.filter(s => s.k === 'wow' && s.rd === 2).length === 2 && r.stars.some(s => s.k === 'wow' && s.rd === 1), 'シールは 回ごとに 分けて 記録される');
+
+  ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && await ta.isVisible('a[href$="/exec?trial=1"]'), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
 
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');

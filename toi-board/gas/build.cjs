@@ -1,6 +1,6 @@
 /* ../index.html（見本）の PLATFORM 区間を platform-gas.js に 差し替えて Index.html を 作る。
    実行: node gas/build.cjs
-   GAS へは Code.gs と Index.html を 同じ コミットから 2つとも 貼る（片方だけ 貼らない）。 */
+   GAS へは Code.gs・Index.html・Trial.html を 同じ コミットから 3つとも 貼る（一部だけ 貼らない）。 */
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const plat = fs.readFileSync(path.join(__dirname, 'platform-gas.js'), 'utf8').trim();
@@ -13,4 +13,8 @@ const code = fs.readFileSync(path.join(__dirname, 'Code.gs'), 'utf8');
 const want = (out.match(/API_WANT = (\d+)/) || [])[1], api = (code.match(/API_VER = (\d+)/) || [])[1];
 if (!want || want !== api) { console.error(`版が 合いません：画面 ${want}／サーバー ${api}`); process.exit(1); }
 fs.writeFileSync(path.join(__dirname, 'Index.html'), out);
-console.log(`Index.html を 作りました（${out.length} 字、API ${api}）`);
+// 体験版：見本（localStorage）の まま、体験の しるしを 立てる
+const trial = src.replace('<script>', '<script>window.TOI_TRIAL = true;</script>\n<script>');
+if (!trial.includes('window.TOI_TRIAL = true')) { console.error('体験版を 作れません'); process.exit(1); }
+fs.writeFileSync(path.join(__dirname, 'Trial.html'), trial);
+console.log(`Index.html・Trial.html を 作りました（${out.length} 字、API ${api}）`);
