@@ -205,7 +205,7 @@ function makeGas() {
   r = G.as('b05' + D, 'poll', [{ teams: { 'B-2': 0, 'A-1': 0 } }]);
   ok(r.stars.filter(s => s.k === 'wow' && s.rd === 2).length === 2 && r.stars.some(s => s.k === 'wow' && s.rd === 1), 'シールは 回ごとに 分けて 記録される');
 
-  ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && await ta.isVisible('a[href$="/exec?trial=1"]'), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
+  ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && (await ta.click('[data-act=ttab][data-k=more]'), await ta.isVisible('a[href$="/exec?trial=1"]')) && (await ta.click('[data-act=ttab][data-k=mode]'), true), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
 
   // 班の中の いいね（サーバー）：自分の班の 付箋だけ、持ち分・回に 関係なく
   r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
@@ -249,6 +249,7 @@ function makeGas() {
   await busy.close();
 
   // 先生の 一覧
+  await ta.click('[data-act=ttab][data-k=list]');
   await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());
   ok(tsv.includes('A組\t1はん\t阪急西宮北口\t表がわ\tどうして 北口なの？') && !tsv.includes('@'), '先生の 一覧に ずらりと 出て、メールは 入らない');
