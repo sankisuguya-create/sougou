@@ -44,7 +44,12 @@ button{font-family:inherit;font-size:16px;color:inherit;cursor:pointer}
     linear-gradient(to right, rgba(15,94,168,.10) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(15,94,168,.10) 1px, transparent 1px);
   background-size:var(--grid) var(--grid);}
-.board.trash{background-color:#F1F1EE}
+.board.back{background-color:#E4E4E1}
+.board.gift{background-color:#E8D6BE}
+.board.trash{background-color:#DDEBF7}
+.face[data-face=back]{background:#F0F0EE}
+.face[data-face=gift]{background:#F4EADC}
+.face[data-face=trash]{background:#EAF2FA}
 svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 svg.arrows line{stroke:var(--ink);stroke-width:4;pointer-events:stroke;cursor:pointer}
 svg.arrows line.hit{stroke:transparent;stroke-width:28}
@@ -300,8 +305,10 @@ function snap(){
   S.stars.forEach(function(s){ st[s.noteId + '|' + kindOf(s) + '|' + s.viewer] = JSON.stringify(s); });
   return {m:m, st:st, modes:JSON.stringify(S.modes)};
 }
-function commit(fn){
+var hist = {undo:[], redo:[]};
+function commit(fn, noHist){
   var b = snap(); fn(); check();
+  if(!noHist) remember(b);
   var ops = {up:[], del:[], star:[], modes:null}, now = {}, st = {};
   S.items.forEach(function(x){ now[x.id] = 1; var j = JSON.stringify(x); if(b.m[x.id] !== j) ops.up.push(JSON.parse(j)); });
   Object.keys(b.m).forEach(function(id){ if(!now[id]) ops.del.push(id); });
@@ -313,6 +320,35 @@ function commit(fn){
   if(JSON.stringify(S.modes) !== b.modes) ops.modes = {cls:ui.tCls, m:S.modes[ui.tCls]};
   Platform.push(ops);
   render();
+}
+/* 変わった 付箋・シールだけ 前と後を 覚える（ほかの人の 変更は 巻き戻さない）。モードは 対象外 */
+function remember(b){
+  var a = snap(), e = {before:{m:{}, st:{}}, after:{m:{}, st:{}}}, n = 0;
+  Object.keys(b.m).concat(Object.keys(a.m)).forEach(function(id){ if(b.m[id] !== a.m[id] && !(id in e.before.m)){ e.before.m[id] = b.m[id] || null; e.after.m[id] = a.m[id] || null; n++; } });
+  Object.keys(b.st).concat(Object.keys(a.st)).forEach(function(k){ if(b.st[k] !== a.st[k] && !(k in e.before.st)){ e.before.st[k] = b.st[k] || null; e.after.st[k] = a.st[k] || null; n++; } });
+  if(!n) return;
+  hist.undo.push(e); if(hist.undo.length > 50) hist.undo.shift();
+  hist.redo = [];
+}
+function putBack(state){
+  Object.keys(state.m).forEach(function(id){
+    S.items = S.items.filter(function(x){ return x.id !== id; });
+    if(state.m[id]) S.items.push(JSON.parse(state.m[id]));
+  });
+  Object.keys(state.st).forEach(function(k){
+    S.stars = S.stars.filter(function(s){ return s.noteId + '|' + kindOf(s) + '|' + s.viewer !== k; });
+    if(state.st[k]) S.stars.push(JSON.parse(state.st[k]));
+  });
+  S.items.forEach(function(x){ if(x.stackOf && !item(x.stackOf)) x.stackOf = null; });
+  S.items = S.items.filter(function(a){ return a.kind !== 'arrow' || (item(a.from) && item(a.to)); });
+}
+function undo(){
+  var e = hist.undo.pop(); if(!e){ toast('もどせる 操作は ありません'); return; }
+  ui.sheet = null; commit(function(){ putBack(e.before); }, true); hist.redo.push(e); toast('もとに もどしました');
+}
+function redo(){
+  var e = hist.redo.pop(); if(!e){ toast('やり直せる 操作は ありません'); return; }
+  ui.sheet = null; commit(function(){ putBack(e.after); }, true); hist.undo.push(e); toast('やり直しました');
 }
 function check(){
   S.items.forEach(function(x){
@@ -430,7 +466,7 @@ function noteHTML(n, opt){
   var mark = n.mark ? '<div class="mark" title="' + MARKS[n.mark] + '">' + ICON['m' + n.mark] + '</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
   var pick = n.pick ? '<div class="pick">' + n.pick + '</div>' : '';
-  var pos = opt.inline ? '' : 'left:' + (n.x*GRID) + 'px;top:' + (n.y*GRID) + 'px;';
+  var at = opt.pos || n, pos = opt.inline ? '' : 'left:' + (at.x*GRID) + 'px;top:' + (at.y*GRID) + 'px;';
   return '<div class="item note' + (n.fromTeam ? ' gift' : '') + (ui.arrowFrom === n.id ? ' sel' : '') + (ui.flash === n.id && !opt.inline ? ' flash' : '') + '" data-id="' + n.id + '" data-kids="' + kids + '" style="' + pos + '">'
     + layers + esc(n.text) + pick + mark + from + show + stars + '</div>';
 }
@@ -486,13 +522,28 @@ function render(){
   ui.pop = null;
 }
 
+var JA = (function(){ try{ return new Intl.Collator('ja'); }catch(e){ return {compare:function(a, b){ return a < b ? -1 : a > b ? 1 : 0; }}; } })();
+function writtenAt(n){ return n.t || parseInt(String(n.id).slice(1, 9), 36) || 0; }
+function sortTrash(list){
+  return list.slice().sort(ui.trashSort === 'time'
+    ? function(a, b){ return writtenAt(a) - writtenAt(b); }
+    : function(a, b){ return JA.compare(String(a.text), String(b.text)); });
+}
+function trashSortHTML(){
+  return '<span class="hint">ならべかた：</span><span class="seg">' + [['aiueo','あいうえお順'],['time','書いた順']].map(function(o){
+    return '<button class="' + ((ui.trashSort || 'aiueo') === o[0] ? 'on' : '') + '" data-act="tsort" data-v="' + o[0] + '">' + o[1] + '</button>';
+  }).join('') + '</span><span class="hint">ゴミばこの 付箋は うごかせません。タップで もどせます。</span>';
+}
 function boardHTML(team, face){
   var all = S.items.filter(function(x){ return x.team === team && x.face === face; });
   var frames = all.filter(function(x){ return x.kind === 'frame'; });
   var notes = all.filter(function(x){ return x.kind === 'note' && !x.stackOf; });
   var arrows = all.filter(function(x){ return x.kind === 'arrow'; });
-  var h = '<div class="wrap"><div class="board' + (face === 'trash' ? ' trash' : '') + '" id="board">';
-  h += frames.map(frameHTML).join('') + arrowsSVG(arrows) + notes.map(function(n){ return noteHTML(n); }).join('');
+  var h = '<div class="wrap"><div class="board ' + face + '" id="board">';
+  if(face === 'trash'){
+    /* ゴミばこは 動かせない。あいうえお順／書いた順に 自動で 並べる（x,y は 書きかえない） */
+    sortTrash(notes).forEach(function(n, i){ h += noteHTML(n, {pos:{x:1 + (i % 10)*(NOTE_W + 1), y:1 + Math.floor(i / 10)*(NOTE_H + 1)}}); });
+  } else h += frames.map(frameHTML).join('') + arrowsSVG(arrows) + notes.map(function(n){ return noteHTML(n); }).join('');
   if(!all.length && Platform.loading && Platform.loading(team)) h += '<div class="empty">よみこんでいます…</div>';
   else if(!all.length) h += '<div class="empty">' + (face === 'gift' ? 'ほかの班からの 付箋は まだ ありません' : face === 'trash' ? 'すてた 付箋は ここに のこります' : 'まだ 何も ありません') + '</div>';
   return h + '</div></div>';
@@ -556,6 +607,7 @@ function viewChild(){
       + '<button class="btn" data-act="search">🔍 さがす</button>';
     h += '<span class="hint">' + (ui.tool === 'arrow' ? (ui.arrowFrom ? 'つなぐ 先を タップ' : 'はじめの 付箋を タップ') : '付箋は ドラッグで うごかせます。上に 重ねると まとまります。') + '</span>';
   }
+  if(ui.face === 'trash') h += trashSortHTML();
   var L = lookable();
   if(L.length){
     var own = L.filter(function(s){ return s.cls === myCls(); }), other = L.length - own.length;
@@ -665,6 +717,7 @@ function viewTeacher(){
     var sc = S.items.filter(function(x){ return x.team === s.team && x.showcase && x.face === 'front' && !x.stackOf; }).length;
     return '<button class="btn' + (ui.tTeam === s.team ? ' on' : '') + '" data-act="tteam" data-t="' + s.team + '">' + s.no + 'はん ' + esc(s.name) + '（見てほしい ' + sc + '）</button>'; }).join('') + '</div>';
   h += '<div class="faces" style="margin:6px 0">' + FACES.map(function(f){ return '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '</button>'; }).join('') + '</div>';
+  if(ui.face === 'trash') h += '<div class="tools" style="padding:0 0 8px">' + trashSortHTML() + '</div>';
   h += '</div>' + boardHTML(ui.tTeam, ui.face) + '<div class="teacher">';
 
   var rows = opinionRows();
@@ -724,7 +777,7 @@ document.addEventListener('pointermove', function(e){
   if(!drag) return;
   var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if(!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
-  if(!canEdit() || ui.tool === 'arrow') return;
+  if(!canEdit() || ui.tool === 'arrow' || ui.face === 'trash') return;
   drag.moved = true;
   if(drag.grip){
     drag.el.style.width = Math.max(4*GRID, drag.ow*GRID + dx) + 'px';
@@ -810,11 +863,11 @@ document.addEventListener('click', function(e){
     if(s.gift){
       if(!canPropose()){ render(); return; }
       var to = boardTeam(), p = freeSpot(to, 'gift');
-      commit(function(){ S.items.push({id:nid(), kind:'note', team:to, face:'gift', x:p.x, y:p.y, text:text, author:me, fromTeam:myTeam()}); });
+      commit(function(){ S.items.push({id:nid(), kind:'note', team:to, face:'gift', x:p.x, y:p.y, text:text, author:me, fromTeam:myTeam(), t:Date.now()}); });
       toast(teamLabel(to) + 'へ おくりました'); return;
     }
     var q = freeSpot(myTeam(), ui.face);
-    commit(function(){ S.items.push({id:nid(), kind:'note', team:myTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me}); });
+    commit(function(){ S.items.push({id:nid(), kind:'note', team:myTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me, t:Date.now()}); });
     return;
   }
   if(act === 'tool'){ ui.tool = ui.tool === 'arrow' ? 'move' : 'arrow'; ui.arrowFrom = null; render(); return; }
@@ -874,6 +927,7 @@ document.addEventListener('click', function(e){
   if(act === 'teams'){ ui.sheet = {type:'teams'}; render(); return; }
   if(act === 'look'){ ui.viewTeam = b.getAttribute('data-t'); ui.sheet = null; ui.face = 'front'; ui.tool = 'move'; Platform.watch(ui.viewTeam); render(); return; }
   if(act === 'home'){ ui.viewTeam = null; ui.face = 'front'; Platform.watch(null); render(); return; }
+  if(act === 'tsort'){ ui.trashSort = b.getAttribute('data-v'); render(); return; }
   if(act === 'tcls'){ ui.tCls = b.getAttribute('data-c'); render(); return; }
   if(act === 'mode'){
     var key = b.getAttribute('data-k'), val = b.getAttribute('data-v');
@@ -893,7 +947,7 @@ document.addEventListener('click', function(e){
   if(act === 'csv'){ csv(); return; }
 });
 document.addEventListener('change', function(e){
-  if(e.target.id === 'who'){ me = e.target.value; Platform.setMe(me); ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'}; render(); }
+  if(e.target.id === 'who'){ me = e.target.value; Platform.setMe(me); hist = {undo:[], redo:[]}; ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'}; render(); }
 });
 /* 文字で さがす：変換中は 描き直さない（日本語入力が こわれるため） */
 function onSearchInput(el){
@@ -902,6 +956,19 @@ function onSearchInput(el){
 }
 document.addEventListener('input', function(e){ if(!e.isComposing) onSearchInput(e.target); });
 document.addEventListener('compositionend', function(e){ onSearchInput(e.target); });
+/* ショートカット：Ctrl+Z もどす／Ctrl+Y・Ctrl+Shift+Z やり直す／Ctrl+F さがす／Esc とじる。
+   文字を 打っている 欄では Ctrl+Z などは その欄の ふつうの 動きに まかせる */
+document.addEventListener('keydown', function(e){
+  if(!S) return;
+  var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if(e.key === 'Escape' && ui.sheet){ e.preventDefault(); ui.sheet = null; render(); return; }
+  if(!(e.ctrlKey || e.metaKey) || e.altKey || typing || e.isComposing) return;
+  var k = e.key.toLowerCase();
+  if(k === 'z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
+  if(k === 'y' || (k === 'z' && e.shiftKey)){ e.preventDefault(); redo(); return; }
+  if(k === 'f' && !isTeacher() && isMine() && !modeOn(M().starOut)){ e.preventDefault(); ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = document.getElementById('s-text'); if(t) t.focus(); }, 0); }
+  if(k === 'f' && isTeacher()){ var q = document.getElementById('t-q'); if(q){ e.preventDefault(); q.focus(); } }
+});
 document.addEventListener('keydown', function(e){
   if(e.target.id === 'w-text' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
     e.preventDefault(); var s = document.querySelector('[data-act=w-save]'); if(s) s.click();

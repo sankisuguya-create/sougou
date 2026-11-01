@@ -233,6 +233,58 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
   ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
+
+  // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
+  await who('A01');
+  const bg = async f => { await page.click(`.face[data-face=${f}]`); return page.$eval('#board', el => getComputedStyle(el).backgroundColor); };
+  const cols = { front: await bg('front'), back: await bg('back'), gift: await bg('gift'), trash: await bg('trash') };
+  const rgb = c => c.match(/\d+/g).map(Number);
+  const [gr, gg, gb] = rgb(cols.gift), [br, bgG, bb] = rgb(cols.back), [tr, tg, tb] = rgb(cols.trash);
+  ok(gr > gb + 20 && Math.abs(br - bb) < 8 && br < 240 && tb > tr + 15 && new Set(Object.values(cols)).size === 4, '面ごとの 背景色（いただきもの 茶・うらがわ 灰・ゴミばこ 薄青）');
+
+  // ゴミばこ：あいうえお順／書いた順、動かせない
+  await page.click('.face[data-face=front]');
+  for (const t of ['んまで', 'あいう', 'かきく']) await write(t);
+  s = await st();
+  const tIds = ['んまで', 'あいう', 'かきく'].map(t => s.items.find(x => x.text === t && x.team === 'A-1').id);
+  for (const id of tIds) { await page.click(`#board .note[data-id="${id}"]`); await page.click(`[data-act=toface][data-f=trash][data-id="${id}"]`); }
+  await page.click('.face[data-face=trash]');
+  const order = async () => page.$$eval('#board .note', els => els.map(e => [e.textContent, e.offsetTop * 10000 + e.offsetLeft]).sort((a, b) => a[1] - b[1]).map(a => a[0]));
+  let o = (await order()).filter(t => ['んまで', 'あいう', 'かきく'].some(w => t.startsWith(w)));
+  ok(o.map(t => t.slice(0, 3)).join() === 'あいう,かきく,んまで', 'ゴミばこは あいうえお順に 並ぶ');
+  await page.click('[data-act=tsort][data-v=time]');
+  o = (await order()).filter(t => ['んまで', 'あいう', 'かきく'].some(w => t.startsWith(w)));
+  ok(o.map(t => t.slice(0, 3)).join() === 'んまで,あいう,かきく', '書いた順にも できる');
+  const before = (await st()).items.find(x => x.id === tIds[0]);
+  const tb0 = await box(tIds[0]);
+  await page.mouse.move(tb0.x + 30, tb0.y + 30); await page.mouse.down(); await page.mouse.move(tb0.x + 300, tb0.y + 300, { steps: 8 }); await page.mouse.up();
+  const after = (await st()).items.find(x => x.id === tIds[0]);
+  ok(before.x === after.x && before.y === after.y && after.face === 'trash', 'ゴミばこの 中では 動かせない');
+  await page.click('.sheet-bg', { position: { x: 5, y: 5 } }).catch(() => {});
+
+  // ショートカット：Ctrl+Z／Ctrl+Y／Esc
+  await page.click(`#board .note[data-id="${tIds[1]}"]`);
+  await page.click(`[data-act=toface][data-f=front][data-id="${tIds[1]}"]`);
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'front', '（準備）表がわへ もどす');
+  await page.keyboard.press('Control+z');
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'trash', 'Ctrl+Z で 直前の 操作を もとに もどす');
+  await page.keyboard.press('Control+y');
+  ok((await st()).items.find(x => x.id === tIds[1]).face === 'front', 'Ctrl+Y で やり直す');
+  await page.keyboard.press('Control+Shift+z');
+  ok(await page.isVisible('text=やり直せる 操作は ありません'), 'やり直す ものが なければ そう 出る');
+  await page.click('.face[data-face=front]');
+  await write('けす 付箋');
+  await page.keyboard.press('Control+z');
+  ok(!(await st()).items.some(x => x.text === 'けす 付箋'), '付箋を 書いたのも もどせる');
+  await page.click('[data-act=add]'); await page.fill('#w-text', 'あいうえ');
+  await page.keyboard.press('Control+z');
+  ok(await page.isVisible('#w-text'), '文字を 打っている 欄の Ctrl+Z は その欄の ふつうの 動き');
+  await page.keyboard.press('Escape');
+  ok(!(await page.isVisible('#w-text')), 'Esc で とじる');
+  await page.keyboard.press('Control+f');
+  ok(await page.isVisible('#s-text'), 'Ctrl+F で さがす');
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: SHOTS + '/9-trash.png' });
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
