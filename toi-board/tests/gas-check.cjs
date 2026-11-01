@@ -196,6 +196,13 @@ function makeGas() {
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.comments.every(c => !c.on), 'コメントを けせる');
 
+  // 回（サーバー）：B組の 回を 2に すると、A組の 付箋への シールは A組の 回（1）、持ち分は 回ごと
+  G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, JSON.parse((G.sheets.modes.data.find(r => r[0] === 'A') || [0, '{}'])[1]), { round: 2 }) } }]);
+  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 2).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  ok(r.rejected.length === 0, '回が 進むと 同じ班に また 2まい 貼れる（持ち分が もどる）');
+  r = G.as('b05' + D, 'poll', [{ teams: { 'B-2': 0, 'A-1': 0 } }]);
+  ok(r.stars.filter(s => s.k === 'wow' && s.rd === 2).length === 2 && r.stars.some(s => s.k === 'wow' && s.rd === 1), 'シールは 回ごとに 分けて 記録される');
+
   // 先生の 一覧
   await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());

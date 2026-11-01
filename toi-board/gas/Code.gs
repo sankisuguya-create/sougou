@@ -2,14 +2,14 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 4;
+var API_VER = 5;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
   '先生':['メール', '組（空なら最初の組）'],
   'スポット':['組', '班', 'スポット名'],
   'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
-  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos'],
+  'stars':['key', 'noteId', 'noteTeam', 'viewer', 'on', 'ver', 'k', 'pos', 'rd'],
   'comments':['key', 'noteId', 'noteTeam', 'viewer', 'text', 'on', 'ver'],
   'modes':['組', 'json', 'ver']
 };
@@ -81,7 +81,8 @@ function spots_(){
     return {team:cls + '-' + no, cls:cls, no:no, name:String(r[2])};
   });
 }
-function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off'}; }
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
+function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
   var c = cache_().get('modes');
   if(c) return JSON.parse(c);
@@ -168,7 +169,7 @@ function pull_(u, spec){
     var ver = Number(r[5]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
-    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
+    var o = {noteId:String(r[1]), k:String(r[6] || 'star'), rd:Number(r[8]) || 1, viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), on:!!r[4]};
     if(viewer === u.id && r[7]){ try{ var pos = JSON.parse(r[7]); o.x = pos.x; o.y = pos.y; o.r = pos.r; }catch(e){} }
     stars.push(o);
   });
@@ -236,7 +237,8 @@ function apply(ops){
       var have = {};  // 班|種類 → 自分が 貼っている 枚数
       srows.forEach(function(r, i){
         sidx[String(r[0])] = i;
-        if(low_(r[3]) === u.id && r[4]) have[r[2] + '|' + (r[6] || 'star')] = (have[r[2] + '|' + (r[6] || 'star')] || 0) + 1;
+        var hk0 = r[2] + '|' + (r[6] || 'star') + '|' + (Number(r[8]) || 1);
+        if(low_(r[3]) === u.id && r[4]) have[hk0] = (have[hk0] || 0) + 1;
       });
       // 書いたばかりの 行も 含めて 付箋の班を 引く
       var teamOf = {};
@@ -245,14 +247,16 @@ function apply(ops){
         var nId = String(s.noteId), t = teamOf[nId];
         var ok = u.role === 'child' && t && t.face !== 'trash' && (t.team === u.team ? !!(modes[u.cls] || {}).starIn : reach_(u, modes, 'starOut', t.team));
         var k = STAR_KINDS.indexOf(s.k) >= 0 ? s.k : 'star';
-        var key0 = nId + '|' + k + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k);
+        // 回は サーバーが 決める（その 付箋の 組の 今の 回）
+        var rd = t ? roundOf_(modes, t.team) : 1;
+        var key0 = nId + '|' + k + '|' + rd + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k + '|' + rd);
         if(ok && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
         if(!ok){ rejected.push('*' + nId + '|' + k); return; }
         if(s.on && !was) have[hk] = (have[hk] || 0) + 1;
         if(!s.on && was) have[hk] = (have[hk] || 1) - 1;
         // 貼った 場所（シール貼り画面）：% と 傾き
         var pos = s.x == null ? '' : JSON.stringify({x:clamp_(s.x, 0, 100), y:clamp_(s.y, 0, 100), r:clamp_(s.r, -30, 30)});
-        var key = nId + '|' + k + '|' + u.id, row = [key, nId, t.team, u.id, !!s.on, v, k, pos];
+        var key = key0, row = [key, nId, t.team, u.id, !!s.on, v, k, pos, rd];
         if(sidx[key] !== undefined) ssh.getRange(sidx[key] + 2, 1, 1, row.length).setValues([row]);
         else { sapp.push(row); sidx[key] = -1; }
         touched = true; teams[t.team] = 1;
@@ -284,7 +288,8 @@ function apply(ops){
           view:SCOPE_KEYS.indexOf(m.view) >= 0 ? m.view : 'off',
           propose:SCOPE_KEYS.indexOf(m.propose) >= 0 ? m.propose : 'off',
           starIn:!!m.starIn,
-          starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off'
+          starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
+          round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1)))
         };
         var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });

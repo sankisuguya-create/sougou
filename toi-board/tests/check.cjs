@@ -52,16 +52,11 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(!s.items.find(x => x.id === d).stackOf, 'とりだすと 単独に もどる');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
-  // 印・えらぶ
+  // 印・えらぶ番号は ない
   await page.click(`#board .note[data-id="${a}"]`);
-  await page.click(`[data-act=pick][data-r="1"][data-id="${a}"]`);
-  s = await st();
-  ok(s.items.find(x => x.id === a).pick === 1 && !(await page.isVisible('[data-act=mark]')), 'えらんだ順が 付箋に つく（印の ボタンは ない）');
+  ok(!(await page.isVisible('[data-act=mark]')) && !(await page.isVisible('[data-act=pick]')), '付箋の メニューに 印・えらぶ番号は ない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
   await page.click(`#board .note[data-id="${d}"]`);
-  await page.click(`[data-act=pick][data-r="1"][data-id="${d}"]`);
-  s = await st();
-  ok(s.items.find(x => x.id === a).pick === 0 && s.items.find(x => x.id === d).pick === 1, '同じ順位は 班で1まいだけ');
 
   // ゴミ箱（消えない）
   await page.click(`[data-act=toface][data-f=trash][data-id="${d}"]`);
@@ -220,7 +215,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 18 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 17 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -254,7 +249,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[7])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -404,6 +399,41 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A02'); await page.click('.fab'); await page.click('[data-act=tanes]');
   ok(await page.locator('.seedcard[data-act=tane]').count() === 8, 'ほかの子の たねは 出ない');
   await page.keyboard.press('Escape');
+  }
+  {
+  // 回：先生が 第2回を はじめると、シール・持ち分・見てほしい付箋が 回ごとに なる
+  await who('A01'); await page.click('.face[data-face=front]');
+  const before = await page.evaluate(() => { const ns = S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front' && !x.stackOf); return { shown: ns.filter(n => shownNow(n)).map(n => n.id), other: ns.filter(n => !showRound(n)).map(n => n.id), stars: S.stars.filter(s => rdOf(s) === 1).length }; });
+  ok(before.shown.length > 0 && before.stars > 0, '（準備）第1回の 見てほしい付箋と シールが ある');
+  await who('teacher'); await page.click('[data-act=tcls][data-c=A]');
+  await page.click('[data-act=round-next]');
+  ok(await page.isVisible('text=もう一度 押すと 第2回に なります'), '回を 進める 前に もう一度 たしかめる');
+  await page.click('[data-act=round-next]');
+  ok(await page.isVisible('.mode b:has-text("第2回")'), '先生が 第2回を はじめられる');
+  await who('A01'); await page.click('.face[data-face=front]');
+  const old = before.shown[0];
+  ok(await page.isVisible(`#board .note[data-id="${old}"] .show.old:has-text("第1回")`) && !(await page.isVisible(`#board .note[data-id="${old}"] .stars`)), '前の 回の 付箋は「第1回」と 出て、シールの 数は 今の 回の 分だけ（0）');
+  await page.click(`#board .note[data-id="${old}"]`);
+  ok(await page.isVisible('button[disabled]:has-text("第1回で えらんだ 付箋")') && !(await page.isVisible(`[data-act=showcase][data-id="${old}"]`)), '前の 回で えらんだ 付箋は えらべない');
+  await page.keyboard.press('Escape');
+  const nw = before.other[0];
+  await page.click(`#board .note[data-id="${nw}"]`);
+  await page.click(`[data-act=showcase][data-id="${nw}"]`);
+  ok((await st()).items.find(x => x.id === nw).showcase === 2, 'ほかの 付箋は 第2回の 見てほしい付箋に できる');
+  await page.keyboard.press('Escape');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=class]');
+  await who('A05');
+  ok(await page.isVisible(`.big[data-id="${nw}"]`) && !(await page.isVisible(`.big[data-id="${old}"]`)), 'シール貼り画面には 今の 回の 見てほしい付箋だけ 出る');
+  ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('2'), '持ち分は 回ごとに もどる（★ のこり2）');
+  await page.waitForTimeout(1800);
+  await page.locator(`.big[data-id="${nw}"]`).scrollIntoViewIfNeeded();
+  const nb3 = await page.locator(`.big[data-id="${nw}"]`).boundingBox();
+  await page.mouse.click(nb3.x + 60, nb3.y + 60);
+  s = await st();
+  ok(s.stars.some(x => x.noteId === nw && x.viewer === 'A05' && x.rd === 2), '第2回の シールとして 貼られる');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  const csvRow = await page.evaluate(id => roundSummary(item(id)), before.shown[0]);
+  ok(/第1回/.test(csvRow), '前の 回の シールの 数は 一覧（CSV）に のこる');
   }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
