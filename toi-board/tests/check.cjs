@@ -247,7 +247,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 17 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 11 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -281,7 +281,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /^\d+$/.test(l.split('\t')[7])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[7])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -404,7 +404,24 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.keyboard.press('Escape');
   await page.screenshot({ path: SHOTS + '/11-new-ui.png' });
   await who('teacher');
-  ok((await page.evaluate(() => opinionTSV())).includes('ホームベースは どこに あるの？'), '先生の 一覧に コメントが 入る');
+  ok(!(await page.evaluate(() => opinionTSV())).includes('ホームベースは どこに あるの？'), 'コメントは はじめは 一覧に 入らない（名前が 書かれて いる ことが ある）');
+  await page.click('[data-act=ttab][data-k=list]'); await page.click('[data-act=fcmt]');
+  ok((await page.evaluate(() => opinionTSV())).includes('ホームベースは どこに あるの？'), '「コメントも 入れる」で 一覧に コメントが 入る');
+  await page.click('[data-act=fcmt]');
+  // しらべた人の 名前・前の 回の シール・まとまり・Gemini 用の 指示文
+  const gx = await page.evaluate(() => {
+    const free = tm => S.items.filter(x => x.kind === 'note' && x.team === tm && x.face === 'front' && !x.stackOf && !stackOf(x.id).length);
+    const ns = free(SPOTS.map(s => s.team).find(tm => free(tm).length >= 3));
+    commit(() => { ns[0].done = true; ns[0].doneBy = 'やまだ はなこ'; ns[2].stackOf = ns[1].id; S.stars.push({ noteId: ns[0].id, viewer: 'A09', k: 'pick', rd: 1 }, { noteId: ns[0].id, viewer: 'A10', k: 'star', rd: 2 }); });
+    ui.fFace = 'all'; ui.fCls = 'all'; ui.fQ = ''; ui.fKind = '';
+    const rows = opinionTSV().split('\n').map(l => l.split('\t'));
+    const r0 = rows.find(r => r[4] === ns[0].text), r1 = rows.find(r => r[4] === ns[1].text), r2 = rows.find(r => r[4] === ns[2].text);
+    return { tsv: opinionTSV(), r0, r1, r2, ai: aiText('next') };
+  });
+  ok(!gx.tsv.includes('やまだ') && gx.r0[5] === '○', 'しらべた人の 名前は 一覧に 入らない（○だけ）');
+  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[7]) && /第2回 面白い！1/.test(gx.r0[7]), 'シールは 前の 回も ふくめて 回ごとに 出る');
+  ok(gx.r1[9] && gx.r1[9].includes('（上）') && gx.r2[9] === gx.r1[9].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
+  ok(gx.ai.startsWith('次の表は') && gx.ai.includes('\n\n組\t班') && !gx.ai.includes('やまだ'), 'Gemini 用は 指示文の あとに 表が つく');
   }
   {
   // ？のたね：付箋を 書く 画面の 上の ボタン → 上から カード → 押すと 言葉が 入る／自分で つくれる

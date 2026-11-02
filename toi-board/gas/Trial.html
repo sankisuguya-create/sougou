@@ -991,21 +991,41 @@ function opinionRows(){
   });
   var order = {}; SPOTS.forEach(function(s, i){ order[s.team] = i; });
   rows.sort(function(a, b){ return (order[a.team] - order[b.team]) || (a.y - b.y) || (a.x - b.x); });
+  /* まとまり番号：重なりの いちばん上と その下の 付箋に 同じ 番号 */
+  var grp = {}, gno = 0;
+  rows.forEach(function(n){ var top = n.stackOf ? n.stackOf : (stackOf(n.id).length ? n.id : null); if(top && !grp[top]) grp[top] = ++gno; });
   return rows.map(function(n){
-    var s = spot(n.team), p = n.stackOf ? item(n.stackOf) : null;
-    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, n.done ? (n.doneBy || '○') : '', showRound(n) ? '第' + showRound(n) + '回' : ''].concat(kindCounts(n).map(function(c){ return c || ''; })).concat([p ? p.text : '', n.fromTeam ? teamLabel(n.fromTeam) : '', commentsOf(n.id).map(function(c){ return c.text; }).join(' / ')]);
+    var s = spot(n.team), top = n.stackOf ? n.stackOf : (stackOf(n.id).length ? n.id : null);
+    // しらべた人の 名前は 入れない（外部AIに 個人名を 渡さない）。コメントは 選んだ 時だけ
+    return [s.cls + '組', s.no + 'はん', s.name, faceLabel(n.face), n.text, n.done ? '○' : '', showRound(n) ? '第' + showRound(n) + '回' : '',
+      sealSummary(n), likesOf(n.id).length || '', top ? grp[top] + (n.stackOf ? '' : '（上）') : '', n.fromTeam ? teamLabel(n.fromTeam) : '']
+      .concat(ui.fCmt ? [commentsOf(n.id).map(function(c){ return c.text; }).join(' / ')] : []);
   });
 }
+/* シールを 全部の 回で（いいねは 別の 列）：第1回 面白い！2 知りたい！1 ／ 第2回 … */
+function sealSummary(n){
+  var by = {};
+  allStarsOf(n.id).forEach(function(x){ var k = kindOf(x); if(k === 'thumb') return; var r = rdOf(x); (by[r] = by[r] || {})[k] = (by[r][k] || 0) + 1; });
+  return Object.keys(by).sort(function(a, b){ return a - b; }).map(function(r){ return '第' + r + '回 ' + KINDS.filter(function(K){ return by[r][K.k]; }).map(function(K){ return K.name + by[r][K.k]; }).join(' '); }).join(' ／ ');
+}
+function opHead(){ return OP_HEAD.concat(ui.fCmt ? ['コメント'] : []); }
+/* Gemini 用：目的を えらぶと 指示文を 表の 前に つけて コピー */
+var AI_GOALS = [
+  {k:'classify', label:'問いを 分類', prompt:'次の表は、小学3年生が総合的な学習の時間（地域「西宮」の名所調べ）で書いた問いの付箋です。1行が付箋1まいです。\n問いを「事実をたずねる問い（いつ・どこ・だれ・なに）」「理由・しくみをたずねる問い（どうして・どうやって）」「関係をたずねる問い（どんな関係）」「前提をうたがう問い（そもそも）」に分類し、班ごとに数と代表例を表にしてください。どれにも入らない問いは「その他」にして理由を一言そえてください。'},
+  {k:'group', label:'似た問いを まとめる', prompt:'次の表は、小学3年生が総合的な学習の時間で書いた問いの付箋です。1行が付箋1まいです。「まとまり」の列が同じ番号の付箋は、児童が自分で重ねてまとめたものです。\n班ごとに、意味が近い問いをまとめて見出しをつけてください。児童が重ねたまとまりと、あなたのまとめ方がちがう所は、そのちがいを示してください。'},
+  {k:'next', label:'次に 調べる問いの 候補', prompt:'次の表は、小学3年生が総合的な学習の時間で書いた問いの付箋と、見合い会でほかの班から貼られたシールの数です（面白い！・知りたい！・その発想はなかった！・？出しの参考になる！）。調査済みに○がある問いは調べ終わっています。\n班ごとに、まだ調べていない問いの中から次に調べる候補を3つまで挙げ、シールの内訳と問いの中身から選んだ理由を一言そえてください。3年生が自分たちで調べられるか（見学・聞き取り・本）の見通しも書いてください。'}
+];
+function aiText(k){ var g = AI_GOALS.filter(function(x){ return x.k === k; })[0]; return g.prompt + '\n\n' + opinionTSV(); }
 /* 回ごとの シールの まとめ（例：第1回 面白い！2 知りたい！1 ／ 第2回 …） */
 function roundSummary(n){
   var by = {};
   allStarsOf(n.id).forEach(function(s){ var r = rdOf(s); (by[r] = by[r] || {})[kindOf(s)] = (by[r][kindOf(s)] || 0) + 1; });
   return Object.keys(by).sort().map(function(r){ return '第' + r + '回 ' + KINDS.filter(function(K){ return by[r][K.k]; }).map(function(K){ return K.name + by[r][K.k]; }).join(' '); }).join(' ／ ');
 }
-var OP_HEAD = ['組','班','スポット','面','付箋','調査済み（しらべた人）','見てほしい'].concat(KINDS.map(function(K){ return K.name; })).concat(['重ねた先','おくり元','コメント']);
+var OP_HEAD = ['組','班','スポット','面','付箋','調査済み','見てほしい','シール（回ごと）','いいね（班の中）','まとまり','おくり元'];
 function kindCounts(n){ var st = starsOf(n.id); return KINDS.map(function(K){ return K.k === 'thumb' ? likesOf(n.id).length : st.filter(function(x){ return kindOf(x) === K.k; }).length; }); }
 function opinionTSV(){
-  return [OP_HEAD].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
+  return [opHead()].concat(opinionRows()).map(function(r){ return r.map(function(v){ return String(v).replace(/[\t\r\n]+/g, ' '); }).join('\t'); }).join('\n');
 }
 /* シールの 集計：班ごとに、付箋に どの シールが 何まい 貼られたか（回を えらべる） */
 function viewTally(){
@@ -1089,10 +1109,12 @@ function viewTeacher(){
     + '面：<span class="seg">' + [{k:'front',label:'表がわ'},{k:'back',label:'うらがわ'},{k:'gift',label:'いただきもの'},{k:'all',label:'ゴミばこ以外'}].map(function(f){ return '<button class="' + (ui.fFace === f.k ? 'on' : '') + '" data-act="fface" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span>'
     + '</div><div class="filters"><input id="t-q" class="sbox" style="max-width:420px" placeholder="ことばで さがす" value="' + esc(ui.fQ || '') + '">'
     + '<span>シール：</span>' + kindButtons('fkind', ui.fKind)
-    + '<button class="btn primary" data-act="copy">表を コピー（Gemini・スプレッドシートに 貼れる）</button></div>';
-  h += '<div class="ttable"><table><tr>' + OP_HEAD.map(function(x){ return '<th>' + x + '</th>'; }).join('') + '</tr>'
+    + '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:700"><input type="checkbox" data-act="fcmt"' + (ui.fCmt ? ' checked' : '') + ' style="width:22px;height:22px">コメントも 入れる</label>'
+    + '<button class="btn primary" data-act="copy">表を コピー</button></div>'
+    + '<div class="filters"><b>Gemini 用（指示文つきで コピー）：</b>' + AI_GOALS.map(function(g){ return '<button class="btn" data-act="aicopy" data-k="' + g.k + '">' + g.label + '</button>'; }).join('') + '</div>';
+  h += '<div class="ttable"><table><tr>' + opHead().map(function(x){ return '<th>' + x + '</th>'; }).join('') + '</tr>'
     + rows.map(function(r){ return '<tr>' + r.map(function(v, i){ return '<td' + (i === 4 ? ' class="text"' : '') + '>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>';
-  h += '<p style="color:var(--sub);font-size:14px">コピーには 書いた児童の 名前・番号は 入りません。</p>';
+  h += '<p style="color:var(--sub);font-size:14px">コピーには 書いた児童・しらべた人の 名前と 番号は 入りません。コメントの 本文に 名前が 書かれて いる ことが あるので、外に 出す 時は「コメントも 入れる」を 切った まま に します。</p>';
 
   var gifts = S.items.filter(function(x){ return x.fromTeam && (ui.fCls === 'all' || clsOf(x.team) === ui.fCls); });
   h += '<h2>いただきもの（だれが おくったか：先生だけ 見える）</h2>';
@@ -1445,6 +1467,8 @@ document.addEventListener('click', function(e){
   if(act === 'tteam'){ ui.tTeam = b.getAttribute('data-t'); render(); return; }
   if(act === 'fcls'){ ui.fCls = b.getAttribute('data-c'); render(); return; }
   if(act === 'fface'){ ui.fFace = b.getAttribute('data-f'); render(); return; }
+  if(act === 'fcmt'){ ui.fCmt = !ui.fCmt; render(); return; }
+  if(act === 'aicopy'){ copyText(aiText(b.getAttribute('data-k'))); toast('指示文と ' + opinionRows().length + 'まい ぶんを コピーしました（Gemini に 貼れます）'); return; }
   if(act === 'copy'){ copyText(opinionTSV()); toast(opinionRows().length + 'まい ぶんを コピーしました'); return; }
   if(act === 'seed'){ seed(); return; }
   if(act === 'wipe'){ if(ui.armed !== true){ ui.armed = true; render(); setTimeout(function(){ ui.armed = false; render(); }, 3000); return; } ui.armed = false; S = fresh(); Platform.push(null); render(); return; }
