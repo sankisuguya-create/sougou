@@ -165,7 +165,7 @@ function slots_(){
   cache_().put('slots', JSON.stringify(m), 21600);
   return m;
 }
-function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5}; }
 function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
   var c = cache_().get('modes');
@@ -194,10 +194,11 @@ function anon_(viewer){
   return 'o' + d.slice(0, 5).map(function(b){ return ((b + 256) % 256).toString(16); }).join('');
 }
 
-/* ===== 整理役（班に 1人・5分） =====
+/* ===== 整理役（班に 1人・時間は 組ごとに 先生が 決める。既定 5分） =====
    付箋を 動かす・枠を 置く／大きさを 変える／動かす のは 整理役だけ。
    2人に なるくらいなら だれも いない ほうが よい ので、決めるのは ロックの 中だけ、確かでない 時は「いない」に 倒す */
-var ORG_MS = 5 * 60 * 1000;
+var ORG_MINS = [3, 5, 10, 15];
+function orgMs_(team){ var n = Number((modes_()[clsOf_(team)] || {}).orgMin); return (ORG_MINS.indexOf(n) >= 0 ? n : 5) * 60 * 1000; }
 function orgGet_(teams){
   var now = Date.now(), out = {};
   if(!teams.length) return out;
@@ -226,7 +227,7 @@ function orgClaim(){
   try{
     var cur = orgGet_([u.team])[u.team];
     if(cur && cur.id !== u.id) return {ok:false, org:orgView_(u, mapOf_(u.team, cur))};
-    var o = {id:u.id, no:u.no, until:Date.now() + ORG_MS};
+    var o = {id:u.id, no:u.no, until:Date.now() + orgMs_(u.team)};
     orgPut_(u.team, o);
     return {ok:true, org:orgView_(u, mapOf_(u.team, o))};
   } finally { lock.releaseLock(); }
@@ -245,7 +246,7 @@ function orgSet(team, no){
     if(!no){ orgPut_(team, null); return {ok:true}; }
     var sl = slots_(), id = Object.keys(sl).filter(function(k){ return sl[k].team === team && sl[k].no === Number(no); })[0];
     if(!id) return {ok:false};
-    orgPut_(team, {id:id, no:Number(no), until:Date.now() + ORG_MS, by:'先生'});
+    orgPut_(team, {id:id, no:Number(no), until:Date.now() + orgMs_(team), by:'先生'});
     return {ok:true};
   } finally { lock.releaseLock(); }
 }
@@ -517,7 +518,8 @@ function apply(ops){
           propose:SCOPE_KEYS.indexOf(m.propose) >= 0 ? m.propose : 'off',
           starIn:!!m.starIn,
           starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
-          round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1)))
+          round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1))),
+          orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5
         };
         var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });

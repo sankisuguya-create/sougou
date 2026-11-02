@@ -417,6 +417,14 @@ function makeGas() {
   ok(O.as('p1' + D, 'poll', [{ teams: { 'A-1': 999999 } }]).org['A-1'].mine && !O.as('p2' + D, 'orgClaim').ok, '先生が 整理役を 決められる（ほかの 子は なれない）');
   O.as('tt@edu.nishi.or.jp', 'orgSet', ['A-1', 0]);
   ok(!O.as('p1' + D, 'poll', [{ teams: { 'A-1': 999999 } }]).org['A-1'], '先生が 整理役を はずせる');
+  // 先生が 時間を 決める（組ごと）
+  O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'off', round: 1, orgMin: 10 } } }]);
+  const c4 = O.as('p2' + D, 'orgClaim');
+  ok(c4.ok && c4.org['A-1'].left > 9 * 60 * 1000 && c4.org['A-1'].left <= 10 * 60 * 1000, '先生が 決めた 時間（10分）で 整理役に なる');
+  O.as('p2' + D, 'orgRelease');
+  O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'off', round: 1, orgMin: 999 } } }]);
+  ok(O.as('p2' + D, 'orgClaim').org['A-1'].left <= 5 * 60 * 1000, 'きめられた 選択肢 以外の 時間は 5分に もどす');
+  O.as('p2' + D, 'orgRelease');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }

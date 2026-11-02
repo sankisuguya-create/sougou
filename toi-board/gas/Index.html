@@ -248,7 +248,7 @@ var MODES = [
   {k:'propose', label:'アイデア提案',      desc:'ほかの班の「いただきもの」に 付箋を 貼れる',   scoped:true},
   {k:'starOut', label:'シール（班の外）',  desc:'児童の画面が、ほかの班の「見てほしい付箋」に シールを 貼る画面に 切り替わる', scoped:true}
 ];
-function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1}; }
+function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5}; }
 
 /* ===== 保存（見本：localStorage。GAS版は build で この区間を 差し替える） ===== */
 /* 体験版：?trial=1 で 開くと、本番と 別の 保存場所に 見本の データを 入れて 案内を 出す */
@@ -693,8 +693,9 @@ function gotoNote(id){
 
 /* 何ができるか（不変条件はここに集める） */
 function canEdit(){ return isMine(); }
-/* 整理役（班に 1人・5分）：付箋を 動かす・枠を 置く／大きさ／動かす のは 整理役だけ */
-var ORG_MS = 5 * 60 * 1000;
+/* 整理役（班に 1人・時間は 組ごとに 先生が 決める）：付箋を 動かす・枠を 置く／大きさ／動かす のは 整理役だけ */
+var ORG_MINS = [3, 5, 10, 15];
+function orgMs(team){ var n = Number(((S.modes || {})[String(team).split('-')[0]] || {}).orgMin); return (ORG_MINS.indexOf(n) >= 0 ? n : 5) * 60 * 1000; }
 function orgOf(team){
   var o = S.org && S.org[team]; if(!o) return null;
   var end = o.end || o.until; if(!end || end <= Date.now()) return null;
@@ -1145,6 +1146,8 @@ function viewTeacher(){
   h += '<div class="mode"><span style="min-width:150px;font-weight:700">見合い会の 回</span><b style="font-size:20px">第' + rd + '回</b>'
     + '<button class="btn" data-act="round-next">' + (ui.armed === 'round' ? 'もう一度 押すと 第' + (rd + 1) + '回に なります' : '第' + (rd + 1) + '回を はじめる') + '</button>'
     + '<span>シール・持ち分・見てほしい付箋が 回ごとに なります（前の 回の 数は 一覧に のこります）</span></div>';
+  var om = ORG_MINS.indexOf(Number(tm.orgMin)) >= 0 ? Number(tm.orgMin) : 5;
+  h += '<div class="mode"><span style="min-width:150px;font-weight:700">整理役の 時間</span><span class="seg">' + ORG_MINS.map(function(n){ return '<button class="' + (om === n ? 'on' : '') + '" data-act="orgmin" data-v="' + n + '">' + n + '分</button>'; }).join('') + '</span><span>「整理する」を 押した 子（先生が 決めた 子も）が 付箋・わくを 動かせる 時間。次に なる 子から 変わります</span></div>';
   h += '<p style="color:var(--sub);font-size:14px">「同じ組」は ' + ui.tCls + '組の中だけ、「学年」は ほかの組の 班にも 届きます。' + ui.tCls + '組の 児童が できることだけを 決めます。</p>';
     var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
     if(noShow.length) h += '<p class="warn">⚠ 第' + (tm.round || 1) + '回の 見てほしい付箋が まだ ない 班：' + noShow.map(function(sp){ return sp.no + 'はん'; }).join('・') + '（シール（班の外）を 入れても、この 班の 付箋は 出ません）</p>';
@@ -1165,7 +1168,7 @@ function viewTeacher(){
   h += '<div class="faces" style="margin:6px 0">' + FACES.map(function(f){ return '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '</button>'; }).join('') + '</div>';
   if(ui.face === 'trash') h += '<div class="tools" style="padding:0 0 8px">' + trashSortHTML() + '</div>';
   var og = orgOf(ui.tTeam), mem = S.roster.filter(function(c){ return c.team === ui.tTeam; }).sort(function(a, b){ return a.no - b.no; });
-  h += '<div class="filters"><b>整理役（付箋を 動かせる 人・5分）：</b>' + (og ? og.no + 'ばん（のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span>）' : 'なし')
+  h += '<div class="filters"><b>整理役（付箋を 動かせる 人・' + orgMs(ui.tTeam) / 60000 + '分）：</b>' + (og ? og.no + 'ばん（のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span>）' : 'なし')
     + mem.map(function(c){ return '<button class="btn' + (og && og.no === c.no ? ' on' : '') + '" data-act="org-set" data-t="' + ui.tTeam + '" data-no="' + c.no + '">' + c.no + 'ばん</button>'; }).join('')
     + (og ? '<button class="btn" data-act="org-set" data-t="' + ui.tTeam + '" data-no="0">はずす</button>' : '') + '</div>';
     return h + '</div>' + boardHTML(ui.tTeam, ui.face);
@@ -1477,7 +1480,7 @@ document.addEventListener('click', function(e){
     if(ui.orgBusy) return; ui.orgBusy = true; render();
     Platform.org('claim', null, function(r){
       ui.orgBusy = false;
-      toast(r && r.ok ? '5分間 整理できます（付箋を うごかす・わく）' : (orgOf(myTeam()) ? orgOf(myTeam()).no + 'ばんが 先に 整理を はじめました' : 'いまは 整理できません。もう一度 おしてね'));
+      toast(r && r.ok ? orgMs(myTeam()) / 60000 + '分間 整理できます（付箋を うごかす・わく）' : (orgOf(myTeam()) ? orgOf(myTeam()).no + 'ばんが 先に 整理を はじめました' : 'いまは 整理できません。もう一度 おしてね'));
       render();
     });
     return;
@@ -1485,7 +1488,7 @@ document.addEventListener('click', function(e){
   if(act === 'org-end'){ Platform.org('release', null, function(){ toast('整理を おわりました'); render(); }); return; }
   if(act === 'org-set'){
     var ot = b.getAttribute('data-t'), on = +b.getAttribute('data-no') || 0;
-    Platform.org('set', {team:ot, no:on}, function(r){ toast(on ? (r && r.ok ? on + 'ばんを 整理役に しました（5分）' : '決められませんでした') : '整理役を はずしました'); render(); });
+    Platform.org('set', {team:ot, no:on}, function(r){ toast(on ? (r && r.ok ? on + 'ばんを 整理役に しました（' + orgMs(ot) / 60000 + '分）' : '決められませんでした') : '整理役を はずしました'); render(); });
     return;
   }
   if(act === 'tbfold'){ ui.tbFold = !ui.tbFold; render(); return; }
@@ -1504,6 +1507,11 @@ document.addEventListener('click', function(e){
     ui.armed = false;
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.round = (mm.round || 1) + 1; }, true);
     ui.modeNote = ui.tCls; render(); toast(ui.tCls + '組を 第' + roundOf(ui.tCls) + '回に しました'); return;
+  }
+  if(act === 'orgmin'){
+    var mn = +b.getAttribute('data-v');
+    commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.orgMin = mn; });
+    ui.modeNote = ui.tCls; render(); return;
   }
   if(act === 'mode'){
     var key = b.getAttribute('data-k'), val = b.getAttribute('data-v');
@@ -1559,7 +1567,7 @@ function trialUrl(){ return window.TOI_TRIAL_URL || (location.pathname + '?trial
 var TRIAL_STEPS = [
   {who:'A01', title:'① ボードで 付箋を 編集する（児童）', items:[
     '左下の ＋ で 付箋を 書く。書く 画面の「？のたね」を 押すと 言葉が 入る',
-    '左の「整理する」を 押すと 5分間 その子だけが 付箋・わくを うごかせる（班で 1人・先着）。付箋を ドラッグで うごかす。ほかの 付箋の 上に 落とすと 重なる（タップ →「いちばん 上に する」）',
+    '左の「整理する」を 押すと 決まった 時間（先生が 3〜15分で 決める）だけ その子だけが 付箋・わくを うごかせる（班で 1人・先着）。付箋を ドラッグで うごかす。ほかの 付箋の 上に 落とすと 重なる（タップ →「いちばん 上に する」）',
     '付箋を タップ →「調査済み」「見てほしい付箋に する」「うらがわへ」など',
     '付箋を タップ →「いいね（班の中）」。いいねは 付箋の 右に、メンバーごとの 色で つく',
     '左の 道具：やじるし（2まいを 順に タップ）・わく（タイトルを ドラッグで 辺の 上を うごかせる）・さがす（新しい順・あいうえお順など）・もどす（Ctrl+Z）',

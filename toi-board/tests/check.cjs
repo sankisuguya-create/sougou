@@ -102,6 +102,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=ttab][data-k=more]'); await page.click('[data-act=seed]'); await page.click('[data-act=ttab][data-k=mode]');
   await page.click('[data-act=mode][data-k=view][data-v=class]');
   await page.click('[data-act=mode][data-k=propose][data-v=class]');
+  await page.click('[data-act=orgmin][data-v="10"]');
+  ok(await page.evaluate(() => S.modes.A.orgMin === 10 && orgMs('A-3') === 600000), '先生が 整理役の 時間を 組ごとに 決められる');
+  await page.click('[data-act=orgmin][data-v="5"]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
   // 別の班の児童：共同閲覧・提案
