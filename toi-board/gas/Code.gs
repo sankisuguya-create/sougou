@@ -42,7 +42,33 @@ function setup(){
 }
 
 /* ===== 読み書きの 道具 ===== */
-function sheet_(n){ return SpreadsheetApp.getActive().getSheetByName(n); }
+/* シートが 無ければ その場で 作る（新しい 版で シートが ふえた 時、setup を し忘れても 止まらない） */
+function sheet_(n){
+  var ss = SpreadsheetApp.getActive();
+  if(!ss) throw new Error('NO_SPREADSHEET：スプレッドシートの「拡張機能 → Apps Script」から 作った スクリプトに 貼ってください（単独の スクリプトでは 動きません）');
+  var sh = ss.getSheetByName(n);
+  if(!sh){ sh = ss.insertSheet(n); sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]); }
+  return sh;
+}
+/* エディタで 実行：動かない 時の 原因を ログに 出す（実行ログで 見る） */
+function selfCheck(){
+  var out = [], ss = SpreadsheetApp.getActive();
+  out.push('スプレッドシートに つながっているか：' + (ss ? 'はい（' + ss.getName() + '）' : 'いいえ ← 拡張機能 → Apps Script から 作り直す'));
+  if(ss) Object.keys(HEAD).forEach(function(n){
+    var sh = ss.getSheetByName(n);
+    out.push('シート ' + n + '：' + (sh ? (sh.getLastRow() - 1) + '行' : 'ない（開いた 時に 自動で 作ります）'));
+  });
+  if(ss){
+    var sp = 0, ro = 0; try{ sp = spots_().length; ro = rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).length; }catch(e){}
+    if(!ro) out.push('⚠ 名簿が 空です（児童は 開けません）');
+    if(!sp) out.push('⚠ スポットが 空です（班が ありません）');
+  }
+  out.push('版：' + PropertiesService.getScriptProperties().getProperty('ver'));
+  try{ out.push('公開 URL：' + ScriptApp.getService().getUrl()); }catch(e){ out.push('公開 URL：まだ ありません（デプロイ → ウェブアプリ）'); }
+  try{ out.push('開いた人の メール（エディタで 実行した 時は 先生）：' + Session.getActiveUser().getEmail()); }catch(e){}
+  Logger.log(out.join('\n'));
+  return out.join('\n');
+}
 function rows_(n){
   var sh = sheet_(n), last = sh.getLastRow();
   return last < 2 ? [] : sh.getRange(2, 1, last - 1, HEAD[n].length).getValues();
@@ -163,7 +189,7 @@ function boot(){
     var sl = slots_(); u.mates = Object.keys(sl).filter(function(k){ return sl[k].team === u.team; }).map(function(k){ return {slot:sl[k].slot, no:sl[k].no, id:k === u.id ? u.id : 'm' + sl[k].slot}; }).sort(function(a, b){ return a.slot - b.slot; });
   }
   p.mver = getMver_();
-  p.api = API_VER; p.trialUrl = ScriptApp.getService().getUrl() + '?trial=1'; p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
+  p.api = API_VER; p.trialUrl = (function(){ try{ return ScriptApp.getService().getUrl() + '?trial=1'; }catch(e){ return ''; } })(); p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
 function mapOf_(t, v){ var m = {}; m[t] = v; return m; }
