@@ -414,7 +414,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=tanes]');
   ok(await page.isVisible('.seeds') && await page.locator('.seeds .seedcard[data-act=tane]').count() >= 8, '「？のたね」を 押すと カードが 出る（8まい）');
   const sb = await page.locator('.seeds').boundingBox();
-  ok(sb.y <= 2, 'カードは 画面の 上から 出る');
+  const wb = await page.locator('.sheet.bigsheet').boundingBox();
+  ok(sb.y + sb.height <= wb.y + 1 && wb.y + wb.height >= (page.viewportSize().height - 2), 'カードは 窓の すぐ上に 出て、窓は 画面の 下に 寄る');
   await page.click('.seedcard[data-w="いつ"]');
   ok(await page.inputValue('#w-text') === 'ホタルは いつ', '「いつ」を 押すと 付箋に「いつ」が 入る');
   await page.click('.seedcard[data-w="どうして"]');
