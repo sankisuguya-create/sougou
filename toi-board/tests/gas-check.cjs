@@ -425,6 +425,21 @@ function makeGas() {
   O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'off', round: 1, orgMin: 999 } } }]);
   ok(O.as('p2' + D, 'orgClaim').org['A-1'].left <= 5 * 60 * 1000, 'きめられた 選択肢 以外の 時間は 5分に もどす');
   O.as('p2' + D, 'orgRelease');
+  // 見られる班：その 班の 児童は 書けない、ほかの 子は その 班だけに 貼れる
+  O.fill('名簿', [['p1' + D, 'A', 1, 1], ['p2' + D, 'A', 1, 2], ['p3' + D, 'A', 2, 3], ['p4' + D, 'A', 3, 4]]);
+  O.fill('スポット', [['A', 1, '甲山'], ['A', 2, '夙川'], ['A', 3, '北口']]);
+  O.ctx.clearWhoCache();
+  O.as('p3' + D, 'apply', [{ up: [{ id: 's2', kind: 'note', team: 'A-2', face: 'front', x: 1, y: 1, text: '見られる', showcase: 1 }], del: [], star: [] }]);
+  O.as('p4' + D, 'apply', [{ up: [{ id: 's3', kind: 'note', team: 'A-3', face: 'front', x: 1, y: 1, text: '見られない', showcase: 1 }], del: [], star: [] }]);
+  O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'class', round: 1, orgMin: 5, stage: ['A-2', 'B-9', 'A-9'] } } }]);
+  const mst = JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).stage;
+  ok(JSON.stringify(mst) === '["A-2"]', '見られる班は その組の ある班だけ 保存される');
+  ro = O.as('p1' + D, 'apply', [{ up: [], del: [], star: [{ noteId: 's2', on: true, k: 'star' }, { noteId: 's3', on: true, k: 'star' }] }]);
+  ok(!ro.rejected.includes('*s2|star') && ro.rejected.includes('*s3|star'), 'ほかの 子は 見られる班だけに 貼れる');
+  ro = O.as('p3' + D, 'apply', [{ up: [{ id: 's2', team: 'A-2', p: { text: 'かえる' }, u: [] }], del: [], star: [{ noteId: 's3', on: true, k: 'star' }] }]);
+  ok(ro.rejected.includes('stage') && O.sheets.items.data.find(r => r[0] === 's2')[3].includes('見られる'), '見られる班の 児童は 書きこめない（見るだけ）');
+  const pst = O.as('p3' + D, 'poll', [{ teams: { 'A-2': 0 } }]);
+  ok(pst.stars.filter(x => x.noteId === 's2').length === 1, '見られる班の 児童に 貼られた シールが 届く');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }

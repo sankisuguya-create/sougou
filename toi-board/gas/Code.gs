@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 8;
+var API_VER = 9;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -179,8 +179,14 @@ function modes_(){
 function clsOf_(team){ return String(team).split('-')[0]; }
 function reach_(u, modes, key, team){
   var v = (modes[u.cls] || blankModes_())[key];
-  return v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
+  var ok = v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
+  // シール（班の外）：先生が「見られる班」を 決めていれば その班だけ
+  if(ok && key === 'starOut'){ var st = stageOf_(modes, team); if(st.length && st.indexOf(String(team)) < 0) ok = false; }
+  return ok;
 }
+/* 見られる班（シール貼りの 間、その班の 児童は 見るだけ） */
+function stageOf_(modes, team){ var s = (modes[clsOf_(team)] || {}).stage; return Array.isArray(s) ? s : []; }
+function onStage_(modes, team){ return stageOf_(modes, team).indexOf(String(team)) >= 0; }
 /* 児童に その行を 見せるか */
 function visible_(u, modes, team, face, showcase){
   if(u.role === 'teacher' || team === u.team) return true;
@@ -342,6 +348,7 @@ function apply(ops){
   lock.waitLock(20000);
   try{
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
+    if(u.role === 'child' && onStage_(modes, u.team)) return {rejected:['stage']};  // 見られている 班は 見るだけ
     var needItems = (ops.up && ops.up.length) || (ops.del && ops.del.length) || (ops.purge && ops.purge.length);
     var ish = needItems ? sheet_(SH.items) : null, irows = needItems ? rows_(SH.items) : [], index = {}, itput = {};
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
@@ -519,7 +526,8 @@ function apply(ops){
           starIn:!!m.starIn,
           starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
           round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1))),
-          orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5
+          orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5,
+          stage:(Array.isArray(m.stage) ? m.stage : []).map(String).filter(function(t, i, a){ return a.indexOf(t) === i && clsOf_(t) === cls && spots_().some(function(sp){ return sp.team === t; }); })
         };
         var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });

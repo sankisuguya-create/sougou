@@ -194,6 +194,16 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('0') && (await page.textContent('[data-left="A-3"] [data-kind=star]')).includes('2'), 'のこりは 班ごとに 数える（ほかの班は 2まい のこる）');
   await page.evaluate(id => commit(() => { S.items = S.items.filter(x => x.id !== id); S.stars = S.stars.filter(x => x.noteId !== id); }), third);
 
+  // 見られる班：A-1 を えらぶと A-1 の 児童は 見るだけ、シールは 実際の まい数だけ ならぶ。ほかの 子には A-1 だけ 出る
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=stage][data-t="A-1"]');
+  await who('A05');
+  ok(await page.isVisible('[data-left="A-1"]') && !(await page.isVisible('[data-left="A-3"]')), '見られる班を 決めると ほかの 子には その 班だけ 出る');
+  await who('A01');
+  s = await st();
+  const stN = s.stars.filter(x => x.noteId === e && x.k !== 'thumb').length;
+  ok(await page.isVisible('.stage') && !(await page.isVisible('#board')) && !(await page.isVisible('.fab')), '見られる班の 児童は 見るだけの 画面に なる');
+  ok(stN >= 1 && await page.locator(`.stnote[data-id="${e}"] .seals .s`).count() === stN && !(await page.isVisible(`.stnote[data-id="${e}"] .cnt`)), 'シールは まとめず 実際の まい数だけ ならぶ');
+  await who('teacher'); await page.click('[data-act=stage][data-t=""]');
   // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01');

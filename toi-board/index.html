@@ -167,6 +167,12 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .bignote textarea,.bignote .txt{display:block;width:100%;min-height:220px;border:0;background:transparent;font:inherit;font-size:28px;font-weight:700;line-height:1.5;padding:0;resize:none;outline:none;word-break:break-all}
 .bignote textarea:focus{box-shadow:inset 0 -3px 0 rgba(15,94,168,.35)}
 .bignote .count{position:absolute;right:10px;bottom:6px;font-size:13px;color:var(--sub)}
+.stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;padding:12px 4px}
+.stnote{width:260px;background:var(--fill-b);box-shadow:0 2px 5px rgba(0,0,0,.18);padding:22px 16px 16px;border-radius:2px;position:relative}
+.stnote::before{content:"";position:absolute;top:-9px;left:50%;width:84px;height:18px;margin-left:-42px;background:rgba(255,255,255,.65)}
+.stnote .t{font-size:21px;font-weight:700;line-height:1.5;word-break:break-all;margin-bottom:10px}
+.stnote .seals{display:flex;flex-wrap:wrap;gap:4px}
+.stnote .s{display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
 .ngrid{display:grid;grid-template-columns:150px minmax(0,400px) 150px;gap:24px;justify-content:center;align-items:start;padding-top:14px}
 .ncol{display:flex;flex-direction:column;gap:10px}.ncol .btn{width:100%;min-height:56px}
 .ncol.r{align-items:center}
@@ -204,6 +210,7 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 .seg{display:inline-flex;border:2px solid var(--line);border-radius:12px;overflow:hidden}
 .seg button{min-height:44px;min-width:84px;border:0;border-right:1px solid var(--line);background:#fff;font-weight:700}
 .seg button:last-child{border-right:0}
+.mode{flex-wrap:wrap}.seg.many{flex-wrap:wrap}.seg.many button{min-width:64px}
 .seg button.on{background:var(--ink);color:#fff}
 .net{position:fixed;right:12px;bottom:12px;background:#FFF4D6;border:2px solid var(--cat-2);border-radius:10px;padding:6px 12px;font-weight:700;z-index:150}
 .net:empty{display:none}
@@ -247,7 +254,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 8, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 9, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -356,7 +363,14 @@ function nid(){ return 'i' + Date.now().toString(36) + Math.random().toString(36
 function M(){ return (S.modes && S.modes[myCls()]) || blankModes(); }
 function modeOn(v){ return !!v && v !== 'off'; }
 /* その班まで 届くか（範囲つきモード） */
-function reach(k, team){ var v = M()[k]; return v === 'grade' || (v === 'class' && clsOf(team) === myCls()); }
+function reach(k, team){
+  var v = M()[k], ok = v === 'grade' || (v === 'class' && clsOf(team) === myCls());
+  if(ok && k === 'starOut'){ var st = stageOf(clsOf(team)); if(st.length && st.indexOf(team) < 0) ok = false; }
+  return ok;
+}
+/* 見られる班：シール貼りの 間、先生が 決めた 班の 児童は 自分の 見てほしい付箋を 見るだけ（ほかの 子は その班だけに 貼る） */
+function stageOf(cls){ var s = ((S.modes || {})[cls] || {}).stage; return Array.isArray(s) ? s : []; }
+function onStage(team){ return !!team && stageOf(clsOf(team)).indexOf(team) >= 0; }
 
 /* 変更は 差分にして Platform へ渡す（GAS版は 差分だけ 送る） */
 function snap(){
@@ -792,7 +806,20 @@ function viewGallery(){
   return h + '</div>';
 }
 
+function viewStage(){
+  var notes = S.items.filter(function(x){ return x.team === myTeam() && x.kind === 'note' && shownNow(x) && x.face === 'front' && !x.stackOf; });
+  var h = '<div class="gal"><div class="gal-head"><h1>' + esc(spot(myTeam()).name) + '：シールを 貼って もらっています</h1><span class="hint">見るだけの 時間です（10秒ほどで ふえます）</span></div><div class="stage">';
+  notes.forEach(function(n){
+    var st = starsOf(n.id).filter(function(x){ return kindOf(x) !== 'thumb'; }).sort(function(a, b){ return (a.v || 0) - (b.v || 0) || String(a.viewer).localeCompare(String(b.viewer)); });
+    h += '<div class="stnote" data-id="' + n.id + '"><div class="t">' + esc(n.text) + '</div><div class="seals">'
+      + st.map(function(x){ return '<span class="s" data-kind="' + kindOf(x) + '" style="' + jitStyle(n.id + x.viewer + kindOf(x), 2, 12) + '">' + sealImg(kindOf(x), 40) + '</span>'; }).join('')
+      + '</div></div>';
+  });
+  if(!notes.length) h += '<p class="hint" style="font-size:18px">見てほしい付箋が ありません</p>';
+  return h + '</div></div>';
+}
 function viewChild(){
+  if(onStage(myTeam())) return viewStage();
   if(modeOn(M().starOut)) return viewGallery();
   var team = boardTeam(), sp = spot(team), mine = isMine(), m = M();
   var faces = visibleFaces();
@@ -1027,6 +1054,10 @@ function viewTeacher(){
     + '<button class="btn" data-act="round-next">' + (ui.armed === 'round' ? 'もう一度 押すと 第' + (rd + 1) + '回に なります' : '第' + (rd + 1) + '回を はじめる') + '</button>'
     + '<span>シール・持ち分・見てほしい付箋が 回ごとに なります（前の 回の 数は 一覧に のこります）</span></div>';
   var om = ORG_MINS.indexOf(Number(tm.orgMin)) >= 0 ? Number(tm.orgMin) : 5;
+  var stg = stageOf(ui.tCls);
+  h += '<div class="mode"><span style="min-width:150px;font-weight:700">見られる班</span><span class="seg many"><button class="' + (stg.length ? '' : 'on') + '" data-act="stage" data-t="">ぜんぶ</button>'
+    + SPOTS.filter(function(sp){ return sp.cls === ui.tCls; }).map(function(sp){ return '<button class="' + (stg.indexOf(sp.team) >= 0 ? 'on' : '') + '" data-act="stage" data-t="' + sp.team + '">' + sp.no + 'はん</button>'; }).join('')
+    + '</span><span>シール（班の外）の 間、えらんだ 班の 児童は 自分の 見てほしい付箋に シールが ふえるのを 見るだけに なり、ほかの 児童は その 班だけに 貼る</span></div>';
   h += '<div class="mode"><span style="min-width:150px;font-weight:700">整理役の 時間</span><span class="seg">' + ORG_MINS.map(function(n){ return '<button class="' + (om === n ? 'on' : '') + '" data-act="orgmin" data-v="' + n + '">' + n + '分</button>'; }).join('') + '</span><span>「整理する」を 押した 子（先生が 決めた 子も）が 付箋・わくを 動かせる 時間。次に なる 子から 変わります</span></div>';
   h += '<p style="color:var(--sub);font-size:14px">「同じ組」は ' + ui.tCls + '組の中だけ、「学年」は ほかの組の 班にも 届きます。' + ui.tCls + '組の 児童が できることだけを 決めます。</p>';
     var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
@@ -1377,7 +1408,7 @@ document.addEventListener('click', function(e){
   if(act === 'tbfold'){ ui.tbFold = !ui.tbFold; render(); return; }
   if(act === 'ttab'){ ui.ttab = b.getAttribute('data-k'); if(ui.ttab === 'tally') ui.tRound = 0; render(); window.scrollTo(0, 0); return; }
   if(act === 'modes-off'){
-    commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); MODES.forEach(function(x){ mm[x.k] = x.scoped ? 'off' : false; }); });
+    commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); MODES.forEach(function(x){ mm[x.k] = x.scoped ? 'off' : false; }); mm.stage = []; });
     ui.modeNote = ui.tCls; toast(ui.tCls + '組を ぜんぶ 切に しました'); render(); return;
   }
   if(act === 'tround'){ ui.tRound = +b.getAttribute('data-r'); render(); return; }
@@ -1390,6 +1421,13 @@ document.addEventListener('click', function(e){
     ui.armed = false;
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.round = (mm.round || 1) + 1; }, true);
     ui.modeNote = ui.tCls; render(); toast(ui.tCls + '組を 第' + roundOf(ui.tCls) + '回に しました'); return;
+  }
+  if(act === 'stage'){
+    var stt = b.getAttribute('data-t');
+    commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(), a = Array.isArray(mm.stage) ? mm.stage.slice() : [];
+      if(!stt) a = []; else if(a.indexOf(stt) >= 0) a.splice(a.indexOf(stt), 1); else a.push(stt);
+      mm.stage = a; });
+    ui.modeNote = ui.tCls; render(); return;
   }
   if(act === 'orgmin'){
     var mn = +b.getAttribute('data-v');
@@ -1431,7 +1469,7 @@ document.addEventListener('keydown', function(e){
   if(!S) return;
   var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if(e.key === 'Escape' && ui.sheet){ e.preventDefault(); if(ui.sheet.type === 'note') flushNote(); ui.sheet = null; render(); return; }
-  if(!(e.ctrlKey || e.metaKey) || e.altKey || typing || e.isComposing) return;
+  if(!(e.ctrlKey || e.metaKey) || e.altKey || typing || e.isComposing || (!isTeacher() && onStage(myTeam()))) return;
   var k = e.key.toLowerCase();
   if(k === 'z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
   if(k === 'y' || (k === 'z' && e.shiftKey)){ e.preventDefault(); redo(); return; }
