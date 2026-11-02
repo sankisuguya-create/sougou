@@ -494,9 +494,11 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await tp.click('.trial [data-act=trial-go][data-n="1"]');
   ok(await tp.isVisible('text=シールを 貼ろう') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
   await tp.click('.trial [data-act=trial-go][data-n="2"]');
-  ok(await tp.isVisible('h2:has-text("シールの 集計")') && (await tp.$$eval('table.tally td.num:not(.zero)', els => els.length)) > 0, '③ 先生の 集計（見本の シールが 入っている）');
+  ok(await tp.isVisible('.stage') && await tp.locator('.stnote .s').count() > 0, '③ 見られる班の 画面（見本の シールが 1まいずつ）');
   await tp.click('.trial [data-act=trial-go][data-n="3"]');
-  ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
+  ok(await tp.isVisible('h2:has-text("シールの 集計")') && (await tp.$$eval('table.tally td.num:not(.zero)', els => els.length)) > 0, '③ 先生の 集計（見本の シールが 入っている）');
+  await tp.click('.trial [data-act=trial-go][data-n="4"]');
+  ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=stage]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
   await tp.screenshot({ path: SHOTS + '/14-trial.png' });
   ok(await page.evaluate(() => localStorage.getItem('toiboard.v3')) === realBefore, '体験の データは 本番の 保存場所に 入らない');
   await tp.close();
@@ -613,6 +615,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // 先生は 付箋を 完全に 消せる（2回 押して 確定）
   await who('teacher'); await page.click('[data-act=ttab][data-k=board]');
   const pid = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).id);
+  await page.click(`#board .note[data-id="${pid}"]`);
+  ok(await page.isVisible('.bignote #w-text') && !(await page.isVisible('[data-act=done]')) && !(await page.isVisible('[data-act=toface]')), '先生は 児童の 付箋の 文字を 直せる（しるし・移動の ボタンは 出ない）');
+  await page.fill('#w-text', '先生が 直した 問い'); await page.keyboard.press('Escape');
+  ok(await page.evaluate(id => item(id).text, pid) === '先生が 直した 問い', '先生の 直した 文が 保存される');
   await page.click(`#board .note[data-id="${pid}"]`);
   await page.click(`[data-act=purge][data-id="${pid}"]`);
   ok(await page.isVisible('text=もう一度 押すと 完全に 消えます（もどせません）') && await page.evaluate(id => !!item(id), pid), '完全削除は 1回目では 消えず、もどせないと 知らせる');
