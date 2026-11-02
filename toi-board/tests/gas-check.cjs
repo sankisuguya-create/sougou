@@ -15,21 +15,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function makeGas() {
   const sheets = {}, props = {}, cache = {};
   let user = '';
+  /* スプレッドシートと 同じく、文字列の「1-1」は 日付に、数字だけの 文字列は 数に 自動で 変える（書式を 文字（@）に した 列は 変えない） */
+  function auto(v, isText) {
+    if (isText || typeof v !== 'string') return v;
+    let m = v.match(/^(\d{1,2})-(\d{1,2})$/);
+    if (m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) return new Date(2026, +m[1] - 1, +m[2]);
+    if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    return v;
+  }
   function Sheet(name) {
-    const data = [];
+    const data = [], textCols = new Set();
     const sh = {
       name, data,
       getLastRow: () => data.length,
       getLastColumn: () => data.reduce((m, r) => Math.max(m, r.length), 0),
       getRange: (r, c, nr = 1, nc = 1) => ({
         getValues: () => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => { const row = data[r - 1 + i] || []; const v = row[c - 1 + j]; return v === undefined ? '' : v; })),
-        setValues: vals => { vals.forEach((row, i) => { while (data.length < r + i) data.push([]); row.forEach((v, j) => { data[r - 1 + i][c - 1 + j] = v; }); }); }
-      })
+        setValues: vals => { vals.forEach((row, i) => { while (data.length < r + i) data.push([]); row.forEach((v, j) => { data[r - 1 + i][c - 1 + j] = (r + i === 1) ? v : auto(v, textCols.has(c + j)); }); }); },
+        setNumberFormat: f => { if (f === '@') for (let j = 0; j < nc; j++) textCols.add(c + j); }
+      }),
+      getMaxRows: () => Math.max(1000, data.length), getMaxColumns: () => 26
     };
     return sh;
   }
   const ss = {
-    getName: () => 'といボード（模擬）',
+    getName: () => 'といボード（模擬）', getSpreadsheetTimeZone: () => 'Asia/Tokyo',
     getSheetByName: n => sheets[n] || null,
     insertSheet: n => (sheets[n] = Sheet(n))
   };
@@ -39,7 +49,7 @@ function makeGas() {
     CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), getAll: ks => { const o = {}; ks.forEach(k => { if (k in cache) o[k] = cache[k]; }); return o; }, put: (k, v) => { cache[k] = String(v); }, putAll: o => Object.assign(cache, o), remove: k => delete cache[k], removeAll: ks => ks.forEach(k => delete cache[k]) }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Session: { getActiveUser: () => ({ getEmail: () => user }) },
-    Utilities: { DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
+    Utilities: { formatDate: (d, tz, f) => f === 'M-d' ? (d.getMonth() + 1) + '-' + d.getDate() : String(d), DigestAlgorithm: { MD5: 'md5' }, computeDigest: (a, s) => Array.from(crypto.createHash('md5').update(s).digest()).map(b => (b > 127 ? b - 256 : b)) },
     HtmlService: {}, Logger: { log: () => {} },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/a/macros/x/s/ID/exec' }) },
     JSON, Date, Number, String, Math, Error, Object
@@ -395,6 +405,25 @@ function makeGas() {
   const small = await open('a05' + D, 800);
   ok(await small.isVisible('[data-act=add]'), '幅 800 でも 付箋を 書ける');
 
+  // 組を 数字（1・2）で 書いた 学校：班の 名前「1-1」が 日付に 変わっても、班の 付箋が 見えて 消えない
+  {
+  const N = makeGas(); N.ctx.setup();
+  N.fill('名簿', [['n1' + D, 1, 1, 1], ['n2' + D, 1, 1, 2], ['n3' + D, 1, 2, 3]]);
+  N.fill('スポット', [[1, 1, '甲山'], [1, 2, '夙川']]);
+  N.as('n1' + D, 'apply', [{ up: [{ id: 'm1', kind: 'note', team: '1-1', face: 'front', x: 1, y: 1, text: 'n1 の 付箋' }], del: [], star: [] }]);
+  N.as('n2' + D, 'apply', [{ up: [{ id: 'm2', kind: 'note', team: '1-1', face: 'front', x: 9, y: 1, text: 'n2 の 付箋' }], del: [], star: [] }]);
+  const b2 = N.as('n2' + D, 'boot');
+  ok(b2.me.team === '1-1' && ['m1', 'm2'].every(id => b2.items.some(x => x.id === id)), '組が 数字でも、同じ班の 子の 付箋が 見える（n2 に n1 の 付箋が 届く）');
+  const r2 = N.as('n2' + D, 'apply', [{ up: [{ id: 'm1', team: '1-1', p: { x: 20 }, u: [] }], del: [], star: [] }]);
+  ok(r2.rejected.length === 0 && JSON.parse(N.sheets.items.data.find(x => x[0] === 'm1')[3]).x === 20, '組が 数字でも、同じ班の 付箋を 動かせる（はねられない）');
+  const b3 = N.as('n3' + D, 'boot');
+  ok(!b3.items.some(x => x.id === 'm1'), '組が 数字でも、ほかの班には 見えない');
+  ok(typeof N.sheets.items.data[1][1] === 'string', 'items の 班の 列は 文字の まま 残る（日付に ならない）');
+  // すでに 日付に 変わって しまった データ（直す 前の 版で 書いた 分）も 読める
+  N.sheets.items.data.push(['old1', new Date(2026, 0, 1), 'front', JSON.stringify({ id: 'old1', kind: 'note', team: '1-1', face: 'front', x: 1, y: 9, text: '前の 版で 書いた 付箋' }), 1, false, 'n1' + D, new Date()]);
+  const b4 = N.as('n2' + D, 'boot');
+  ok(b4.items.some(x => x.id === 'old1'), 'すでに 日付に 変わった 班の 値も「1-1」と して 読める（前に 書いた 付箋も 見える）');
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

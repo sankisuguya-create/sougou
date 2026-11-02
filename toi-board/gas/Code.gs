@@ -35,6 +35,7 @@ function setup(){
   Object.keys(HEAD).forEach(function(n){
     var sh = ss.getSheetByName(n) || ss.insertSheet(n);
     if(sh.getLastRow() === 0) sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]);
+    textFormat_(n, sh);
   });
   // 版が もう あれば さわらない（0 に もどすと、児童の 画面が 以後の 書きこみを 取りに 行かなくなる）
   var pr = PropertiesService.getScriptProperties();
@@ -47,7 +48,7 @@ function sheet_(n){
   var ss = SpreadsheetApp.getActive();
   if(!ss) throw new Error('NO_SPREADSHEET：スプレッドシートの「拡張機能 → Apps Script」から 作った スクリプトに 貼ってください（単独の スクリプトでは 動きません）');
   var sh = ss.getSheetByName(n);
-  if(!sh){ sh = ss.insertSheet(n); sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]); }
+  if(!sh){ sh = ss.insertSheet(n); sh.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]); textFormat_(n, sh); }
   return sh;
 }
 /* エディタで 実行：動かない 時の 原因を ログに 出す（実行ログで 見る） */
@@ -69,9 +70,33 @@ function selfCheck(){
   Logger.log(out.join('\n'));
   return out.join('\n');
 }
+/* 班（1-1 など）や id を 入れる 列。スプレッドシートは「1-1」を 日付に、「12」を 数に 自動で 変えるので、
+   この 列だけ 書式を 文字（@）に する。シート全体を 文字に すると 削除の 印（false）が 文字の "FALSE" に なり、消えた 扱いに なるので しない */
+var TEXT_COLS = {items:[1, 2, 3], stars:[1, 2, 3, 4, 7], comments:[1, 2, 3, 4], modes:[1]};
+function textFormat_(n, sh){
+  (TEXT_COLS[n] || []).forEach(function(c){ sh.getRange(1, c, sh.getMaxRows(), 1).setNumberFormat('@'); });
+}
+/* いまの シートにも 1回だけ 書式を かける（版を 上げた 時、setup を し忘れても 効く） */
+function ensureFormat_(){
+  if(cache_().get('fmt1')) return;
+  var pr = props_();
+  if(!pr.getProperty('fmt1')){ Object.keys(TEXT_COLS).forEach(function(n){ textFormat_(n, sheet_(n)); }); pr.setProperty('fmt1', '1'); }
+  cache_().put('fmt1', '1', 21600);
+}
+/* すでに 日付に 変わってしまった 値を「1-1」に もどして 読む */
+function fixText_(v, tz){
+  if(Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz, 'M-d');
+  return v;
+}
 function rows_(n){
   var sh = sheet_(n), last = sh.getLastRow();
-  return last < 2 ? [] : sh.getRange(2, 1, last - 1, HEAD[n].length).getValues();
+  if(last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, HEAD[n].length).getValues(), cols = TEXT_COLS[n];
+  if(cols){
+    var tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+    vals.forEach(function(r){ cols.forEach(function(c){ r[c - 1] = fixText_(r[c - 1], tz); }); });
+  }
+  return vals;
 }
 function low_(s){ return String(s || '').trim().toLowerCase(); }
 function props_(){ return PropertiesService.getScriptProperties(); }
@@ -173,6 +198,7 @@ function anon_(viewer){
 /* 開いた時に 1回。モードも ここで 渡す（モードを 変えたら 先生の 合図で 児童が ページを 更新する） */
 function boot(){
   var u = who_();
+  ensureFormat_();
   var roster = u.role === 'teacher'
     ? rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).map(function(r){ var cls = String(r[1]).trim(); return {id:low_(r[0]), cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; })
     : [{id:u.id, cls:u.cls, team:u.team, no:u.no}];
@@ -252,6 +278,7 @@ function pull_(u, spec){
 /* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
 function apply(ops){
   var u = who_(), lock = LockService.getScriptLock();
+  ensureFormat_();
   lock.waitLock(20000);
   try{
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
