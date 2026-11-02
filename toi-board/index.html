@@ -158,8 +158,9 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .sheet{background:#fff;width:min(720px,100%);border-radius:16px 16px 0 0;padding:16px;max-height:85vh;overflow:auto}
 .sheet h2{margin:0 0 10px;font-size:18px}
 /* 付箋を 大きく 出して その上で 書く・直す */
-.sheet.bigsheet{width:min(940px,96vw);border-radius:16px;max-height:94vh}
-.sheet-bg.bigsheet{align-items:center}
+.sheet.bigsheet{width:min(940px,96vw);border-radius:16px 16px 0 0;max-height:80vh}
+.sheet-bg.bigsheet{flex-direction:column;align-items:center;justify-content:flex-end}
+.sheet-bg.bigsheet .seeds{position:static;transform:none;animation:none;width:min(940px,96vw);box-sizing:border-box;border:2px solid var(--cat-2);border-radius:18px;margin:0 0 10px;flex:none}
 .bigwrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
 .bignote{position:relative;flex:none;width:min(400px,100%);min-height:280px;padding:26px 20px 20px;background:var(--fill-b);box-shadow:0 4px 12px rgba(0,0,0,.22);border-radius:3px;margin-top:10px}
 .bignote::before{content:"";position:absolute;top:-10px;left:50%;width:110px;height:22px;margin-left:-55px;background:rgba(255,255,255,.7);box-shadow:0 0 1px rgba(0,0,0,.2)}
@@ -726,7 +727,6 @@ function render(){
   h += isTeacher() ? viewTeacher() : viewChild();
   if(TRIAL) h += trialHTML();
   if(ui.sheet) h += viewSheet();
-  if(ui.sheet && (ui.sheet.type === 'write' || ui.sheet.type === 'note') && ui.sheet.seeds) h += seedsHTML();
   if(ui.toast) h += '<div class="toast">' + esc(ui.toast) + '</div>';
   var sc = document.querySelector('.wrap'), pos = sc ? [sc.scrollLeft, sc.scrollTop] : null;
   var tt = document.querySelector('.ttable'), tpos = tt ? tt.scrollTop : null;
@@ -861,7 +861,7 @@ function viewChild(){
 }
 
 function viewSheet(){
-  var s = ui.sheet, win = s.type === 'search', big = s.type === 'write' || s.type === 'note', h = '<div class="sheet-bg' + (win ? ' win' : big ? ' bigsheet' : '') + '" data-act="close"><div class="sheet' + (win ? ' win' : big ? ' bigsheet' : '') + '">';
+  var s = ui.sheet, win = s.type === 'search', big = s.type === 'write' || s.type === 'note', h = '<div class="sheet-bg' + (win ? ' win' : big ? ' bigsheet' : '') + '" data-act="close">' + (big && s.seeds ? seedsHTML() : '') + '<div class="sheet' + (win ? ' win' : big ? ' bigsheet' : '') + '">';
   if(s.type === 'write'){
     h += '<div class="ngrid"><div class="ncol"></div><div class="bignote' + (s.gift ? ' gift' : '') + '"><textarea id="w-text" maxlength="200" placeholder="' + (s.gift ? teamLabel(boardTeam()) + 'へ おくる アイデア' : '問いを 書こう') + '">' + esc(s.text || '') + '</textarea></div>'
       + '<div class="ncol r"></div></div>'
