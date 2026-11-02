@@ -19,7 +19,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v3')));
   const write = async t => { await page.click('[data-act=add]'); await page.fill('#w-text', t); await page.press('#w-text', 'Enter'); };
   const box = async id => page.locator(`#board .note[data-id="${id}"]`).boundingBox();
-  const dragTo = async (id, x, y) => { const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
+  // 動かす・枠は 整理役だけ：まだ だれも 整理役で なければ「整理する」を 押す
+  const claim = async () => { if (await page.isVisible('[data-act=org-claim]')) { await page.click('[data-act=org-claim]'); await page.waitForTimeout(30); } };
+  const dragTo = async (id, x, y) => { await claim(); const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
 
   await who('A01');
   for (const q of ['どうして うめたの？', 'いつ なくなったの？', 'ホームベースは 本物なの？', 'だれが きめたの？']) await write(q);
@@ -76,7 +78,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click(`#board .note[data-id="${e}"]`);
   s = await st();
   ok(s.items.some(x => x.kind === 'arrow' && x.from === c && x.to === e), '2まいを タップすると 矢印で つながる');
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   s = await st();
   ok(s.items.some(x => x.kind === 'frame'), '枠を おける');
   await page.screenshot({ path: SHOTS + '/3-arrow-frame.png' });
@@ -339,6 +341,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const tops = await page.evaluate(() => { const ns = S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); return [ns[0].id, ns[1].id]; });
   await page.waitForTimeout(200);
   for (const id of tops) await page.locator(`#board .note[data-id="${id}"]`).scrollIntoViewIfNeeded();
+  await claim();
   const sk1 = await box(tops[1]); const sk0 = await box(tops[0]);
   await page.mouse.move(sk1.x + 30, sk1.y + 30); await page.mouse.down(); await page.mouse.move(sk1.x + 60, sk1.y + 60, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
   const lay = await page.$eval(`#board .note[data-id="${tops[0]}"] .layer`, el => el.style.transform);
@@ -473,13 +476,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // 枠：タイトル案ボタン／タイトルを 辺の 上で ドラッグ
   await who('A01'); await page.click('.face[data-face=front]');
   await page.evaluate(() => { const sc = document.querySelector('.wrap'); sc.scrollTop = 0; });
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   const fid = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
   await page.click(`#board .frame[data-id="${fid}"] .label`);
   ok(await page.locator('.tsug .btn').count() === 6 && await page.isVisible('.tsug .btn:has-text("ヘルプミー！")'), '枠の 設定に タイトル案が 6つ ある');
   await page.click('.tsug .btn:has-text("本命こうほ")');
   ok(await page.inputValue('#f-text') === '本命こうほ', 'タイトル案を 押すと 欄に 入る');
   await page.click('[data-act=f-save]');
+  await claim();
   const fb = await page.locator(`#board .frame[data-id="${fid}"]`).boundingBox();
   const lb = await page.locator(`#board .frame[data-id="${fid}"] .label`).boundingBox();
   await page.mouse.move(lb.x + 10, lb.y + lb.height / 2); await page.mouse.down();
@@ -560,7 +564,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // CDP で 文書を 読むと file:// では ブラウザが この 警告を 出す（アプリの エラーでは ない）
   for (let i = errors.length - 1; i >= e0; i--) if (/Unsafe attempt to load URL file:/.test(errors[i])) errors.splice(i, 1);
   // ・消す 操作は 注意色
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   const fid2 = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
   await page.click(`#board .frame[data-id="${fid2}"] .label`);
   const dc = await page.$eval('.sheet [data-act=del]', el => getComputedStyle(el).color);

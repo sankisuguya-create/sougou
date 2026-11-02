@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 7;
+var API_VER = 8;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -194,6 +194,62 @@ function anon_(viewer){
   return 'o' + d.slice(0, 5).map(function(b){ return ((b + 256) % 256).toString(16); }).join('');
 }
 
+/* ===== 整理役（班に 1人・5分） =====
+   付箋を 動かす・枠を 置く／大きさを 変える／動かす のは 整理役だけ。
+   2人に なるくらいなら だれも いない ほうが よい ので、決めるのは ロックの 中だけ、確かでない 時は「いない」に 倒す */
+var ORG_MS = 5 * 60 * 1000;
+function orgGet_(teams){
+  var now = Date.now(), out = {};
+  if(!teams.length) return out;
+  var got = cache_().getAll(teams.map(function(t){ return 'org:' + t; })) || {};
+  teams.forEach(function(t){
+    var c = got['org:' + t]; if(!c) return;
+    try{ var o = JSON.parse(c); if(o && o.until > now) out[t] = o; }catch(e){}
+  });
+  return out;
+}
+function orgPut_(team, o){
+  if(o) cache_().put('org:' + team, JSON.stringify(o), Math.ceil((o.until - Date.now()) / 1000) + 5);
+  else cache_().remove('org:' + team);
+}
+/* 児童に 見せる 形：自分か どうか と 番号 と のこり（メールは 出さない） */
+function orgView_(u, m){
+  var out = {}, now = Date.now();
+  Object.keys(m).forEach(function(t){ var o = m[t]; out[t] = {mine:o.id === u.id, no:o.no, left:o.until - now, by:o.by || ''}; });
+  return out;
+}
+function isOrg_(u){ var o = orgGet_([u.team])[u.team]; return !!(o && o.id === u.id); }
+/* 児童：「整理する」（先着）／「おわる」 */
+function orgClaim(){
+  var u = who_(); if(u.role !== 'child') throw new Error('NOT_CHILD');
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try{
+    var cur = orgGet_([u.team])[u.team];
+    if(cur && cur.id !== u.id) return {ok:false, org:orgView_(u, mapOf_(u.team, cur))};
+    var o = {id:u.id, no:u.no, until:Date.now() + ORG_MS};
+    orgPut_(u.team, o);
+    return {ok:true, org:orgView_(u, mapOf_(u.team, o))};
+  } finally { lock.releaseLock(); }
+}
+function orgRelease(){
+  var u = who_(); var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try{ var cur = orgGet_([u.team])[u.team]; if(cur && cur.id === u.id) orgPut_(u.team, null); return {ok:true, org:{}}; }
+  finally { lock.releaseLock(); }
+}
+/* 先生：班の 整理役を 決める（番号）／はずす（no を 空に） */
+function orgSet(team, no){
+  var u = who_(); if(u.role !== 'teacher') throw new Error('NOT_TEACHER');
+  team = String(team);
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try{
+    if(!no){ orgPut_(team, null); return {ok:true}; }
+    var sl = slots_(), id = Object.keys(sl).filter(function(k){ return sl[k].team === team && sl[k].no === Number(no); })[0];
+    if(!id) return {ok:false};
+    orgPut_(team, {id:id, no:Number(no), until:Date.now() + ORG_MS, by:'先生'});
+    return {ok:true};
+  } finally { lock.releaseLock(); }
+}
+
 /* ===== 画面から 呼ぶ ===== */
 /* 開いた時に 1回。モードも ここで 渡す（モードを 変えたら 先生の 合図で 児童が ページを 更新する） */
 function boot(){
@@ -215,6 +271,7 @@ function boot(){
     var sl = slots_(); u.mates = Object.keys(sl).filter(function(k){ return sl[k].team === u.team; }).map(function(k){ return {slot:sl[k].slot, no:sl[k].no, id:k === u.id ? u.id : 'm' + sl[k].slot}; }).sort(function(a, b){ return a.slot - b.slot; });
   }
   p.mver = getMver_();
+  p.org = orgView_(u, orgGet_(u.role === 'teacher' ? spots_().map(function(s){ return s.team; }) : [u.team]));
   p.api = API_VER; p.trialUrl = (function(){ try{ return ScriptApp.getService().getUrl() + '?trial=1'; }catch(e){ return ''; } })(); p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
@@ -227,8 +284,9 @@ function poll(req){
   var u = who_(); req = req || {};
   if(u.role === 'teacher'){
     var v = getVer_(), since = Number(req.all || 0);
-    if(since && v === since) return {same:true};
-    var p = pull_(u, since); p.all = v; p.mver = getMver_(); return p;
+    var orgT = orgView_(u, orgGet_(spots_().map(function(s){ return s.team; })));
+    if(since && v === since) return {same:true, org:orgT};
+    var p = pull_(u, since); p.all = v; p.mver = getMver_(); p.org = orgT; return p;
   }
   var mv = getMver_(), extra = req.mv !== undefined && String(req.mv) !== mv ? {modes:modes_(), mver:mv} : null;
   var teams = req.teams || {}, names = Object.keys(teams).slice(0, 30), want = {}, cur = {}, changed = false;
@@ -238,8 +296,9 @@ function poll(req){
     cur[t] = c;
     if(!since || c > since){ want[t] = since; changed = true; }
   });
-  if(!changed){ var s0 = {same:true}; if(extra){ s0.same = false; s0.items = []; s0.stars = []; s0.comments = []; s0.fullTeams = []; s0.modes = extra.modes; s0.mver = extra.mver; s0.tv = cur; } return s0; }
-  var q = pull_(u, want); q.tv = cur; if(extra){ q.modes = extra.modes; q.mver = extra.mver; } return q;
+  var orgC = orgView_(u, orgGet_([u.team]));
+  if(!changed){ var s0 = {same:true, org:orgC}; if(extra){ s0.same = false; s0.items = []; s0.stars = []; s0.comments = []; s0.fullTeams = []; s0.modes = extra.modes; s0.mver = extra.mver; s0.tv = cur; } return s0; }
+  var q = pull_(u, want); q.tv = cur; q.org = orgC; if(extra){ q.modes = extra.modes; q.mver = extra.mver; } return q;
 }
 
 /* spec：数（学年全部を その版より 新しい分）または {班:版}（その班だけ） */
@@ -303,6 +362,8 @@ function apply(ops){
     }
 
     var KEEP = ['id', 'team', 'author', 'fromTeam'];  // 変わった 項目として 送られても 変えない
+    var ARRANGE = ['x', 'y', 'w', 'h', 'stackOf', 'lp'], orgOk = null;
+    function canArrange(){ if(orgOk === null) orgOk = u.role === 'child' && isOrg_(u); return orgOk; }
     (ops.up || []).forEach(guard_(rejected, function(x){ return String(x && x.id || ''); }, function(x){
       var id = String(x && x.id || '');
       if(x && x.p && typeof x.p === 'object'){
@@ -311,6 +372,8 @@ function apply(ops){
         if(!er || er[5] || u.role !== 'child' || String(er[1]) !== u.team){ rejected.push(id); return; }
         var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
         if(!cur){ rejected.push(id); return; }
+        var moves = Object.keys(x.p).concat(x.u || []).some(function(k){ return ARRANGE.indexOf(k) >= 0; });
+        if(moves && !canArrange() && !(cur.face === 'trash' || x.p.face)){ rejected.push(id); return; }
         Object.keys(x.p).forEach(function(k){ if(KEEP.indexOf(k) < 0) cur[k] = x.p[k]; });
         (x.u || []).forEach(function(k){ if(KEEP.indexOf(k) < 0) delete cur[k]; });
         if(KINDS.indexOf(cur.kind) < 0 || FACE_KEYS.indexOf(cur.face) < 0){ rejected.push(id); return; }
@@ -334,6 +397,7 @@ function apply(ops){
         if(old && old.fromTeam) x.fromTeam = old.fromTeam; else delete x.fromTeam;
       } else if(x.team === u.team){
         if(x.face === 'gift'){ rejected.push(id); return; }
+        if(x.kind === 'frame' && !canArrange()){ rejected.push(id); return; }
         x.author = u.id; delete x.fromTeam;
       } else {
         // アイデア提案：ほかの班の いただきものへ 付箋を 1まい 置くだけ
@@ -348,6 +412,7 @@ function apply(ops){
       id = String(id);
       var i = index[id];
       if(i === undefined || i < 0 || u.role !== 'child' || String(irows[i][1]) !== u.team){ rejected.push(id); return; }
+      if(String(irows[i][3]).indexOf('"kind":"frame"') >= 0 && !canArrange()){ rejected.push(id); return; }
       var r = irows[i].slice(); r[4] = v; r[5] = true; r[6] = u.id; r[7] = now;
       writeRow(id, r);
     }));

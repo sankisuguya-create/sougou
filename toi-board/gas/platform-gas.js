@@ -127,6 +127,7 @@ var Platform = (function(){
           if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
+          window.__bootOrg = r.org || {};
           cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
           loop();
           // 前に 送れなかった 変更が 端末に あれば 送り直す
@@ -182,6 +183,16 @@ var Platform = (function(){
     },
     loading:function(team){ return role !== 'teacher' && team === watching && !got[team]; },
     setMe:function(){},
+    /* 整理役：サーバーが ロックの 中で 決める（返事が 来るまで 整理役に しない） */
+    org:function(act, arg, cb){
+      var fn = act === 'claim' ? 'orgClaim' : act === 'release' ? 'orgRelease' : 'orgSet';
+      var args = act === 'set' ? [arg.team, arg.no] : [];
+      run(fn, args, function(r){
+        if(r && r.org) setOrg(r.org);
+        if(act === 'set' || act === 'release') pull();
+        cb(r);
+      }, function(){ cb({ok:false}); });
+    },
     state:function(){ return {mver:mver, tv:tv, polling:polling, role:role}; }
   };
 })();

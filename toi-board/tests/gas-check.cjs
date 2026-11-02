@@ -121,11 +121,12 @@ function makeGas() {
   await write(a02, 'いつ できたの？');
   await settle();
   const ids = await a01.evaluate(() => S.items.filter(x => x.face === 'front').map(x => x.id));
+  G.as('a01' + D, 'orgClaim');  // 動かすのは 整理役（a01）
   await a01.evaluate(id => commit(() => { item(id).x = 20; }), ids[0]);
-  await a02.evaluate(id => commit(() => { item(id).x = 30; }), ids[1]);
+  await a02.evaluate(id => commit(() => { item(id).text = 'a02 が 直した'; }), ids[1]);
   await settle();
-  const xs = await a01.evaluate(ids => ids.map(id => item(id).x), ids);
-  ok(xs[0] === 20 && xs[1] === 30, '同じ班の 2人の 変更が 両方 のこる');
+  const xs = await a01.evaluate(ids => [item(ids[0]).x, item(ids[1]).text], ids);
+  ok(xs[0] === 20 && xs[1] === 'a02 が 直した', '同じ班の 2人の 変更が 両方 のこる（整理役が 動かし、ほかの 子が 文を 直す）');
 
   // B組：モードが 切なら ほかの班は 見えない。サーバーも 送らない
   ok(!(await b01.isVisible('[data-act=look]')), 'モードが 切なら ほかの班の ボタンは 出ない');
@@ -269,6 +270,7 @@ function makeGas() {
   const nid2 = 'safe1';
   G.as('a01' + D, 'apply', [{ up: [{ id: nid2, kind: 'note', team: 'A-1', face: 'front', x: 2, y: 30, text: 'もとの 文' }], del: [], star: [] }]);
   G.as('a02' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { text: 'B が 直した 文' }, u: [] }], del: [], star: [] }]);
+  G.as('a01' + D, 'orgClaim');
   G.as('a01' + D, 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { x: 9 }, u: [] }], del: [], star: [] }]);  // A は 古い 画面のまま 動かした
   const got1 = JSON.parse(G.sheets.items.data.find(r => r[0] === nid2)[3]);
   ok(got1.text === 'B が 直した 文' && got1.x === 9, '同じ 付箋を 2人が 別々に 変えても 両方 のこる（文は 消えない）');
@@ -305,6 +307,7 @@ function makeGas() {
   const sid = await a01.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 30, y: 2, text: 'はじめ', author: me }); }); return id; });
   await settle();
   await a02.evaluate(id => commit(() => { item(id).text = 'B が 直した'; }), sid);
+  G.as('a01' + D, 'orgClaim');
   await a01.evaluate(id => commit(() => { item(id).x = 33; }), sid);   // a01 は まだ「はじめ」の 画面
   await settle(); await settle();
   const sv = JSON.parse(G.sheets.items.data.find(r => r[0] === sid)[3]);
@@ -383,6 +386,41 @@ function makeGas() {
   ok(/スプレッドシートに つながっているか：はい/.test(G.as('ta@edu.nishi.or.jp', 'selfCheck')), 'selfCheck で 原因を しらべられる');
   }
 
+  // 整理役：班に 1人・先着・5分。2人には ならない。動かす・枠は 整理役だけ
+  {
+  const O = makeGas(); O.ctx.setup();
+  O.fill('名簿', [['p1' + D, 'A', 1, 1], ['p2' + D, 'A', 1, 2], ['p3' + D, 'A', 2, 3]]);
+  O.fill('先生', [['tt@edu.nishi.or.jp', 'A']]);
+  O.fill('スポット', [['A', 1, '甲山'], ['A', 2, '夙川']]);
+  O.as('p1' + D, 'apply', [{ up: [{ id: 'q1', kind: 'note', team: 'A-1', face: 'front', x: 1, y: 1, text: 'うごかす 付箋' }], del: [], star: [] }]);
+  let ro = O.as('p2' + D, 'apply', [{ up: [{ id: 'q1', team: 'A-1', p: { x: 9 }, u: [] }, { id: 'fr1', kind: 'frame', team: 'A-1', face: 'front', x: 1, y: 1, w: 8, h: 6, text: '' }], del: [], star: [] }]);
+  ok(ro.rejected.includes('q1') && ro.rejected.includes('fr1'), '整理役が いない 時は だれも 付箋を 動かせない・枠を 置けない');
+  const c1 = O.as('p1' + D, 'orgClaim'), c2 = O.as('p2' + D, 'orgClaim');
+  ok(c1.ok && c1.org['A-1'].mine && !c2.ok && c2.org['A-1'].no === 1 && !c2.org['A-1'].mine, '「整理する」は 先着1人（2人目は ことわられ、だれが 整理中か 知らされる）');
+  ok(O.as('p3' + D, 'orgClaim').ok, 'ほかの班の 整理役は べつ');
+  ro = O.as('p2' + D, 'apply', [{ up: [{ id: 'q1', team: 'A-1', p: { x: 9 }, u: [] }], del: [], star: [] }]);
+  ok(ro.rejected.includes('q1'), '整理役で ない 子は 動かせない（サーバーでも）');
+  ro = O.as('p2' + D, 'apply', [{ up: [{ id: 'q1', team: 'A-1', p: { text: '文は 直せる' }, u: [] }], del: [], star: [] }]);
+  ok(ro.rejected.length === 0, '整理役で なくても 文は 直せる');
+  ro = O.as('p1' + D, 'apply', [{ up: [{ id: 'q1', team: 'A-1', p: { x: 9 }, u: [] }, { id: 'fr1', kind: 'frame', team: 'A-1', face: 'front', x: 1, y: 1, w: 8, h: 6, text: '' }], del: [], star: [] }]);
+  ok(ro.rejected.length === 0, '整理役は 動かせて 枠も 置ける');
+  const pv = O.as('p2' + D, 'poll', [{ teams: { 'A-1': 999999 } }]);
+  ok(pv.org && pv.org['A-1'] && pv.org['A-1'].no === 1 && pv.org['A-1'].left > 290000 && !JSON.stringify(pv.org).includes('@'), 'ふだんの 確認で 整理役（番号・のこり時間）が 届く（メールは 届かない）');
+  // 5分で 切れる
+  const realNow = Date.now; O.ctx.Date = Object.assign(function(...a){ return new Date(...a); }, { now: () => realNow() + 5 * 60 * 1000 + 1000 });
+  O.ctx.Date.prototype = Date.prototype;
+  const c3 = O.as('p2' + D, 'orgClaim');
+  O.ctx.Date = Date;
+  ok(c3.ok, '5分たつと 整理役は 自動で はずれ、ほかの 子が なれる');
+  // 先生が 決める・はずす
+  O.as('tt@edu.nishi.or.jp', 'orgSet', ['A-1', 1]);
+  ok(O.as('p1' + D, 'poll', [{ teams: { 'A-1': 999999 } }]).org['A-1'].mine && !O.as('p2' + D, 'orgClaim').ok, '先生が 整理役を 決められる（ほかの 子は なれない）');
+  O.as('tt@edu.nishi.or.jp', 'orgSet', ['A-1', 0]);
+  ok(!O.as('p1' + D, 'poll', [{ teams: { 'A-1': 999999 } }]).org['A-1'], '先生が 整理役を はずせる');
+  let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
+  ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
+  }
+
   // 先生の 一覧
   await ta.click('[data-act=ttab][data-k=list]');
   await ta.click('[data-act=fface][data-f=all]');
@@ -414,6 +452,7 @@ function makeGas() {
   N.as('n2' + D, 'apply', [{ up: [{ id: 'm2', kind: 'note', team: '1-1', face: 'front', x: 9, y: 1, text: 'n2 の 付箋' }], del: [], star: [] }]);
   const b2 = N.as('n2' + D, 'boot');
   ok(b2.me.team === '1-1' && ['m1', 'm2'].every(id => b2.items.some(x => x.id === id)), '組が 数字でも、同じ班の 子の 付箋が 見える（n2 に n1 の 付箋が 届く）');
+  N.as('n2' + D, 'orgClaim');
   const r2 = N.as('n2' + D, 'apply', [{ up: [{ id: 'm1', team: '1-1', p: { x: 20 }, u: [] }], del: [], star: [] }]);
   ok(r2.rejected.length === 0 && JSON.parse(N.sheets.items.data.find(x => x[0] === 'm1')[3]).x === 20, '組が 数字でも、同じ班の 付箋を 動かせる（はねられない）');
   const b3 = N.as('n3' + D, 'boot');
