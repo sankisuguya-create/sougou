@@ -157,6 +157,10 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:#fff;width:min(720px,100%);border-radius:16px 16px 0 0;padding:16px;max-height:85vh;overflow:auto}
 .sheet h2{margin:0 0 10px;font-size:18px}
+.nhead{display:flex;align-items:flex-start;gap:12px}.nhead h2{flex:1}
+.likebtn{flex:none;width:64px;height:64px;border:2px solid var(--line);border-radius:50%;background:#fff;display:grid;place-items:center;opacity:.55;filter:grayscale(1)}
+.likebtn.on{opacity:1;filter:none;border-color:var(--ink)}
+.grp{border-top:1px solid var(--line);margin-top:10px;padding-top:6px}.glabel{font-size:13px;font-weight:700;color:var(--sub)}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .row .btn{min-height:56px}
 textarea{width:100%;font:inherit;font-size:20px;padding:10px;border:2px solid var(--ink);border-radius:10px;min-height:96px}
@@ -842,22 +846,27 @@ function viewSheet(){
     });
     h += '<div class="row"><button class="btn" data-act="close">とじる</button></div>';
   } else if(s.type === 'note'){
-    var n = item(s.id), kids = stackOf(n.id), ed = canEdit() && n.face !== 'trash';
-    h += '<h2>' + esc(n.text) + '</h2>';
+    var n = item(s.id), kids = stackOf(n.id), ed = canEdit() && n.face !== 'trash', likeBtn = '';
     if(canLike(n)){
       var liked = likesOf(n.id).some(function(x){ return x.viewer === me; });
-      h += '<div class="row"><button class="btn' + (liked ? ' on' : '') + '" data-act="like" data-id="' + n.id + '">' + sealImg('thumb', 24) + (liked ? ' いいねを はずす' : ' いいね（班の中）') + '</button></div>';
-    } else if(canStar(n) && n.team !== myTeam()){
+      likeBtn = '<button class="likebtn' + (liked ? ' on' : '') + '" data-act="like" data-id="' + n.id + '" aria-pressed="' + liked + '" aria-label="いいね" title="いいね">' + sealImg('thumb', 44) + '</button>';
+    }
+    h += '<div class="nhead"><h2>' + esc(n.text) + '</h2>' + likeBtn + '</div>';
+    if(!likeBtn && canStar(n) && n.team !== myTeam()){
       var on = starsOf(n.id).some(function(x){ return x.viewer === me && kindOf(x) === 'star'; });
       h += '<div class="row"><button class="btn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '">' + sealImg('star', 28) + (on ? ' シールを はがす' : ' 面白い！シールを はる') + '</button></div>';
     }
     if(ed){
-      h += '<div class="row"><button class="btn" data-act="edit" data-id="' + n.id + '">文字を 直す</button></div>';
-      h += '<div class="row"><button class="btn' + (n.done ? ' on' : '') + '" data-act="done" data-id="' + n.id + '">' + (n.done ? '✓ 調査済み（はずす）' : '調査済み') + '</button></div>';
-      h += '<div class="row">' + (shownBefore(n) ? '<button class="btn" disabled>第' + showRound(n) + '回で えらんだ 付箋（もう えらべません）</button>' : '<button class="btn' + (shownNow(n) ? ' on' : '') + '" data-act="showcase" data-id="' + n.id + '">' + (shownNow(n) ? '★ 見てほしい付箋（はずす）' : '見てほしい付箋に する（第' + curRound(n.team) + '回）') + '</button>') + '</div>';
+      h += '<div class="grp"><span class="glabel">なおす・しるし</span><div class="row">'
+        + '<button class="btn" data-act="edit" data-id="' + n.id + '">✎ 文字を 直す</button>'
+        + '<button class="btn' + (n.done ? ' on' : '') + '" data-act="done" data-id="' + n.id + '">' + (n.done ? '✓ 調査済み（はずす）' : '調査済み') + '</button>'
+        + (shownBefore(n) ? '<button class="btn" disabled>第' + showRound(n) + '回で えらんだ 付箋（もう えらべません）</button>' : '<button class="btn' + (shownNow(n) ? ' on' : '') + '" data-act="showcase" data-id="' + n.id + '">' + (shownNow(n) ? '★ 見てほしい付箋（はずす）' : '見てほしい付箋に する（第' + curRound(n.team) + '回）') + '</button>')
+        + '</div></div>';
     }
     if(canEdit()){
-      h += '<div class="row">' + FACES.filter(function(f){ return f.k !== n.face && f.k !== 'gift'; }).map(function(f){ return '<button class="btn" data-act="toface" data-f="' + f.k + '" data-id="' + n.id + '">' + f.label + 'へ</button>'; }).join('') + '</div>';
+      h += '<div class="grp"><span class="glabel">うごかす（いまは ' + faceLabel(n.face) + '）</span><div class="row">'
+        + FACES.filter(function(f){ return f.k !== n.face && f.k !== 'gift'; }).map(function(f){ return '<button class="btn" data-act="toface" data-f="' + f.k + '" data-id="' + n.id + '">→ ' + f.label + 'へ</button>'; }).join('')
+        + '</div></div>';
     }
     if(kids.length){
       h += '<h2 style="margin-top:14px">重なっている 付箋（' + (kids.length + 1) + 'まい）</h2><div class="stacklist">' + noteHTML(n, {inline:true}).replace(/<div class="layer"[^>]*><\/div>/g, '');
@@ -1410,8 +1419,8 @@ var TRIAL_STEPS = [
   {who:'A01', title:'① ボードで 付箋を 編集する（児童）', items:[
     '左下の ＋ で 付箋を 書く。書く 画面の「？のたね」を 押すと 言葉が 入る',
     '左の「整理する」を 押すと 決まった 時間（先生が 3〜15分で 決める）だけ その子だけが 付箋・わくを うごかせる（班で 1人・先着）。付箋を ドラッグで うごかす。ほかの 付箋の 上に 落とすと 重なる（タップ →「いちばん 上に する」）',
-    '付箋を タップ →「調査済み」「見てほしい付箋に する」「うらがわへ」など',
-    '付箋を タップ →「いいね（班の中）」。いいねは 付箋の 右に、メンバーごとの 色で つく',
+    '付箋を タップ →「なおす・しるし」（文字・調査済み・見てほしい付箋）と「うごかす」（うらがわ・ゴミばこへ）',
+    '付箋を タップ → 右上の いいねシールを 押す（もう一度で はずす）。いいねは 付箋の 右に、メンバーごとの 色で つく',
     '左の 道具：やじるし（2まいを 順に タップ）・わく（タイトルを ドラッグで 辺の 上を うごかせる）・さがす（新しい順・あいうえお順など）・もどす（Ctrl+Z）',
     '上の タブで うらがわ・いただきもの・ゴミばこを 見る']},
   {who:'A05', title:'② シール貼り（児童）', items:[
