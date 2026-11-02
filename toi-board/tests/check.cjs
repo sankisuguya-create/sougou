@@ -59,6 +59,19 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(!(await page.isVisible('[data-act=mark]')) && !(await page.isVisible('[data-act=pick]')), '付箋の メニューに 印・えらぶ番号は ない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
   await page.click(`#board .note[data-id="${d}"]`);
+  // 大きい 付箋で そのまま 直す：ほかの ボタンを 押しても 直した 文は のこる
+  ok(await page.isVisible('.bignote #w-text'), '付箋を タップすると 大きい 付箋で 文字を 直せる');
+  await page.fill('#w-text', 'なおした 問い');
+  await page.click(`[data-act=toface][data-f=trash][data-id="${d}"]`);
+  s = await st();
+  ok(s.items.some(x => x.id === d && x.text === 'なおした 問い' && x.face === 'trash'), '直した 文は ほかの ボタンを 押しても 保存される');
+  await page.click('.face[data-face=trash]'); await page.click(`#board .note[data-id="${d}"]`);
+  await page.click(`[data-act=toface][data-f=front][data-id="${d}"]`); await page.click('.face[data-face=front]');
+  await page.click(`#board .note[data-id="${d}"]`);
+  await page.fill('#w-text', ''); await page.keyboard.press('Escape');
+  s = await st();
+  ok(s.items.some(x => x.id === d && x.text === 'なおした 問い'), '文を 空に して とじても もとの 文の まま');
+  await page.click(`#board .note[data-id="${d}"]`);
 
   // ゴミ箱（消えない）
   await page.click(`[data-act=toface][data-f=trash][data-id="${d}"]`);
