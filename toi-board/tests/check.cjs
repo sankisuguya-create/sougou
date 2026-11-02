@@ -19,7 +19,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const st = () => page.evaluate(() => JSON.parse(localStorage.getItem('toiboard.v3')));
   const write = async t => { await page.click('[data-act=add]'); await page.fill('#w-text', t); await page.press('#w-text', 'Enter'); };
   const box = async id => page.locator(`#board .note[data-id="${id}"]`).boundingBox();
-  const dragTo = async (id, x, y) => { const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
+  // 動かす・枠は 整理役だけ：まだ だれも 整理役で なければ「整理する」を 押す
+  const claim = async () => { if (await page.isVisible('[data-act=org-claim]')) { await page.click('[data-act=org-claim]'); await page.waitForTimeout(30); } };
+  const dragTo = async (id, x, y) => { await claim(); const b = await box(id); await page.mouse.move(b.x + 30, b.y + 30); await page.mouse.down(); await page.mouse.move(b.x + 60, b.y + 60, { steps: 4 }); await page.mouse.move(x, y, { steps: 8 }); await page.mouse.up(); };
 
   await who('A01');
   for (const q of ['どうして うめたの？', 'いつ なくなったの？', 'ホームベースは 本物なの？', 'だれが きめたの？']) await write(q);
@@ -44,18 +46,33 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.screenshot({ path: SHOTS + '/1-board.png' });
 
   // 取り出し
-  await page.click(`#board .note[data-id="${c}"]`);
+  await page.click(`#board .note[data-id="${c}"]`); await page.click('[data-act=stackpop].stackbtn');
   ok(await page.isVisible('text=重なっている 付箋（3まい）'), 'タップで 重なりの中身を 見られる');
   await page.screenshot({ path: SHOTS + '/2-stack.png' });
   await page.click(`[data-act=unstack][data-id="${d}"]`);
   s = await st();
   ok(!s.items.find(x => x.id === d).stackOf, 'とりだすと 単独に もどる');
+  await page.click('.stackbg', { position: { x: 5, y: 5 } });
+  ok(!(await page.isVisible('.stackpop')) && await page.isVisible('.bignote'), '重なりの 小窓の 外を 押すと 小窓だけ とじる');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
   // 印・えらぶ番号は ない
   await page.click(`#board .note[data-id="${a}"]`);
   ok(!(await page.isVisible('[data-act=mark]')) && !(await page.isVisible('[data-act=pick]')), '付箋の メニューに 印・えらぶ番号は ない');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
+  await page.click(`#board .note[data-id="${d}"]`);
+  // 大きい 付箋で そのまま 直す：ほかの ボタンを 押しても 直した 文は のこる
+  ok(await page.isVisible('.bignote #w-text'), '付箋を タップすると 大きい 付箋で 文字を 直せる');
+  await page.fill('#w-text', 'なおした 問い');
+  await page.click(`[data-act=toface][data-f=trash][data-id="${d}"]`);
+  s = await st();
+  ok(s.items.some(x => x.id === d && x.text === 'なおした 問い' && x.face === 'trash'), '直した 文は ほかの ボタンを 押しても 保存される');
+  await page.click('.face[data-face=trash]'); await page.click(`#board .note[data-id="${d}"]`);
+  await page.click(`[data-act=toface][data-f=front][data-id="${d}"]`); await page.click('.face[data-face=front]');
+  await page.click(`#board .note[data-id="${d}"]`);
+  await page.fill('#w-text', ''); await page.keyboard.press('Escape');
+  s = await st();
+  ok(s.items.some(x => x.id === d && x.text === 'なおした 問い'), '文を 空に して とじても もとの 文の まま');
   await page.click(`#board .note[data-id="${d}"]`);
 
   // ゴミ箱（消えない）
@@ -76,7 +93,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click(`#board .note[data-id="${e}"]`);
   s = await st();
   ok(s.items.some(x => x.kind === 'arrow' && x.from === c && x.to === e), '2まいを タップすると 矢印で つながる');
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   s = await st();
   ok(s.items.some(x => x.kind === 'frame'), '枠を おける');
   await page.screenshot({ path: SHOTS + '/3-arrow-frame.png' });
@@ -100,6 +117,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=ttab][data-k=more]'); await page.click('[data-act=seed]'); await page.click('[data-act=ttab][data-k=mode]');
   await page.click('[data-act=mode][data-k=view][data-v=class]');
   await page.click('[data-act=mode][data-k=propose][data-v=class]');
+  await page.click('[data-act=orgmin][data-v="10"]');
+  ok(await page.evaluate(() => S.modes.A.orgMin === 10 && orgMs('A-3') === 600000), '先生が 整理役の 時間を 組ごとに 決められる');
+  await page.click('[data-act=orgmin][data-v="5"]');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
   // 別の班の児童：共同閲覧・提案
@@ -174,6 +194,16 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok((await page.textContent('[data-left="A-1"] [data-kind=star]')).includes('0') && (await page.textContent('[data-left="A-3"] [data-kind=star]')).includes('2'), 'のこりは 班ごとに 数える（ほかの班は 2まい のこる）');
   await page.evaluate(id => commit(() => { S.items = S.items.filter(x => x.id !== id); S.stars = S.stars.filter(x => x.noteId !== id); }), third);
 
+  // 見られる班：A-1 を えらぶと A-1 の 児童は 見るだけ、シールは 実際の まい数だけ ならぶ。ほかの 子には A-1 だけ 出る
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=stage][data-t="A-1"]');
+  await who('A05');
+  ok(await page.isVisible('[data-left="A-1"]') && !(await page.isVisible('[data-left="A-3"]')), '見られる班を 決めると ほかの 子には その 班だけ 出る');
+  await who('A01');
+  s = await st();
+  const stN = s.stars.filter(x => x.noteId === e && x.k !== 'thumb').length;
+  ok(await page.isVisible('.stage') && !(await page.isVisible('#board')) && !(await page.isVisible('.fab')), '見られる班の 児童は 見るだけの 画面に なる');
+  ok(stN >= 1 && await page.locator(`.stnote[data-id="${e}"] .seals .s`).count() === stN && !(await page.isVisible(`.stnote[data-id="${e}"] .cnt`)), 'シールは まとめず 実際の まい数だけ ならぶ');
+  await who('teacher'); await page.click('[data-act=stage][data-t=""]');
   // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01');
@@ -339,11 +369,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const tops = await page.evaluate(() => { const ns = S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); return [ns[0].id, ns[1].id]; });
   await page.waitForTimeout(200);
   for (const id of tops) await page.locator(`#board .note[data-id="${id}"]`).scrollIntoViewIfNeeded();
+  await claim();
   const sk1 = await box(tops[1]); const sk0 = await box(tops[0]);
   await page.mouse.move(sk1.x + 30, sk1.y + 30); await page.mouse.down(); await page.mouse.move(sk1.x + 60, sk1.y + 60, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
   const lay = await page.$eval(`#board .note[data-id="${tops[0]}"] .layer`, el => el.style.transform);
   ok(/translate\(\d+px,\s?\d+px\)\s?rotate/.test(lay), '下の 付箋は 斜めに 少し ずれて 見える');
-  await page.click(`#board .note[data-id="${tops[0]}"]`);
+  await page.click(`#board .note[data-id="${tops[0]}"]`); await page.click('[data-act=stackpop].stackbtn');
   await page.click(`[data-act=totop][data-id="${tops[1]}"]`);
   s = await st();
   const nt = s.items.find(x => x.id === tops[1]), ot = s.items.find(x => x.id === tops[0]);
@@ -383,7 +414,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=tanes]');
   ok(await page.isVisible('.seeds') && await page.locator('.seeds .seedcard[data-act=tane]').count() >= 8, '「？のたね」を 押すと カードが 出る（8まい）');
   const sb = await page.locator('.seeds').boundingBox();
-  ok(sb.y <= 2, 'カードは 画面の 上から 出る');
+  const wb = await page.locator('.sheet.bigsheet').boundingBox();
+  ok(sb.y + sb.height <= wb.y + 1 && wb.y + wb.height >= (page.viewportSize().height - 2), 'カードは 窓の すぐ上に 出て、窓は 画面の 下に 寄る');
   await page.click('.seedcard[data-w="いつ"]');
   ok(await page.inputValue('#w-text') === 'ホタルは いつ', '「いつ」を 押すと 付箋に「いつ」が 入る');
   await page.click('.seedcard[data-w="どうして"]');
@@ -416,7 +448,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const old = before.shown[0];
   ok(await page.isVisible(`#board .note[data-id="${old}"] .show.old:has-text("第1回")`) && !(await page.isVisible(`#board .note[data-id="${old}"] .stars`)), '前の 回の 付箋は「第1回」と 出て、シールの 数は 今の 回の 分だけ（0）');
   await page.click(`#board .note[data-id="${old}"]`);
-  ok(await page.isVisible('button[disabled]:has-text("第1回で えらんだ 付箋")') && !(await page.isVisible(`[data-act=showcase][data-id="${old}"]`)), '前の 回で えらんだ 付箋は えらべない');
+  ok(await page.isVisible('button[disabled]:has-text("第1回で えらんだ")') && !(await page.isVisible(`[data-act=showcase][data-id="${old}"]`)), '前の 回で えらんだ 付箋は えらべない');
   await page.keyboard.press('Escape');
   const nw = before.other[0];
   await page.click(`#board .note[data-id="${nw}"]`);
@@ -473,13 +505,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // 枠：タイトル案ボタン／タイトルを 辺の 上で ドラッグ
   await who('A01'); await page.click('.face[data-face=front]');
   await page.evaluate(() => { const sc = document.querySelector('.wrap'); sc.scrollTop = 0; });
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   const fid = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
   await page.click(`#board .frame[data-id="${fid}"] .label`);
   ok(await page.locator('.tsug .btn').count() === 6 && await page.isVisible('.tsug .btn:has-text("ヘルプミー！")'), '枠の 設定に タイトル案が 6つ ある');
   await page.click('.tsug .btn:has-text("本命こうほ")');
   ok(await page.inputValue('#f-text') === '本命こうほ', 'タイトル案を 押すと 欄に 入る');
   await page.click('[data-act=f-save]');
+  await claim();
   const fb = await page.locator(`#board .frame[data-id="${fid}"]`).boundingBox();
   const lb = await page.locator(`#board .frame[data-id="${fid}"] .label`).boundingBox();
   await page.mouse.move(lb.x + 10, lb.y + lb.height / 2); await page.mouse.down();
@@ -560,7 +593,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // CDP で 文書を 読むと file:// では ブラウザが この 警告を 出す（アプリの エラーでは ない）
   for (let i = errors.length - 1; i >= e0; i--) if (/Unsafe attempt to load URL file:/.test(errors[i])) errors.splice(i, 1);
   // ・消す 操作は 注意色
-  await page.click('[data-act=frame]');
+  await claim(); await page.click('[data-act=frame]');
   const fid2 = await page.evaluate(() => S.items.filter(x => x.kind === 'frame').slice(-1)[0].id);
   await page.click(`#board .frame[data-id="${fid2}"] .label`);
   const dc = await page.$eval('.sheet [data-act=del]', el => getComputedStyle(el).color);
