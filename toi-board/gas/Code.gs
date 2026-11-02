@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 9;
+var API_VER = 10;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -377,7 +377,9 @@ function apply(ops){
       if(x && x.p && typeof x.p === 'object'){
         // 変わった 項目だけ：いまの 付箋に 重ねる（ほかの 項目は さわらない）
         var ri = index[id], er = ri !== undefined && ri >= 0 ? irows[ri] : null;
-        if(!er || er[5] || u.role !== 'child' || String(er[1]) !== u.team){ rejected.push(id); return; }
+        // 先生は 文だけ 直せる（ふさわしくない ことば・誤字の 手当て）
+        var tEdit = u.role === 'teacher' && !(x.u || []).length && Object.keys(x.p).length && Object.keys(x.p).every(function(k){ return k === 'text'; });
+        if(!er || er[5] || (!tEdit && (u.role !== 'child' || String(er[1]) !== u.team))){ rejected.push(id); return; }
         var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
         if(!cur){ rejected.push(id); return; }
         var moves = Object.keys(x.p).concat(x.u || []).some(function(k){ return ARRANGE.indexOf(k) >= 0; });
