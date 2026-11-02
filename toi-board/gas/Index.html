@@ -165,7 +165,6 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .bignote::before{content:"";position:absolute;top:-10px;left:50%;width:110px;height:22px;margin-left:-55px;background:rgba(255,255,255,.7);box-shadow:0 0 1px rgba(0,0,0,.2)}
 .bignote.done{background:var(--done)}.bignote.gift::before{content:"頂き物";background:#9C6B3C;color:#fff;font-size:13px;font-weight:700;line-height:22px;text-align:center}
 .bignote textarea,.bignote .txt{display:block;width:100%;min-height:220px;border:0;background:transparent;font:inherit;font-size:28px;font-weight:700;line-height:1.5;padding:0;resize:none;outline:none;word-break:break-all}
-.bignote textarea:focus{box-shadow:inset 0 -3px 0 rgba(15,94,168,.35)}
 .bignote .count{position:absolute;right:10px;bottom:6px;font-size:13px;color:var(--sub)}
 .stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;padding:12px 4px}
 .stnote{width:260px;background:var(--fill-b);box-shadow:0 2px 5px rgba(0,0,0,.18);padding:22px 16px 16px;border-radius:2px;position:relative}
@@ -1023,8 +1022,8 @@ function viewSheet(){
   var s = ui.sheet, win = s.type === 'search', big = s.type === 'write' || s.type === 'note', h = '<div class="sheet-bg' + (win ? ' win' : big ? ' bigsheet' : '') + '" data-act="close"><div class="sheet' + (win ? ' win' : big ? ' bigsheet' : '') + '">';
   if(s.type === 'write'){
     h += '<div class="ngrid"><div class="ncol"></div><div class="bignote' + (s.gift ? ' gift' : '') + '"><textarea id="w-text" maxlength="200" placeholder="' + (s.gift ? teamLabel(boardTeam()) + 'へ おくる アイデア' : '問いを 書こう') + '">' + esc(s.text || '') + '</textarea></div>'
-      + '<div class="ncol r"><button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button></div></div>'
-      + '<div class="row" style="justify-content:center"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="btn" data-act="close">やめる</button></div>';
+      + '<div class="ncol r"></div></div>'
+      + '<div class="row" style="justify-content:center"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
     var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return !s.face || n.face === s.face; }), s.sort || 'new');
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">じぶんの 班の 付箋を さがす（' + hits.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
@@ -1069,12 +1068,11 @@ function viewSheet(){
       R += '<button class="likebtn' + (on ? ' on' : '') + '" data-act="star" data-id="' + n.id + '" aria-pressed="' + on + '" aria-label="面白い！シール" title="面白い！シール">' + sealImg('star', 44) + '</button>';
     }
     if(kids.length) R += '<button class="btn stackbtn' + (s.stack ? ' on' : '') + '" data-act="stackpop">重なり<b>' + (kids.length + 1) + '</b></button>';
-    if(ed) R += '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button>';
     h += '<div class="ngrid"><div class="ncol">' + L + '</div><div class="bignote' + (n.done ? ' done' : '') + (n.fromTeam ? ' gift' : '') + '">'
       + (ed ? '<textarea id="w-text" maxlength="200">' + esc(s.text) + '</textarea>' : '<div class="txt">' + esc(n.text) + '</div>')
       + (n.done ? '<span class="donemark">✓ 調査済み' + (n.doneBy ? '（' + esc(n.doneBy) + '）' : '') + '</span>' : '') + '</div><div class="ncol r">' + R + '</div></div>';
     if(isTeacher()) h += '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn danger" data-act="purge" data-id="' + n.id + '">' + (ui.armed === 'purge' ? 'もう一度 押すと 完全に 消えます（もどせません）' : 'この 付箋を 完全に 消す') + '</button></div>';
-    h += '<div class="row" style="justify-content:center"><button class="btn primary" data-act="note-close">とじる</button></div>';
+    h += '<div class="row" style="justify-content:center"><button class="btn primary" data-act="note-close">とじる</button>' + (ed ? '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button>' : '') + '</div>';
     /* 重なりは 別の 小窓で（シートの 形を くずさない） */
     if(s.stack && kids.length){
       h += '<div class="stackbg" data-act="stackpop"><div class="stackpop"><div class="row" style="margin-top:0;align-items:center"><b>重なっている 付箋（' + (kids.length + 1) + 'まい）</b><button class="btn" data-act="stackpop" style="margin-left:auto">とじる</button></div><div class="stacklist">'
