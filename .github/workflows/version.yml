@@ -1,0 +1,41 @@
+# push のたびに version.txt（更新日時・コミット）を更新する。
+# 校務PCでは jsDelivr 経由で @main/version.txt を開き、届いている版を確認する。
+# 続けて jsDelivr の @main キャッシュを全ファイル・全フォルダ分消し、数分で反映させる。
+name: version.txt を更新
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: [version.txt]
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: version.txt を書き出す
+        run: |
+          {
+            echo "更新日時: $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M') (日本時間)"
+            echo "コミット: ${GITHUB_SHA::7}"
+            echo "内容: $(git log -1 --format=%s)"
+          } > version.txt
+          cat version.txt
+      - name: コミットして push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add version.txt
+          git commit -m "version.txt を更新 [skip ci]" || exit 0
+          git push
+      - name: jsDelivr の @main キャッシュを消す
+        run: |
+          base="https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main"
+          { git ls-files; git ls-files | xargs -n1 dirname | sort -u | grep -v '^\.$' | sed 's|$|/|'; echo ""; } |
+          while IFS= read -r path; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$base/$path")
+            echo "$code /$path"
+          done
