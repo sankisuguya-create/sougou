@@ -46,12 +46,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.screenshot({ path: SHOTS + '/1-board.png' });
 
   // 取り出し
-  await page.click(`#board .note[data-id="${c}"]`);
+  await page.click(`#board .note[data-id="${c}"]`); await page.click('[data-act=stackpop].stackbtn');
   ok(await page.isVisible('text=重なっている 付箋（3まい）'), 'タップで 重なりの中身を 見られる');
   await page.screenshot({ path: SHOTS + '/2-stack.png' });
   await page.click(`[data-act=unstack][data-id="${d}"]`);
   s = await st();
   ok(!s.items.find(x => x.id === d).stackOf, 'とりだすと 単独に もどる');
+  await page.click('.stackbg', { position: { x: 5, y: 5 } });
+  ok(!(await page.isVisible('.stackpop')) && await page.isVisible('.bignote'), '重なりの 小窓の 外を 押すと 小窓だけ とじる');
   await page.click('.sheet-bg', { position: { x: 5, y: 5 } });
 
   // 印・えらぶ番号は ない
@@ -362,7 +364,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.mouse.move(sk1.x + 30, sk1.y + 30); await page.mouse.down(); await page.mouse.move(sk1.x + 60, sk1.y + 60, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
   const lay = await page.$eval(`#board .note[data-id="${tops[0]}"] .layer`, el => el.style.transform);
   ok(/translate\(\d+px,\s?\d+px\)\s?rotate/.test(lay), '下の 付箋は 斜めに 少し ずれて 見える');
-  await page.click(`#board .note[data-id="${tops[0]}"]`);
+  await page.click(`#board .note[data-id="${tops[0]}"]`); await page.click('[data-act=stackpop].stackbtn');
   await page.click(`[data-act=totop][data-id="${tops[1]}"]`);
   s = await st();
   const nt = s.items.find(x => x.id === tops[1]), ot = s.items.find(x => x.id === tops[0]);
@@ -435,7 +437,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const old = before.shown[0];
   ok(await page.isVisible(`#board .note[data-id="${old}"] .show.old:has-text("第1回")`) && !(await page.isVisible(`#board .note[data-id="${old}"] .stars`)), '前の 回の 付箋は「第1回」と 出て、シールの 数は 今の 回の 分だけ（0）');
   await page.click(`#board .note[data-id="${old}"]`);
-  ok(await page.isVisible('button[disabled]:has-text("第1回で えらんだ 付箋")') && !(await page.isVisible(`[data-act=showcase][data-id="${old}"]`)), '前の 回で えらんだ 付箋は えらべない');
+  ok(await page.isVisible('button[disabled]:has-text("第1回で えらんだ")') && !(await page.isVisible(`[data-act=showcase][data-id="${old}"]`)), '前の 回で えらんだ 付箋は えらべない');
   await page.keyboard.press('Escape');
   const nw = before.other[0];
   await page.click(`#board .note[data-id="${nw}"]`);
