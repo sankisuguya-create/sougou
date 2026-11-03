@@ -257,7 +257,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 11 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 12 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -291,7 +291,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[7])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -429,8 +429,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
     return { tsv: opinionTSV(), r0, r1, r2, ai: aiText('next') };
   });
   ok(!gx.tsv.includes('やまだ') && gx.r0[5] === '○', 'しらべた人の 名前は 一覧に 入らない（○だけ）');
-  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[7]) && /第2回 面白い！1/.test(gx.r0[7]), 'シールは 前の 回も ふくめて 回ごとに 出る');
-  ok(gx.r1[9] && gx.r1[9].includes('（上）') && gx.r2[9] === gx.r1[9].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
+  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[8]) && /第2回 面白い！1/.test(gx.r0[8]), 'シールは 前の 回も ふくめて 回ごとに 出る');
+  ok(gx.r1[10] && gx.r1[10].includes('（上）') && gx.r2[10] === gx.r1[10].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
   ok(gx.ai.startsWith('次の表は') && gx.ai.includes('\n\n組\t班') && !gx.ai.includes('やまだ'), 'Gemini 用は 指示文の あとに 表が つく');
   }
   {
@@ -523,14 +523,36 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await tp.click('.trial [data-act=trial-min]');
   ok(await tp.isVisible('.trial ul') && (await tp.getAttribute('.trialfold', 'aria-expanded')) === 'true', '体験の 案内を また ひらける');
   await tp.click('.trial [data-act=trial-go][data-n="1"]');
-  ok(await tp.isVisible('.book') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
+  ok(await tp.isVisible('#board .curl.has') && await tp.isVisible('.trial b:has-text("② 調べモード")'), '② 調べモード：めくれが 出て、見本の うらに 書いて ある');
   await tp.click('.trial [data-act=trial-go][data-n="2"]');
-  ok(await tp.isVisible('.stage') && await tp.locator('.stnote .s').count() > 0, '③ 見られる班の 画面（見本の シールが 1まいずつ）');
+  ok(await tp.isVisible('.book') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
   await tp.click('.trial [data-act=trial-go][data-n="3"]');
+  ok(await tp.isVisible('.stage') && await tp.locator('.stnote .s').count() > 0, '③ 見られる班の 画面（見本の シールが 1まいずつ）');
+  await tp.click('.trial [data-act=trial-go][data-n="4"]');
   ok(await tp.isVisible('h2:has-text("シールの 集計")') && (await tp.$$eval('table.tally td.num:not(.zero)', els => els.length)) > 0, '③ 先生の 集計（見本の シールが 入っている）');
   const cw = await tp.$$eval('table.tally .c1', els => els.map(e => Math.round(e.getBoundingClientRect().width)));
   ok(cw.length >= 2 && cw.every(w => w === cw[0]), 'シールの 集計の コメントは 横幅が そろう');
-  await tp.click('.trial [data-act=trial-go][data-n="4"]');
+  await tp.click('.trial [data-act=trial-go][data-n="5"]');
+  ok(await tp.isVisible('[data-pane="0"] #board') && await tp.isVisible('[data-pane="1"] .tcard'), '⑥ 左に 児童、右に 先生の 画面が ならぶ');
+  await tp.click('.trial [data-act=trial-min]');
+  ok(!(await tp.isVisible('[data-pane="0"] [data-act=look]')), '⑥ はじめは 共同閲覧が 切（左に「ほかの班を 見る」が ない）');
+  await tp.click('[data-pane="1"] [data-act=mode][data-k=view][data-v=class]');
+  ok(await tp.isVisible('[data-pane="0"] [data-act=look]'), '⑥ 右で 共同閲覧を 入れると 左に すぐ 出る');
+  await tp.click('[data-pane="1"] [data-act=research][data-v=on]');
+  ok(await tp.isVisible('[data-pane="0"] #board .curl'), '⑥ 右で 調べモードを 入れると 左の 付箋に めくれ');
+  await tp.click('[data-pane="1"] [data-act=mode][data-k=starOut][data-v=class]');
+  ok(await tp.isVisible('[data-pane="0"] .gal.wait'), '⑥ 見合い会の 画面を 入れると 左が 待ち画面');
+  await tp.click('[data-pane="1"] [data-act=rot][data-v=start]');
+  ok(await tp.isVisible('[data-pane="0"] .stage') && await tp.isVisible('[data-pane="1"] .rotnow'), '⑥「はじめる」で 左（1はん）は 見るだけ、右に 進み方');
+  await tp.selectOption('#splitwho', 'A05');
+  ok(await tp.isVisible('[data-pane="0"] .book'), '⑥ 左を 2はんの 子に すると シール帳で 貼れる');
+  await tp.click('[data-pane="0"] .book .page[data-kind=pick]');
+  const bx6 = await tp.locator('[data-pane="0"] .big >> nth=0').boundingBox(); await tp.mouse.click(bx6.x + 60, bx6.y + bx6.height - 40);
+  ok(await tp.evaluate(() => S.stars.some(x => x.viewer === 'A05' && x.x != null)), '⑥ 左の 画面で シールを 貼れる');
+  await tp.click('[data-pane="1"] [data-act=rot][data-v=stop]'); await tp.click('[data-pane="1"] [data-act=rot][data-v=stop]');
+  ok(await tp.isVisible('[data-pane="0"] #board'), '⑥ 右で やめると 左が ボードに もどる');
+  await tp.click('.trial [data-act=trial-min]'); await tp.click('.trial [data-act=trial-go][data-n="6"]');
+  ok(!(await tp.isVisible('[data-pane]')), '⑦では ならべた 画面を やめる');
   ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=rotmin]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
   await tp.screenshot({ path: SHOTS + '/14-trial.png' });
   ok(await page.evaluate(() => localStorage.getItem('toiboard.v3')) === realBefore, '体験の データは 本番の 保存場所に 入らない');
@@ -690,6 +712,27 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=cmt-purge]');
   ok(!(await page.evaluate(id => S.comments.some(c => c.noteId === id && c.text === 'ふさわしくない ことば'), cn)), '先生は コメントを 1つずつ 消せる');
   }
+  // 調べモード：はじめは 切（めくれ なし）→ 先生が 入れると めくれ → うらに わかった ことを 書ける
+  await who('A01'); await page.click('.face[data-face=front]');
+  const rn = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).id);
+  ok(!(await page.isVisible('#board .curl')) && (await page.evaluate(() => S.modes.A.research)) !== 'on', '調べモードは はじめ 切（めくれは 出ない）');
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=research][data-v=on]');
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(await page.isVisible(`#board .note[data-id="${rn}"] .curl`), '調べモードを 入れると 付箋の 右下に めくれが 出る');
+  const cb2 = await page.locator(`#board .note[data-id="${rn}"] .curl`).boundingBox(), nb4 = await page.locator(`#board .note[data-id="${rn}"]`).boundingBox();
+  ok(Math.abs(cb2.x + cb2.width - (nb4.x + nb4.width)) < 3 && Math.abs(cb2.y + cb2.height - (nb4.y + nb4.height)) < 3, 'めくれは 付箋の 右下の 角');
+  await page.click(`#board .note[data-id="${rn}"] .curl`);
+  ok(await page.isVisible('.bignote.back #w-ans'), 'めくれを 押すと 付箋の うらが 出て 書ける');
+  await page.fill('#w-ans', '市の ホームページで しらべた');
+  await page.keyboard.press('Escape');
+  ok(await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた' && await page.isVisible(`#board .note[data-id="${rn}"] .curl.has`), 'うらに 書いた ことは とじると 保存され、めくれの 色が かわる');
+  await page.click(`#board .note[data-id="${rn}"]`); await page.click('[data-act=flip]');
+  ok((await page.inputValue('#w-ans')) === '市の ホームページで しらべた', 'おもての 画面からも うらへ めくれる');
+  await page.keyboard.press('Escape');
+  ok((await page.evaluate(() => opinionTSV())).includes('市の ホームページで しらべた'), '意見の 一覧に わかったこと（うら）が 入る');
+  await who('teacher'); await page.click('[data-act=research][data-v=off]');
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(!(await page.isVisible('#board .curl')) && await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた', '調べモードを 切っても 書いた ことは のこる');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
