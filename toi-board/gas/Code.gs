@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 10;
+var API_VER = 11;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -19,7 +19,7 @@ var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 var STAR_PER_TEAM = 2;
-var SHOW_PER_TEAM = 4;  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで（指導案の「4つ選ぶ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
+var SHOW_PER_TEAM = 8;  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで（指導案の「本命の 問い 8つ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
 /* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
 function doGet(e){
@@ -179,14 +179,29 @@ function modes_(){
 function clsOf_(team){ return String(team).split('-')[0]; }
 function reach_(u, modes, key, team){
   var v = (modes[u.cls] || blankModes_())[key];
-  var ok = v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
-  // シール（班の外）：先生が「見られる班」を 決めていれば その班だけ
-  if(ok && key === 'starOut'){ var st = stageOf_(modes, team); if(st.length && st.indexOf(String(team)) < 0) ok = false; }
-  return ok;
+  // シール（班の外）は 見合い会の 順番で、今の 班だけ（組の中だけ）
+  if(key === 'starOut'){ var st = rotState_(modes, u.cls); return clsOf_(team) === u.cls && (st.phase === 'run' || st.phase === 'pause') && st.team === String(team); }
+  return v === 'grade' || (v === 'class' && clsOf_(team) === u.cls);
 }
-/* 見られる班（シール貼りの 間、その班の 児童は 見るだけ） */
-function stageOf_(modes, team){ var s = (modes[clsOf_(team)] || {}).stage; return Array.isArray(s) ? s : []; }
-function onStage_(modes, team){ return stageOf_(modes, team).indexOf(String(team)) >= 0; }
+/* ===== 見合い会の 順番（1はん → 7はん を 決まった 時間ずつ） =====
+   modes[組].rot = {min, start, paused}。時刻は サーバーが 決める。今の 班は 時刻から 計算する */
+var ROT_MINS = [2, 3, 4, 5, 6, 8];
+var spotsMemo_ = null;
+function rotTeams_(cls){
+  if(!spotsMemo_) spotsMemo_ = spots_();
+  return spotsMemo_.filter(function(s){ return s.cls === cls; }).sort(function(a, b){ return a.no - b.no; }).map(function(s){ return s.team; }).filter(function(t, i, x){ return x.indexOf(t) === i; });
+}
+function rotState_(modes, cls, now){
+  var m = modes[cls] || {}, r = m.rot;
+  if(!m.starOut || m.starOut === 'off') return {phase:'off'};
+  if(!r || !r.start) return {phase:'wait'};
+  var slot = (Number(r.min) || 4) * 60000, el = r.paused != null ? Number(r.paused) : (now || Date.now()) - Number(r.start);
+  var ts = rotTeams_(cls), i = Math.max(0, Math.floor(el / slot));
+  if(i >= ts.length) return {phase:'done'};
+  return {phase:r.paused != null ? 'pause' : 'run', idx:i, team:ts[i], left:(i + 1) * slot - el, n:ts.length};
+}
+/* 今 見られている 班（その班の 児童は 見るだけ） */
+function onStage_(modes, team){ var st = rotState_(modes, clsOf_(team)); return (st.phase === 'run' || st.phase === 'pause') && st.team === String(team); }
 /* 児童に その行を 見せるか */
 function visible_(u, modes, team, face, showcase){
   if(u.role === 'teacher' || team === u.team) return true;
@@ -279,7 +294,7 @@ function boot(){
   }
   p.mver = getMver_();
   p.org = orgView_(u, orgGet_(u.role === 'teacher' ? spots_().map(function(s){ return s.team; }) : [u.team]));
-  p.api = API_VER; p.trialUrl = (function(){ try{ return ScriptApp.getService().getUrl() + '?trial=1'; }catch(e){ return ''; } })(); p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
+  p.api = API_VER; p.now = Date.now(); p.trialUrl = (function(){ try{ return ScriptApp.getService().getUrl() + '?trial=1'; }catch(e){ return ''; } })(); p.me = u; p.spots = spots_(); p.roster = roster; p.modes = modes_();
   return p;
 }
 function mapOf_(t, v){ var m = {}; m[t] = v; return m; }
@@ -291,10 +306,12 @@ function poll(req){
   var u = who_(); req = req || {};
   if(u.role === 'teacher'){
     var v = getVer_(), since = Number(req.all || 0);
-    var orgT = orgView_(u, orgGet_(spots_().map(function(s){ return s.team; })));
-    if(since && v === since) return {same:true, org:orgT};
-    var p = pull_(u, since); p.all = v; p.mver = getMver_(); p.org = orgT; return p;
+    var orgT = orgView_(u, orgGet_(spots_().map(function(s){ return s.team; }))), here = req.here ? here_() : null;
+    if(since && v === since) return {same:true, org:orgT, here:here, now:Date.now()};
+    var p = pull_(u, since); p.all = v; p.mver = getMver_(); p.org = orgT; p.here = here; p.now = Date.now(); return p;
   }
+  // シール貼りの 画面を 開いているか（先生が「全員 開けた」を 確かめる）
+  if(req.here){ try{ cache_().put('here:' + u.id, String(Date.now()), 120); }catch(e){} }
   var mv = getMver_(), extra = req.mv !== undefined && String(req.mv) !== mv ? {modes:modes_(), mver:mv} : null;
   var teams = req.teams || {}, names = Object.keys(teams).slice(0, 30), want = {}, cur = {}, changed = false;
   var got = names.length ? (cache_().getAll(names.map(function(t){ return 'tv:' + t; })) || {}) : {}, gv = null;
@@ -304,10 +321,18 @@ function poll(req){
     if(!since || c > since){ want[t] = since; changed = true; }
   });
   var orgC = orgView_(u, orgGet_([u.team]));
-  if(!changed){ var s0 = {same:true, org:orgC}; if(extra){ s0.same = false; s0.items = []; s0.stars = []; s0.comments = []; s0.fullTeams = []; s0.modes = extra.modes; s0.mver = extra.mver; s0.tv = cur; } return s0; }
-  var q = pull_(u, want); q.tv = cur; q.org = orgC; if(extra){ q.modes = extra.modes; q.mver = extra.mver; } return q;
+  if(!changed){ var s0 = {same:true, org:orgC, now:Date.now()}; if(extra){ s0.same = false; s0.items = []; s0.stars = []; s0.comments = []; s0.fullTeams = []; s0.modes = extra.modes; s0.mver = extra.mver; s0.tv = cur; } return s0; }
+  var q = pull_(u, want); q.tv = cur; q.org = orgC; q.now = Date.now(); if(extra){ q.modes = extra.modes; q.mver = extra.mver; } return q;
 }
 
+/* 児童ごとの 最後に シール貼りの 画面で 確かめた 時刻からの 経過（ミリ秒） */
+function here_(){
+  var ids = Object.keys(slots_()), now = Date.now(), out = {};
+  if(!ids.length) return out;
+  var got = cache_().getAll(ids.map(function(id){ return 'here:' + id; })) || {};
+  ids.forEach(function(id){ var c = got['here:' + id]; if(c) out[id] = now - Number(c); });
+  return out;
+}
 /* spec：数（学年全部を その版より 新しい分）または {班:版}（その班だけ） */
 function pull_(u, spec){
   var modes = modes_(), items = [], stars = [], fullTeams = [];
@@ -348,7 +373,7 @@ function apply(ops){
   lock.waitLock(20000);
   try{
     var v = getVer_() + 1, now = new Date(), modes = modes_(), rejected = [];
-    if(u.role === 'child' && onStage_(modes, u.team)) return {rejected:['stage']};  // 見られている 班は 見るだけ
+    if(u.role === 'child' && onStage_(modes, u.team)) return {rejected:['stage'], now:Date.now()};  // 見られている 班は 見るだけ
     var needItems = (ops.up && ops.up.length) || (ops.del && ops.del.length) || (ops.purge && ops.purge.length);
     var ish = needItems ? sheet_(SH.items) : null, irows = needItems ? rows_(SH.items) : [], index = {}, itput = {};
     irows.forEach(function(r, i){ index[String(r[0])] = i; });
@@ -529,8 +554,17 @@ function apply(ops){
           starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
           round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1))),
           orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5,
-          stage:(Array.isArray(m.stage) ? m.stage : []).map(String).filter(function(t, i, a){ return a.indexOf(t) === i && clsOf_(t) === cls && spots_().some(function(sp){ return sp.team === t; }); })
+          rotMin:ROT_MINS.indexOf(Number(m.rotMin)) >= 0 ? Number(m.rotMin) : 4
         };
+        // 見合い会の 順番：時刻は サーバーが 決める（先生の 端末の 時計は 使わない）
+        var rot = (modes[cls] || {}).rot || null, act = String(m.rotAct || ''), t0 = Date.now();
+        if(act === 'start') rot = {min:clean.rotMin, start:t0, paused:null};
+        else if(rot && act === 'pause' && rot.paused == null) rot.paused = t0 - rot.start;
+        else if(rot && act === 'resume' && rot.paused != null){ rot.start = t0 - rot.paused; rot.paused = null; }
+        else if(rot && act === 'next'){ var rs0 = rotState_(modes, cls, t0); if(rs0.left > 0){ if(rot.paused != null) rot.paused += rs0.left; else rot.start -= rs0.left; } }
+        else if(act === 'stop'){ rot = null; clean.starOut = 'off'; }
+        if(clean.starOut === 'off') rot = null;
+        clean.rot = rot;
         var msh = sheet_(SH.modes), mrows = rows_(SH.modes), at = -1;
         mrows.forEach(function(r, i){ if(String(r[0]).trim() === cls) at = i; });
         var mrow = [cls, JSON.stringify(clean), v];
@@ -571,4 +605,5 @@ function clamp_(v, a, b){ v = Number(v); return isNaN(v) ? a : Math.max(a, Math.
 function clearWhoCache(){
   var keys = rows_(SH.roster).concat(rows_(SH.teachers)).map(function(r){ return 'who:' + low_(r[0]); });
   cache_().removeAll(keys.concat(['modes', 'slots']));
+  spotsMemo_ = null;
 }

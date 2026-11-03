@@ -87,17 +87,20 @@ var Platform = (function(){
     });
   }
   function request(){
-    if(role === 'teacher') return {all:all};
+    var hr = typeof wantHere === 'function' && wantHere() ? 1 : 0;
+    if(role === 'teacher') return {all:all, here:hr};
     var t = {}; t[own] = tv[own] || 0;
     if(watching && watching !== own) t[watching] = tv[watching] || 0;
     (typeof galleryTeams === 'function' ? galleryTeams() : []).forEach(function(g){ if(!(g in t)) t[g] = tv[g] || 0; });
-    return {teams:t, mv:mver};
+    return {teams:t, mv:mver, here:hr};
   }
   function pull(){
     if(polling){ again = true; return; }
     polling = true;
     run('poll', [request()], function(r){
       polling = false;
+      if(r.now && typeof setNow === 'function') setNow(r.now);
+      if(r.here && typeof setHere === 'function') setHere(r.here);
       if(!r.same){
         var gotModes = r.mver !== undefined && String(r.mver) !== mver;
         if(r.mver !== undefined) mver = String(r.mver);
@@ -120,6 +123,7 @@ var Platform = (function(){
   window.addEventListener('pagehide', flush);
   return {
     demo:false,
+    kick:function(){ pull(); },
     start:function(cb){
       var tries = 0;
       (function boot(){
@@ -128,6 +132,7 @@ var Platform = (function(){
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
           window.__bootOrg = r.org || {};
+          if(r.now && typeof setNow === 'function') setNow(r.now);
           cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
           loop();
           // 前に 送れなかった 変更が 端末に あれば 送り直す

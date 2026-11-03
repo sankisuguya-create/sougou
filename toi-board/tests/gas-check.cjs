@@ -68,7 +68,7 @@ function makeGas() {
   G.ctx.setup();
   const D = '@kyoiku.edu.nishi.or.jp';
   G.fill('名簿', [
-    ['a01' + D, 'A', 1, 1], ['a02' + D, 'A', 1, 2], ['a05' + D, 'A', 2, 5], ['b01' + D, 'B', 1, 1], ['b05' + D, 'B', 2, 5]
+    ['a01' + D, 'A', 1, 1], ['a02' + D, 'A', 1, 2], ['a05' + D, 'A', 2, 5], ['a06' + D, 'A', 2, 6], ['b01' + D, 'B', 1, 1], ['b05' + D, 'B', 2, 5]
   ]);
   G.fill('先生', [['ta@edu.nishi.or.jp', 'A']]);
   G.fill('スポット', [['A', 1, '阪急西宮北口'], ['A', 2, '甲山'], ['B', 1, '甲子園球場'], ['B', 2, '西宮神社']]);
@@ -164,62 +164,74 @@ function makeGas() {
   r = G.as('b01' + D, 'apply', [{ up: [{ id: 'evil', kind: 'note', team: 'A-1', face: 'front', x: 1, y: 1, text: 'x' }], del: [ids[0]], star: [], modes: { cls: 'A', m: { view: 'off' } } }]);
   ok(r.rejected.includes('evil') && r.rejected.includes(ids[0]) && r.rejected.includes('modes') && !G.sheets.items.data.some(x => x[0] === 'evil'), 'ほかの班への 書き込み・消去・モード変更は はねられる');
 
-  // シール：A組1はんが 1まいを「見てほしい」に。B組 班の外を 学年に → b01 は シール貼り画面
+  // シール：A組1はんが 1まいを「見てほしい」に。A組の 見合い会を はじめる → 2はんの a05 は 1はんに 貼る 画面
   await a01.click('.face[data-face=front]');
   await a01.evaluate(id => commit(() => { item(id).showcase = true; }), ids[0]);
+  await ta.click('[data-act=ttab][data-k=mode]'); await ta.click('[data-act=tcls][data-c=A]');
   await ta.click('[data-act=mode][data-k=view][data-v=off]');
-  await ta.click('[data-act=mode][data-k=starOut][data-v=grade]');
-  await settle(); await reload(b01);
-  ok(await b01.isVisible('text=シールを 貼ろう'), 'B組が シール貼り画面に なる');
-  const bigs = await b01.$$eval('.big', els => els.map(e => e.dataset.id));
-  ok(bigs.length === 1 && bigs[0] === ids[0], '開いた時に 範囲の 班の「見てほしい付箋」だけが 届く（共同閲覧が 切でも）');
-  const bb = await b01.locator(`.big[data-id="${ids[0]}"]`).boundingBox();
-  await b01.mouse.click(bb.x + 60, bb.y + 60);
-  await b01.click('[data-act=kind][data-k=pick]');
-  await b01.mouse.click(bb.x + 150, bb.y + 90);
-  G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
+  await ta.click('[data-act=mode][data-k=starOut][data-v=class]');
+  const a05p = await open('a05' + D);
+  await settle(); await reload(a05p);
+  ok(await a05p.isVisible('.gal.wait'), 'シール（班の外）を 入れると 待ち画面に なる');
+  await a05p.waitForTimeout(1200); await ta.click('[data-act=ttab][data-k=mode]');
+  ok(await ta.isVisible('text=開いた 児童') && /[1-4]／4人/.test(await ta.textContent('.rotpanel')), '先生に 開いた 児童の 数が 出る（A組 3人中 1人）');
+  G.as('a01' + D, 'apply', [{ up: ['az1', 'az2'].map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 30 + i * 8, y: 1, text: 'もう1まい' + i })), del: [], star: [] }]);
+  await ta.click('[data-act=rot][data-v=start]');
+  await settle(); await sleep(600);
+  ok(await a05p.isVisible('.book') && await a05p.isVisible('.rothead:has-text("1はん")'), '「はじめる」で 1はんの 番に なり、右に シール帳が 出る');
+  ok(await a01.isVisible('.stage') && !(await a01.isVisible('#board')), '1はんの 児童は 見るだけの 画面に なる');
+  const bigs = await a05p.$$eval('.big', els => els.map(e => e.dataset.id));
+  ok(bigs.length === 1 && bigs[0] === ids[0], '今の 班の「見てほしい付箋」だけが 届く（共同閲覧が 切でも）');
+  const bb = await a05p.locator(`.big[data-id="${ids[0]}"]`).boundingBox();
+  await a05p.mouse.click(bb.x + 60, bb.y + 60);
+  await a05p.click('[data-act=kind][data-k=pick]');
+  await a05p.mouse.click(bb.x + 150, bb.y + 90);
+  ok(await a05p.locator('.book .page[data-kind=star] .slot.used').count() === 1 && await a05p.locator('.book .page[data-kind=pick] .slot.used').count() === 1, 'シール帳から 貼った 分が へる');
+  G.as('a06' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
   await sleep(1600); await settle();  // シールは 1.5秒 ためて 送る
-  ok((await a01.textContent(`[data-stars="${ids[0]}"] [data-kind=star] .cnt`)).trim() === '2' && await a01.locator(`[data-stars="${ids[0]}"] [data-kind=pick]`).count() === 1, '自分の班では 種類ごとの 数が 見える');
+  ok(await a01.locator(`.stnote[data-id="${ids[0]}"] .s`).count() === 3, '見られている 班には シールが 実際の まい数だけ ふえて いく');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.stars.length === 3 && r.stars.every(s => /^o[0-9a-f]+$/.test(s.viewer) && s.x === undefined), '貼った人は 記号に なり、場所は 本人にしか 届かない');
-  await reload(b01);
-  ok(await b01.locator(`.big[data-id="${ids[0]}"] .seal`).count() === 2, '開き直しても 自分の シールは 貼った 場所に のこる');
-  r = G.as('b01' + D, 'poll', [{ teams: { 'B-1': 0, 'A-1': 0 } }]);
-  ok(r.stars.length === 2 && r.stars.every(s => s.viewer === 'b01' + D), 'ほかの班の 付箋は 自分の シールだけ 届く');
-  await b01.screenshot({ path: SHOTS + '/g3-gallery.png' });
+  await reload(a05p);
+  ok(await a05p.locator(`.big[data-id="${ids[0]}"] .seal`).count() === 2, '開き直しても 自分の シールは 貼った 場所に のこる');
+  r = G.as('a05' + D, 'poll', [{ teams: { 'A-2': 0, 'A-1': 0 } }]);
+  ok(r.stars.length === 2 && r.stars.every(s => s.viewer === 'a05' + D), 'ほかの班の 付箋は 自分の シールだけ 届く');
+  await ta.click('[data-act=ttab][data-k=mode]');
+  ok(await ta.locator(`.rotnow .stnote[data-id="${ids[0]}"] .s`).count() === 3, '先生は 今の 班と 同じ 画面を 見られる');
+  await a05p.screenshot({ path: SHOTS + '/g3-gallery.png' });
 
   // 持ち分（サーバー）：1つの班に 種類ごとに 2まいまで
-  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[1], k: 'pick', on: true }, { noteId: 'ax0', k: 'pick', on: true }] }]);
-  G.as('a01' + D, 'apply', [{ up: ['az1', 'az2'].map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 30 + i * 8, y: 1, text: 'もう1まい' + i })), del: [], star: [] }]);
+
   const aNotes = G.as('ta@edu.nishi.or.jp', 'poll', [{ all: 0 }]).items.filter(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front').map(x => x.id);
-  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 3).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 3).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
   ok(aNotes.length >= 3 && r.rejected.length === 1 && r.rejected[0] === '*' + aNotes[2] + '|wow', 'サーバーも 同じ班への 同じ種類の 3まい目を はねる');
-  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
+  r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
   ok(r.rejected.length === 0, 'はがせば また 貼れる');
 
   // コメント（サーバー）：シール（班の外）が 届く 班の 付箋にだけ。相手の 班には だれが 書いたか 届かない
-  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ホームは いくつ？', on: true }] }]);
+  r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ホームは いくつ？', on: true }] }]);
   ok(r.rejected.length === 0, 'ほかの班の 付箋に コメントを 書ける');
-  r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: '自分の 班', on: true }] }]);
-  ok(r.rejected.length === 1, '自分の班の 付箋には（シール貼りの 範囲の外なので）書けない');
+  r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: '自分の 班', on: true }] }]);
+  ok(r.rejected.length >= 1, '自分の班の 付箋には 書けない（見られている 間は 見るだけ）');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.comments.length === 1 && r.comments[0].text === 'ホームは いくつ？' && /^o[0-9a-f]+$/.test(r.comments[0].viewer), '書かれた 班には コメントが 届き、書いた人は 記号');
-  await reload(a01); await a01.click('.face[data-face=front]');
-  ok(await a01.isVisible(`#board .note[data-id="${ids[0]}"] .cicon`), '児童の 画面に コメントの しるしが 出る');
-  r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], on: false }] }]);
+  await sleep(600); await settle();
+  ok(await a01.isVisible(`.stnote[data-id="${ids[0]}"] .cm`) && (await a01.textContent(`.stnote[data-id="${ids[0]}"] .cm .tip`)).includes('ホームは いくつ？'), '見られている 班に コメントが 届く（💬 に 指を のせると 読める）');
+  r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], on: false }] }]);
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.comments.every(c => !c.on), 'コメントを けせる');
 
   // 回（サーバー）：B組の 回を 2に すると、A組の 付箋への シールは A組の 回（1）、持ち分は 回ごと
   G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, JSON.parse((G.sheets.modes.data.find(r => r[0] === 'A') || [0, '{}'])[1]), { round: 2 }) } }]);
-  r = G.as('b05' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 2).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
+  r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 2).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
   ok(r.rejected.length === 0, '回が 進むと 同じ班に また 2まい 貼れる（持ち分が もどる）');
-  r = G.as('b05' + D, 'poll', [{ teams: { 'B-2': 0, 'A-1': 0 } }]);
+  r = G.as('a06' + D, 'poll', [{ teams: { 'A-2': 0, 'A-1': 0 } }]);
   ok(r.stars.filter(s => s.k === 'wow' && s.rd === 2).length === 2 && r.stars.some(s => s.k === 'wow' && s.rd === 1), 'シールは 回ごとに 分けて 記録される');
 
   ok(G.as('ta@edu.nishi.or.jp', 'boot').trialUrl.endsWith('/exec?trial=1') && (await ta.click('[data-act=ttab][data-k=more]'), await ta.isVisible('a[href$="/exec?trial=1"]')) && (await ta.click('[data-act=ttab][data-k=mode]'), true), '先生画面の「体験する」は 本番の URL に ?trial=1 を つけて ひらく');
 
   // 班の中の いいね（サーバー）：自分の班の 付箋だけ、持ち分・回に 関係なく
+  await ta.click('[data-act=ttab][data-k=mode]'); await ta.click('[data-act=rot][data-v=stop]'); await ta.click('[data-act=rot][data-v=stop]'); await settle();
   r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
   ok(r.rejected.length === 0, '自分の班の 付箋に いいねを つけられる');
   r = G.as('b01' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'thumb', rd: 0, on: true }] }]);
@@ -235,9 +247,9 @@ function makeGas() {
   const busy = await open('a05' + D);
   ok(await busy.isVisible('.head, .gal') && failBoot === 0, '開くのに 2回 失敗しても 自動で やり直して 開ける');
   // ② シールの 書きこみは 1.5秒 ためて まとめて 送る
-  await ta.click('[data-act=tcls][data-c=A]'); await ta.click('[data-act=mode][data-k=starOut][data-v=class]');
+  await ta.click('[data-act=tcls][data-c=A]'); await ta.click('[data-act=mode][data-k=starOut][data-v=class]'); await ta.click('[data-act=rot][data-v=start]');
   await sleep(1500);
-  ok(await busy.isVisible('text=シールを 貼ろう'), 'シール（班の外）も ページの 開き直し なしで 切りかわる');
+  ok(await busy.isVisible('.book'), '見合い会も ページの 開き直し なしで 切りかわる');
   const ap0 = calls.apply || 0;
   const bigs2 = await busy.$$eval('.big', els => els.map(e => e.dataset.id));
   for (const [i, kk] of [['star', 0], ['pick', 1], ['wow', 2]].map((x, j) => [j, x[0]])) {
@@ -257,7 +269,7 @@ function makeGas() {
   G.as('a05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: bigs2[0], k: 'bulb', on: true }] }]);
   G.ctx.rows_ = orig2;
   ok(itemReads === 0, 'シールだけの 書きこみでは 付箋の シートを 読まない');
-  await ta.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await ta.click('[data-act=mode][data-k=starOut][data-v=off]'); await sleep(800);
   await busy.close();
 
   // データが 勝手に 消えない（サーバー）
@@ -358,16 +370,16 @@ function makeGas() {
   ], del: [], star: [] }]);
   const okRow = G.sheets.items.data.find(x => x[0] === 'ok1');
   ok(r.rejected.includes('bad1') && okRow && JSON.parse(okRow[3]).text.length === 200, '大きすぎる 付箋は その1まいだけ はねて、ほかは 保存（長い 文は 200字まで）');
-  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで
-  const sh = ['sh1', 'sh2', 'sh3', 'sh4', 'sh5'];
-  r = G.as('a02' + D, 'apply', [{ up: sh.map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 1 + i * 8, y: 46, text: '見て' + i })), del: [], star: [] }]);
+  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで
+  const sh = ['sh1', 'sh2', 'sh3', 'sh4', 'sh5', 'sh6', 'sh7', 'sh8', 'sh9'];
+  r = G.as('a02' + D, 'apply', [{ up: sh.map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 1 + (i % 6) * 8, y: 46 + Math.floor(i / 6) * 7, text: '見て' + i })), del: [], star: [] }]);
   const rdA = JSON.parse(G.sheets.modes.data.find(x => x[0] === 'A')[1]).round || 1;
   const already = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
   r = G.as('a02' + D, 'apply', [{ up: sh.map(id => ({ id, team: 'A-1', p: { showcase: rdA }, u: [] })), del: [], star: [] }]);
   const nowShown = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
-  ok(nowShown === Math.max(4, already) && r.rejected.length === sh.length - Math.max(0, 4 - already), '見てほしい付箋は 1つの 班で 今の 回に 4まいまで（サーバーでも）');
+  ok(nowShown === Math.max(8, already) && r.rejected.length === sh.length - Math.max(0, 8 - already), '見てほしい付箋は 1つの 班で 今の 回に 8まいまで（サーバーでも）');
   // 先生は コメントを 1つずつ 消せる、児童は 消せない
-  G.as('b01' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], text: 'ふさわしくない ことば', on: true }] }]);
+  G.fill('comments', [[ids[0] + '|b01' + D, ids[0], 'A-1', 'b01' + D, 'ふさわしくない ことば', true, 1]]);
   r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
   ok(r.rejected.includes('cmtDel'), '児童は ほかの 子の コメントを 消せない');
   G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
@@ -428,21 +440,42 @@ function makeGas() {
   O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'off', round: 1, orgMin: 999 } } }]);
   ok(O.as('p2' + D, 'orgClaim').org['A-1'].left <= 5 * 60 * 1000, 'きめられた 選択肢 以外の 時間は 5分に もどす');
   O.as('p2' + D, 'orgRelease');
-  // 見られる班：その 班の 児童は 書けない、ほかの 子は その 班だけに 貼れる
+  // 見合い会の 順番：先生が はじめると 1はん→3はんを 決まった 時間ずつ。今の 班だけに 貼れ、今の 班の 児童は 見るだけ
   O.fill('名簿', [['p1' + D, 'A', 1, 1], ['p2' + D, 'A', 1, 2], ['p3' + D, 'A', 2, 3], ['p4' + D, 'A', 3, 4]]);
   O.fill('スポット', [['A', 1, '甲山'], ['A', 2, '夙川'], ['A', 3, '北口']]);
   O.ctx.clearWhoCache();
-  O.as('p3' + D, 'apply', [{ up: [{ id: 's2', kind: 'note', team: 'A-2', face: 'front', x: 1, y: 1, text: '見られる', showcase: 1 }], del: [], star: [] }]);
-  O.as('p4' + D, 'apply', [{ up: [{ id: 's3', kind: 'note', team: 'A-3', face: 'front', x: 1, y: 1, text: '見られない', showcase: 1 }], del: [], star: [] }]);
-  O.as('tt@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: { view: 'off', propose: 'off', starIn: false, starOut: 'class', round: 1, orgMin: 5, stage: ['A-2', 'B-9', 'A-9'] } } }]);
-  const mst = JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).stage;
-  ok(JSON.stringify(mst) === '["A-2"]', '見られる班は その組の ある班だけ 保存される');
-  ro = O.as('p1' + D, 'apply', [{ up: [], del: [], star: [{ noteId: 's2', on: true, k: 'star' }, { noteId: 's3', on: true, k: 'star' }] }]);
-  ok(!ro.rejected.includes('*s2|star') && ro.rejected.includes('*s3|star'), 'ほかの 子は 見られる班だけに 貼れる');
-  ro = O.as('p3' + D, 'apply', [{ up: [{ id: 's2', team: 'A-2', p: { text: 'かえる' }, u: [] }], del: [], star: [{ noteId: 's3', on: true, k: 'star' }] }]);
-  ok(ro.rejected.includes('stage') && O.sheets.items.data.find(r => r[0] === 's2')[3].includes('見られる'), '見られる班の 児童は 書きこめない（見るだけ）');
-  const pst = O.as('p3' + D, 'poll', [{ teams: { 'A-2': 0 } }]);
-  ok(pst.stars.filter(x => x.noteId === 's2').length === 1, '見られる班の 児童に 貼られた シールが 届く');
+  O.as('p1' + D, 'apply', [{ up: [{ id: 's1', kind: 'note', team: 'A-1', face: 'front', x: 9, y: 9, text: '1はんの 問い', showcase: 1 }], del: [], star: [] }]);
+  O.as('p3' + D, 'apply', [{ up: [{ id: 's2', kind: 'note', team: 'A-2', face: 'front', x: 1, y: 1, text: '2はんの 問い', showcase: 1 }], del: [], star: [] }]);
+  O.as('p4' + D, 'apply', [{ up: [{ id: 's3', kind: 'note', team: 'A-3', face: 'front', x: 1, y: 1, text: '3はんの 問い', showcase: 1 }], del: [], star: [] }]);
+  const T = 'tt@edu.nishi.or.jp', M0 = { view: 'off', propose: 'off', starIn: false, starOut: 'class', round: 1, orgMin: 5, rotMin: 2 };
+  const setMode = m => O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, m) } }]);
+  const realNow0 = Date.now; let off = 0;
+  O.ctx.Date = Object.assign(function (...a) { return new Date(...a); }, { now: () => realNow0() + off }); O.ctx.Date.prototype = Date.prototype;
+  const star = (who, id, k = 'star') => O.as(who + D, 'apply', [{ up: [], del: [], star: [{ noteId: id, on: true, k }] }]).rejected;
+  setMode({});
+  ok(star('p3', 's1').length === 1, '「はじめる」前（待ち画面）は だれも 貼れない');
+  setMode({ rotAct: 'start' });
+  const rot0 = JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).rot;
+  ok(rot0 && rot0.min === 2 && Math.abs(rot0.start - Date.now()) < 5000 && rot0.paused === null, '「はじめる」で サーバーが 時刻を 決める');
+  ok(star('p3', 's1').length === 0 && star('p4', 's2').length === 1, '今の 班（1はん）にだけ 貼れる');
+  ro = O.as('p1' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { text: 'かえる' }, u: [] }], del: [], star: [{ noteId: 's2', on: true, k: 'pick' }] }]);
+  ok(ro.rejected.includes('stage') && O.sheets.items.data.find(r => r[0] === 's1')[3].includes('1はんの 問い'), '今の 班の 児童は 書きこめない（見るだけ）');
+  ok(O.as('p1' + D, 'poll', [{ teams: { 'A-1': 0 } }]).stars.filter(x => x.noteId === 's1').length === 1, '今の 班の 児童に 貼られた シールが 届く');
+  off = 2 * 60000 + 1000;
+  ok(star('p1', 's2').length === 0 && star('p4', 's1', 'pick').length === 1 && O.as('p3' + D, 'apply', [{ up: [], del: [], star: [] }]).rejected.includes('stage'), '時間が たつと 自動で つぎの 班（2はん）に なる');
+  setMode({ rotAct: 'next' });
+  ok(star('p1', 's3').length === 0 && star('p1', 's2', 'pick').length === 1, '「つぎの 班へ」で 3はんに 進む');
+  setMode({ rotAct: 'pause' }); off += 10 * 60000;
+  ok(star('p2', 's3').length === 0, '一時停止の 間は 時間が 進まない（3はんの まま）');
+  setMode({ rotAct: 'resume' }); setMode({ rotAct: 'next' });
+  ok(star('p1', 's3', 'wow').length === 1 && O.as('p4' + D, 'apply', [{ up: [{ id: 's3', team: 'A-3', p: { text: '3はんの 問い（なおした）' }, u: [] }], del: [], star: [] }]).rejected.length === 0, '最後の 班が おわると だれも 貼れず、全員 ボードに もどる（書ける）');
+  O.as('p1' + D, 'poll', [{ teams: { 'A-1': 0 }, here: 1 }]);
+  const hr = O.as(T, 'poll', [{ all: 0, here: 1 }]).here;
+  ok(hr && hr['p1' + D] != null && hr['p1' + D] < 5000 && hr['p3' + D] == null, '先生に 開いている 児童が 届く');
+  setMode({ rotAct: 'stop' });
+  const mStop = JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]);
+  ok(mStop.rot === null && mStop.starOut === 'off', '「やめる」で シール（班の外）も 切に なる');
+  O.ctx.Date = Date;
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }
