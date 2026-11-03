@@ -733,6 +733,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('teacher'); await page.click('[data-act=research][data-v=off]');
   await who('A01'); await page.click('.face[data-face=front]');
   ok(!(await page.isVisible('#board .curl')) && await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた', '調べモードを 切っても 書いた ことは のこる');
+  // 整理モード（組ごと）：切に すると「整理する」が 消え、だれでも 動かせる。B組は そのまま
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=tcls][data-c=A]'); await page.click('[data-act=orgmode][data-v=off]');
+  ok(await page.evaluate(() => S.modes.A.orgMode === 'off' && (S.modes.B || {}).orgMode !== 'off') && (await page.textContent('[data-act=tcls][data-c=A]')).includes('整理なし'), '整理モードは 組ごと（A組だけ 切、組の ボタンに 出る）');
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(!(await page.isVisible('[data-act=org-claim]')) && await page.evaluate(() => canArrange()), '整理モードが 切なら「整理する」は 出ず、だれでも 動かせる');
+  await who('B01');
+  ok(await page.isVisible('[data-act=org-claim]'), 'B組は 整理モードの まま');
+  await who('teacher'); await page.click('[data-act=orgmode][data-v=on]');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
