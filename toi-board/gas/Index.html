@@ -246,6 +246,12 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 .ttab.on{background:#fff;border-color:var(--line);color:var(--ink)}
 .trial{position:fixed;right:12px;bottom:12px;width:min(420px,calc(100% - 120px));background:#fff;border:3px solid var(--cat-2);border-radius:14px;padding:10px 14px;z-index:90;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:15px}
 .trial.min{width:auto;padding:6px}
+.splitbar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:6px 12px;background:#FFF4D6;border-bottom:2px solid var(--cat-2);height:44px;box-sizing:border-box;font-size:14px}
+.splitbar select{font:inherit;font-size:15px;padding:2px 6px}
+.split{display:flex;height:calc(100vh - 44px)}
+.pane{flex:1 1 50%;min-width:0;overflow:auto;position:relative;transform:translateZ(0);background:var(--paper)}
+.pane + .pane{border-left:4px solid var(--cat-2)}
+.panehead{position:sticky;top:0;z-index:30;background:var(--ink);color:#fff;font-weight:700;font-size:14px;padding:4px 12px}
 .trialfold{display:block;width:100%;min-height:40px;margin:0 0 6px;border:0;background:transparent;text-align:left;font-weight:700;font-size:15px;color:var(--ink)}
 .trial.min .trialfold{margin:0;padding:0 8px}
 .trial ul{margin:6px 0;padding-left:20px}
@@ -273,8 +279,7 @@ b.bignum{font-size:20px}
 .rotsteps li.on{border-color:var(--cat-1);color:var(--ink);font-weight:700;background:var(--fill-a)}
 .rotsteps li.done{color:var(--ink)}
 .rotsteps li.done b::after{content:" ✓"}
-.note.rs{background:linear-gradient(315deg,transparent 21px,var(--fill-b) 21px)}
-.note.rs.done{background:linear-gradient(315deg,transparent 21px,var(--done) 21px)}
+.note.rs{clip-path:polygon(-24px -24px,calc(100% + 24px) -24px,calc(100% + 24px) calc(100% - 54px),calc(100% - 54px) calc(100% + 24px),-24px calc(100% + 24px))}
 .curl{position:absolute;right:0;bottom:0;width:30px;height:30px;z-index:4;cursor:pointer;background:linear-gradient(315deg,transparent 0 50%,#E8D6A8 50% 100%);border-top-left-radius:6px;filter:drop-shadow(-1px -1px 1.5px rgba(0,0,0,.22))}
 .curl::after{content:"";position:absolute;inset:-10px}
 .curl.has{background:linear-gradient(315deg,transparent 0 50%,#8EC3EE 50% 100%)}
@@ -340,6 +345,17 @@ function researchOn(team){ return ((S.modes || {})[clsOf(team)] || {}).research 
 /* ===== 保存（見本：localStorage。GAS版は build で この区間を 差し替える） ===== */
 /* 体験版：?trial=1 で 開くと、本番と 別の 保存場所に 見本の データを 入れて 案内を 出す */
 document.documentElement.lang = 'ja';  // 埋め込み先に lang が 無くても 日本語の 字形で 描く
+/* 体験⑥：左に 児童、右に 先生 を 1つの ページに ならべる（iframe を 使わない ので GAS の 中でも 動く）。
+   2つの 画面は それぞれ 自分の me / ui を もち、さわった 側に 切り替えてから ふつうの 処理を 通す */
+var SPLIT = null, TRIAL_ST = {n:0, min:false};
+function paneRoot(){ return SPLIT ? document.querySelector('[data-pane="' + SPLIT.cur + '"]') || document : document; }
+function $q(sel){ return paneRoot().querySelector(sel); }
+function $id(id){ return paneRoot().querySelector('#' + id); }
+function $qa(sel){ return paneRoot().querySelectorAll(sel); }
+function paneSync(){ if(SPLIT){ SPLIT.panes[SPLIT.cur].me = me; SPLIT.panes[SPLIT.cur].ui = ui; } }
+function usePane(i){ if(!SPLIT || i === SPLIT.cur) return; paneSync(); SPLIT.cur = i; me = SPLIT.panes[i].me; ui = SPLIT.panes[i].ui; }
+['pointerdown', 'click', 'focusin', 'input', 'change'].forEach(function(t){ document.addEventListener(t, function(e){ var p = e.target && e.target.closest && e.target.closest('[data-pane]'); if(p) usePane(+p.getAttribute('data-pane')); }, true); });
+function paneW(){ return SPLIT ? Math.floor(window.innerWidth / 2) - 2 : window.innerWidth; }
 var TRIAL = !!window.TOI_TRIAL || /[?&#]trial/.test(location.search + location.hash);
 'PLATFORM_BEGIN';
 /* GAS版の 保存。build.cjs が ../index.html の PLATFORM 区間を これに 差し替える。
@@ -814,7 +830,7 @@ function gotoNote(id){
   var top = n.stackOf ? item(n.stackOf) || n : n;
   ui.sheet = null; ui.face = top.face; ui.flash = top.id; ui.viewTeam = null;
   render();
-  var sc = document.querySelector('.wrap'); if(sc){ sc.scrollLeft = Math.max(0, top.x*GRID - 60); sc.scrollTop = Math.max(0, top.y*GRID - 60); }
+  var sc = $q('.wrap'); if(sc){ sc.scrollLeft = Math.max(0, top.x*GRID - 60); sc.scrollTop = Math.max(0, top.y*GRID - 60); }
   setTimeout(function(){ if(ui.flash === top.id){ ui.flash = null; render(); } }, 2500);
 }
 
@@ -965,27 +981,51 @@ function arrowsSVG(list){
 }
 
 /* ===== 画面 ===== */
+function paneHTML(){
+  var h = isTeacher() ? viewTeacher() : viewChild();
+  if(ui.sheet) h += viewSheet();
+  if(ui.toast) h += '<div class="toast">' + esc(ui.toast) + '</div>';
+  ui.pop = null;
+  return h;
+}
+function newUi(o){ return Object.assign({face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front'}, o || {}); }
 function render(){
   if(drag || !S) return; // 動かしている間は描き直さない（終わってから反映）
   var app = document.getElementById('app');
-  var active = document.activeElement, keep = active && active.id ? {id:active.id, v:active.value, s:active.selectionStart} : null;
-  var h = '';
-  if(Platform.demo){
-    var opts = '<option value="teacher">先生</option>' + S.roster.map(function(c){ return '<option value="' + c.id + '">' + c.cls + '組 ' + c.no + 'ばん（' + c.team.split('-')[1] + 'はん）</option>'; }).join('');
-    h += '<div class="demo">見本の切り替え <select id="who">' + opts + '</select> 本番では Google アカウントで自動で決まります</div>';
+  var active = document.activeElement, keep = active && active.id ? {id:active.id, v:active.value, s:active.selectionStart, pane:SPLIT ? SPLIT.cur : null} : null;
+  var h = '', keepPos = [];
+  if(SPLIT){
+    paneSync();
+    var cur = SPLIT.cur;
+    h += '<div class="splitbar"><b>⑥ 先生と 児童を ならべて ためす</b><span>左の 児童：<select id="splitwho">' + S.roster.filter(function(c){ return c.cls === 'A'; }).map(function(c){ return '<option value="' + c.id + '"' + (c.id === SPLIT.panes[0].me ? ' selected' : '') + '>' + c.cls + '組 ' + c.no + 'ばん（' + c.team.split('-')[1] + 'はん）</option>'; }).join('') + '</select></span><span class="hint">右で 設定を 変えると、左の 画面が すぐ 変わります</span></div><div class="split">';
+    SPLIT.panes.forEach(function(p, i){
+      var root = document.querySelector('[data-pane="' + i + '"]'), w0 = root && root.querySelector('.wrap'), t0 = root && root.querySelector('.ttable');
+      keepPos[i] = [w0 ? [w0.scrollLeft, w0.scrollTop] : null, t0 ? t0.scrollTop : null, root ? root.scrollTop : 0];
+      SPLIT.cur = i; me = p.me; ui = p.ui;
+      h += '<section class="pane" data-pane="' + i + '"><div class="panehead">' + (i ? '先生の 画面' : '児童の 画面（' + teamLabel(myTeam()) + ' ' + (child(me) || {}).no + 'ばん）') + '</div>' + paneHTML() + '</section>';
+    });
+    SPLIT.cur = cur; me = SPLIT.panes[cur].me; ui = SPLIT.panes[cur].ui;
+    h += '</div>';
+  } else {
+    if(Platform.demo){
+      var opts = '<option value="teacher">先生</option>' + S.roster.map(function(c){ return '<option value="' + c.id + '">' + c.cls + '組 ' + c.no + 'ばん（' + c.team.split('-')[1] + 'はん）</option>'; }).join('');
+      h += '<div class="demo">見本の切り替え <select id="who">' + opts + '</select> 本番では Google アカウントで自動で決まります</div>';
+    }
+    var sc = document.querySelector('.wrap'), tt = document.querySelector('.ttable');
+    keepPos[0] = [sc ? [sc.scrollLeft, sc.scrollTop] : null, tt ? tt.scrollTop : null, 0];
+    h += paneHTML();
   }
-  h += isTeacher() ? viewTeacher() : viewChild();
   if(TRIAL) h += trialHTML();
-  if(ui.sheet) h += viewSheet();
-  if(ui.toast) h += '<div class="toast">' + esc(ui.toast) + '</div>';
-  var sc = document.querySelector('.wrap'), pos = sc ? [sc.scrollLeft, sc.scrollTop] : null;
-  var tt = document.querySelector('.ttable'), tpos = tt ? tt.scrollTop : null;
   app.innerHTML = h;
-  if(Platform.demo) document.getElementById('who').value = me;
-  sc = document.querySelector('.wrap'); if(sc && pos){ sc.scrollLeft = pos[0]; sc.scrollTop = pos[1]; }
-  tt = document.querySelector('.ttable'); if(tt && tpos != null) tt.scrollTop = tpos;
-  if(keep){ var el = document.getElementById(keep.id); if(el){ el.value = keep.v; el.focus(); try{ el.setSelectionRange(keep.s, keep.s); }catch(e){} } }
-  ui.pop = null;
+  if(Platform.demo && !SPLIT) document.getElementById('who').value = me;
+  (SPLIT ? SPLIT.panes : [0]).forEach(function(_, i){
+    var root = SPLIT ? document.querySelector('[data-pane="' + i + '"]') : document, k = keepPos[i]; if(!root || !k) return;
+    var w1 = root.querySelector('.wrap'), t1 = root.querySelector('.ttable');
+    if(w1 && k[0]){ w1.scrollLeft = k[0][0]; w1.scrollTop = k[0][1]; }
+    if(t1 && k[1] != null) t1.scrollTop = k[1];
+    if(SPLIT) root.scrollTop = k[2];
+  });
+  if(keep){ var kr = keep.pane != null ? document.querySelector('[data-pane="' + keep.pane + '"]') : document, el = kr && kr.querySelector('#' + keep.id); if(el){ el.value = keep.v; el.focus(); try{ el.setSelectionRange(keep.s, keep.s); }catch(e){} } }
 }
 
 var JA = (function(){ try{ return new Intl.Collator('ja'); }catch(e){ return {compare:function(a, b){ return a < b ? -1 : a > b ? 1 : 0; }}; } })();
@@ -1249,7 +1289,7 @@ function insertSeed(w){
   var t = s.text || '', at = s.caret == null ? t.length : s.caret;
   s.text = t.slice(0, at) + w + t.slice(at); s.caret = at + w.length;
   render();
-  var ta = document.getElementById('w-text'); if(ta){ ta.focus(); try{ ta.setSelectionRange(s.caret, s.caret); }catch(e){} }
+  var ta = $id('w-text'); if(ta){ ta.focus(); try{ ta.setSelectionRange(s.caret, s.caret); }catch(e){} }
 }
 
 /* ===== 先生 ===== */
@@ -1438,12 +1478,12 @@ function copyText(t){
 
 /* ===== ドラッグ ===== */
 var drag = null;
-function boardPoint(e){ var b = document.getElementById('board').getBoundingClientRect(); return {x:e.clientX - b.left, y:e.clientY - b.top}; }
+function boardPoint(e){ var b = $id('board').getBoundingClientRect(); return {x:e.clientX - b.left, y:e.clientY - b.top}; }
 function noteAt(pt, exceptId){
   var found = null;
-  document.querySelectorAll('#board .note').forEach(function(el){
+  $qa('#board .note').forEach(function(el){
     if(el.getAttribute('data-id') === exceptId) return;
-    var r = el.getBoundingClientRect(), b = document.getElementById('board').getBoundingClientRect();
+    var r = el.getBoundingClientRect(), b = $id('board').getBoundingClientRect();
     var x = pt.x + b.left, y = pt.y + b.top;
     if(x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) found = el.getAttribute('data-id');
   });
@@ -1451,7 +1491,7 @@ function noteAt(pt, exceptId){
 }
 function faceAt(e){
   var f = null;
-  document.querySelectorAll('.face[data-face]').forEach(function(el){
+  $qa('.face[data-face]').forEach(function(el){
     var r = el.getBoundingClientRect();
     if(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) f = el.getAttribute('data-face');
   });
@@ -1493,7 +1533,7 @@ document.addEventListener('pointermove', function(e){
   if(x && x.kind === 'note'){
     var t = noteAt(boardPoint(e), drag.id);
     document.querySelectorAll('.note.target').forEach(function(n){ n.classList.remove('target'); });
-    if(t){ var tel = document.querySelector('#board .note[data-id="' + t + '"]'); if(tel) tel.classList.add('target'); }
+    if(t){ var tel = $q('#board .note[data-id="' + t + '"]'); if(tel) tel.classList.add('target'); }
     document.querySelectorAll('.face').forEach(function(f){ f.classList.toggle('drop', f.getAttribute('data-face') === faceAt(e) && f.getAttribute('data-face') !== ui.face); });
   }
 });
@@ -1544,7 +1584,7 @@ function tapItem(x){
 /* 板の 列数（方眼の 数）。画面の 幅から 決める */
 function boardCols(){
   /* 左の 道具の 列（64＋あいだ）・まわりの 余白・枠線・たてスクロールバーの 分を 引く */
-  var w = window.innerWidth - (isMine() && ui.face !== 'trash' ? 12 + 64 + 12 : 12) - 12 - 4 - 18;
+  var w = paneW() - (isMine() && ui.face !== 'trash' ? 12 + 64 + 12 : 12) - 12 - 4 - 18;
   return Math.max(NOTE_W + 2, Math.floor(w / GRID));
 }
 function clampX(x, w){ return Math.max(0, Math.min(x, boardCols() - (w || NOTE_W) - 1)); }
@@ -1573,15 +1613,15 @@ document.addEventListener('click', function(e){
   if(act === 'tanes'){ ui.sheet.seeds = !ui.sheet.seeds; render(); return; }
   if(act === 'tane'){ insertSeed(b.getAttribute('data-w')); return; }
   if(act === 'tane-add'){
-    var nw = document.getElementById('seed-new').value.trim().slice(0, 12); if(!nw) return;
+    var nw = $id('seed-new').value.trim().slice(0, 12); if(!nw) return;
     var ms = mySeeds(); if(ms.indexOf(nw) < 0 && SEEDS.indexOf(nw) < 0){ ms.push(nw); saveSeeds(ms); }
     render(); toast('「' + nw + '」の たねを つくりました'); return;
   }
   if(act === 'tane-del'){ var md = mySeeds(); md.splice(+b.getAttribute('data-i'), 1); saveSeeds(md); render(); return; }
-  if(act === 'add'){ ui.sheet = {type:'write', gift:!isMine()}; render(); setTimeout(function(){ var t = document.getElementById('w-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 'add'){ ui.sheet = {type:'write', gift:!isMine()}; render(); setTimeout(function(){ var t = $id('w-text'); if(t) t.focus(); }, 0); return; }
   if(act === 'edit'){ ui.sheet = {type:'write', id:id, text:item(id).text}; render(); return; }
   if(act === 'w-save'){
-    var text = document.getElementById('w-text').value.trim(); if(!text) return;
+    var text = $id('w-text').value.trim(); if(!text) return;
     var s = ui.sheet; ui.sheet = null;
     if(s.id){ if(item(s.id)) commit(function(){ item(s.id).text = text; }); else render(); return; }
     if(s.gift){
@@ -1598,12 +1638,12 @@ document.addEventListener('click', function(e){
   if(act === 'tool'){ ui.tool = ui.tool === 'arrow' ? 'move' : 'arrow'; ui.arrowFrom = null; render(); return; }
   if(act === 'frame'){
     if(!canArrange()){ toast(orgHint()); return; }
-    var sc = document.querySelector('.wrap');
+    var sc = $q('.wrap');
     commit(function(){ S.items.push({id:nid(), kind:'frame', team:myTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
     return;
   }
-  if(act === 'f-sug'){ var fi = document.getElementById('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
-  if(act === 'f-save'){ var v = document.getElementById('f-text').value; ui.sheet = null; commit(function(){ item(id).text = v; }); return; }
+  if(act === 'f-sug'){ var fi = $id('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
+  if(act === 'f-save'){ var v = $id('f-text').value; ui.sheet = null; commit(function(){ item(id).text = v; }); return; }
   if(act === 'del'){ ui.sheet = null; commit(function(){ dropArrows(id); S.items = S.items.filter(function(x){ return x.id !== id; }); }); return; }
   if(act === 'like'){
     var ln = item(id); if(!canLike(ln)) return;
@@ -1649,9 +1689,9 @@ document.addEventListener('click', function(e){
     commit(function(){ S.stars.push({noteId:id, viewer:me, k:kind, rd:curRound(nn.team), x:+sx.toFixed(1), y:+sy.toFixed(1), r:Math.round(Math.random()*30 - 15)}); });
     return;
   }
-  if(act === 'cmt'){ ui.sheet = {type:'cmt', id:id}; render(); setTimeout(function(){ var t = document.getElementById('c-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 'cmt'){ ui.sheet = {type:'cmt', id:id}; render(); setTimeout(function(){ var t = $id('c-text'); if(t) t.focus(); }, 0); return; }
   if(act === 'c-save' || act === 'c-del'){
-    var ctext = act === 'c-save' ? document.getElementById('c-text').value.trim().slice(0, 100) : '';
+    var ctext = act === 'c-save' ? $id('c-text').value.trim().slice(0, 100) : '';
     var cno = item(id); if(!canComment(cno)) return;
     ui.sheet = null;
     commit(function(){
@@ -1663,10 +1703,10 @@ document.addEventListener('click', function(e){
   if(act === 'done'){
     var dx = item(id);
     if(dx.done){ commit(function(){ dx.done = false; delete dx.doneBy; }); return; }
-    ui.sheet = {type:'done', id:id}; render(); setTimeout(function(){ var t = document.getElementById('d-text'); if(t) t.focus(); }, 0); return;
+    ui.sheet = {type:'done', id:id}; render(); setTimeout(function(){ var t = $id('d-text'); if(t) t.focus(); }, 0); return;
   }
   if(act === 'd-save'){
-    var who2 = document.getElementById('d-text').value.trim();
+    var who2 = $id('d-text').value.trim();
     ui.sheet = null; commit(function(){ var x = item(id); x.done = true; if(who2) x.doneBy = who2.slice(0, 40); else delete x.doneBy; }); return;
   }
   if(act === 'toface'){ ui.sheet = null; moveFace(item(id), b.getAttribute('data-f')); return; }
@@ -1687,7 +1727,7 @@ document.addEventListener('click', function(e){
     if(!parent || !stackOf(parent.id).length) ui.sheet = null;
     render(); return;
   }
-  if(act === 'search'){ ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = document.getElementById('s-text'); if(t) t.focus(); }, 0); return; }
+  if(act === 'search'){ ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = $id('s-text'); if(t) t.focus(); }, 0); return; }
   if(act === 's-sort'){ ui.sheet.sort = b.getAttribute('data-k'); render(); return; }
   if(act === 's-face'){ ui.sheet.face = b.getAttribute('data-f'); render(); return; }
   if(act === 's-kind'){ ui.sheet.kind = b.getAttribute('data-k'); render(); return; }
@@ -1741,7 +1781,7 @@ document.addEventListener('click', function(e){
   if(act === 'tround'){ ui.tRound = +b.getAttribute('data-r'); render(); return; }
   if(act === 'trial-go'){ trialGo(+b.getAttribute('data-n')); return; }
   if(act === 'trial-reset'){ if(!arm('trial')) return; S = fresh(); trialSeed(); trialGo(0); return; }
-  if(act === 'trial-min'){ ui.trialMin = !ui.trialMin; render(); return; }
+  if(act === 'trial-min'){ TRIAL_ST.min = !TRIAL_ST.min; render(); return; }
   if(act === 'tcls'){ ui.tCls = b.getAttribute('data-c'); render(); return; }
   if(act === 'round-next'){
     if(!arm('round')) return;
@@ -1784,6 +1824,7 @@ document.addEventListener('click', function(e){
   if(act === 'csv'){ csv(); return; }
 });
 document.addEventListener('change', function(e){
+  if(e.target.id === 'splitwho' && SPLIT){ SPLIT.panes[0] = {me:e.target.value, ui:newUi()}; if(SPLIT.cur === 0){ me = SPLIT.panes[0].me; ui = SPLIT.panes[0].ui; } render(); return; }
   if(e.target.id === 'who'){ me = e.target.value; Platform.setMe(me); hist = {undo:[], redo:[]}; ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front', trialStep:ui.trialStep, trialMin:ui.trialMin}; render(); }
 });
 /* 文字で さがす：変換中は 描き直さない（日本語入力が こわれるため） */
@@ -1805,13 +1846,13 @@ document.addEventListener('keydown', function(e){
   var k = e.key.toLowerCase();
   if(k === 'z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
   if(k === 'y' || (k === 'z' && e.shiftKey)){ e.preventDefault(); redo(); return; }
-  if(k === 'f' && !isTeacher() && isMine() && !inGallery()){ e.preventDefault(); ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = document.getElementById('s-text'); if(t) t.focus(); }, 0); }
-  if(k === 'f' && isTeacher()){ var q = document.getElementById('t-q'); if(q){ e.preventDefault(); q.focus(); } }
+  if(k === 'f' && !isTeacher() && isMine() && !inGallery()){ e.preventDefault(); ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = $id('s-text'); if(t) t.focus(); }, 0); }
+  if(k === 'f' && isTeacher()){ var q = $id('t-q'); if(q){ e.preventDefault(); q.focus(); } }
 });
 document.addEventListener('keydown', function(e){
-  if(e.target.id === 'd-text' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); var dsv = document.querySelector('[data-act=d-save]'); if(dsv) dsv.click(); return; }
+  if(e.target.id === 'd-text' && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); var dsv = $q('[data-act=d-save]'); if(dsv) dsv.click(); return; }
   if(e.target.id === 'w-text' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){
-    e.preventDefault(); var s = document.querySelector('[data-act=w-save],[data-act=note-close]'); if(s) s.click();
+    e.preventDefault(); var s = $q('[data-act=w-save],[data-act=note-close]'); if(s) s.click();
   }
 });
 
@@ -1842,7 +1883,13 @@ var TRIAL_STEPS = [
     'シールの 集計：班ごと・付箋ごとに、どの シールが 何まいか と コメント（回を えらべる）',
     '「班の ボード」で 付箋を タップすると 文字を 直せる・完全に 消せる（2回 押し）。整理役も 決められる・はずせる',
     '「意見の 一覧」で しぼって「表を コピー」や「Gemini 用」。「書き出し」の CSV は 番号つきの 記録']},
-  {who:'teacher', title:'⑥ 授業の 設定（先生）', mode:true, star:true, items:[
+  {who:'teacher', title:'⑥ 先生と 児童を ならべて ためす', split:true, items:[
+    '左が 児童（A組 1ばん）、右が 先生の 画面です。右で 変えた ことが 左に すぐ 出ます（本番では 10秒ほど）',
+    'ためして みる：共同閲覧を「同じ組」→ 左の 右上に「ほかの班を 見る」。アイデア提案 → いただきもの に 貼れる',
+    '調べモードを「入」→ 付箋に めくれ。見合い会の 画面を「入」→ 左が 待ち画面 →「はじめる」で 1はんの 番（1ばんは 見るだけ）',
+    '左の 児童は 上で かえられる（2はんの 子に すると、1はんの 番で シールを 貼れる）',
+    '左でも 右でも ふつうに 操作 できる（付箋を 書く・整理する・シールを 貼る など）']},
+  {who:'teacher', title:'⑦ 授業の 設定（先生）', mode:true, star:true, items:[
     '「ふだんの 活動」：共同閲覧・アイデア提案を「切／同じ組／学年」、整理役の 時間',
     '「見合い会」：見合い会の 画面を 入れると 待ち画面 →「開いた 児童」が そろったら「はじめる」。1つの 班の 時間・一時停止・つぎの 班へ・やめる',
     '調べモード（ふだんの 活動）：入れると 付箋の 右下に めくれが 出て、うらに しらべた ことを 書ける（見本では 入れて ある。切っても 書いた ことは のこる）',
@@ -1850,20 +1897,26 @@ var TRIAL_STEPS = [
     '本番では 児童の 画面に 10秒ほどで 届く。上の「見本の 切り替え」で 児童に して たしかめる']}
 ];
 function trialGo(n){
-  var st = TRIAL_STEPS[n]; ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front', trialStep:n, trialMin:ui.trialMin};
+  var st = TRIAL_STEPS[n]; TRIAL_ST.n = n;
   S.modes.A = S.modes.A || blankModes();
   S.modes.A.starOut = st.star ? 'class' : 'off';
   S.modes.A.rot = st.rot ? {min:4, start:nowMs(), paused:null} : null;
   if(st.view) S.modes.A.view = 'class';
   S.modes.A.research = st.research || st.mode ? 'on' : 'off';
-  ui.ttab = st.tally ? 'tally' : st.mode ? 'mode' : null;
-  me = st.who; Platform.setMe(me); Platform.push(null); render(); window.scrollTo(0, 0);
+  if(st.split){
+    S.modes.A.view = 'off'; S.modes.A.propose = 'off'; S.modes.A.research = 'off';
+    SPLIT = {cur:1, panes:[{me:'A01', ui:newUi()}, {me:'teacher', ui:newUi({ttab:'mode'})}]};
+    me = 'teacher'; ui = SPLIT.panes[1].ui;
+  } else {
+    SPLIT = null; ui = newUi({ttab:st.tally ? 'tally' : st.mode ? 'mode' : null}); me = st.who;
+  }
+  Platform.setMe(me); Platform.push(null); render(); window.scrollTo(0, 0);
 }
 function trialHTML(){
-  var n = ui.trialStep || 0, st = TRIAL_STEPS[n];
-  var fold = '<button class="trialfold" data-act="trial-min" aria-expanded="' + !ui.trialMin + '">' + (ui.trialMin ? '▶ 体験の 案内（' + '①②③④⑤⑥'[n] + '）を ひらく' : '▼ 体験の 案内（たたむ）') + '</button>';
-  if(ui.trialMin) return '<div class="trial min">' + fold + '</div>';
-  return '<div class="trial">' + fold + '<div class="trial-tabs">' + TRIAL_STEPS.map(function(x, i){ return '<button class="' + (i === n ? 'on' : '') + '" data-act="trial-go" data-n="' + i + '">' + '①②③④⑤⑥'[i] + '</button>'; }).join('')
+  var n = TRIAL_ST.n || 0, st = TRIAL_STEPS[n];
+  var fold = '<button class="trialfold" data-act="trial-min" aria-expanded="' + !TRIAL_ST.min + '">' + (TRIAL_ST.min ? '▶ 体験の 案内（' + '①②③④⑤⑥⑦'[n] + '）を ひらく' : '▼ 体験の 案内（たたむ）') + '</button>';
+  if(TRIAL_ST.min) return '<div class="trial min">' + fold + '</div>';
+  return '<div class="trial">' + fold + '<div class="trial-tabs">' + TRIAL_STEPS.map(function(x, i){ return '<button class="' + (i === n ? 'on' : '') + '" data-act="trial-go" data-n="' + i + '">' + '①②③④⑤⑥⑦'[i] + '</button>'; }).join('')
     + '</div><b>' + esc(st.title) + '</b><ul>' + st.items.map(function(t){ return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
     + '<div class="row" style="margin:6px 0 0">' + (n > 0 ? '<button class="btn" data-act="trial-go" data-n="' + (n - 1) + '">← まえ</button>' : '') + (n < TRIAL_STEPS.length - 1 ? '<button class="btn primary" data-act="trial-go" data-n="' + (n + 1) + '">つぎ →</button>' : '')
     + confirmBtn('trial', 'trial-reset', '', '最初から', 'もう一度 押すと 最初から', '体験で 書いた 付箋・シールが 消えます（本番の データは そのまま）') + '</div></div>';
@@ -1954,7 +2007,7 @@ setInterval(function(){
 }, 1000);
 Platform.start(function(s, who, spots, info){ S = s; S.comments = S.comments || []; S.org = S.org || {}; if(window.__bootOrg){ me = who; setOrg(window.__bootOrg); } me = who; if(info && info.mates){ S.mates = {}; S.mates[info.team] = info.mates; }
   if(TRIAL && !S.items.length){ trialSeed(); trialGo(0); return; }
-  if(TRIAL) ui.trialStep = 0; if(spots) SPOTS = spots; if(info && info.cls) ui.tCls = info.cls; var c = child(me); if(!c && classes().indexOf(ui.tCls) < 0) ui.tCls = classes()[0]; render(); });
+  if(TRIAL) TRIAL_ST.n = 0; if(spots) SPOTS = spots; if(info && info.cls) ui.tCls = info.cls; var c = child(me); if(!c && classes().indexOf(ui.tCls) < 0) ui.tCls = classes()[0]; render(); });
 </script>
 </body>
 </html>
