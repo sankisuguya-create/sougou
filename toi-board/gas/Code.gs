@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 12;
+var API_VER = 13;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -396,7 +396,8 @@ function apply(ops){
 
     var KEEP = ['id', 'team', 'author', 'fromTeam'];  // 変わった 項目として 送られても 変えない
     var ARRANGE = ['x', 'y', 'w', 'h', 'stackOf', 'lp'], orgOk = null;
-    function canArrange(){ if(orgOk === null) orgOk = u.role === 'child' && isOrg_(u); return orgOk; }
+    // 整理モードが 切の 組では 班の だれでも 動かせる
+    function canArrange(){ if(orgOk === null) orgOk = u.role === 'child' && ((modes[u.cls] || {}).orgMode === 'off' || isOrg_(u)); return orgOk; }
     (ops.up || []).forEach(guard_(rejected, function(x){ return String(x && x.id || ''); }, function(x){
       var id = String(x && x.id || '');
       if(x && x.p && typeof x.p === 'object'){
@@ -555,6 +556,7 @@ function apply(ops){
           round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1))),
           orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5,
           rotMin:ROT_MINS.indexOf(Number(m.rotMin)) >= 0 ? Number(m.rotMin) : 4,
+          orgMode:m.orgMode === 'off' ? 'off' : 'on',
           research:m.research === 'on' ? 'on' : 'off'
         };
         // 見合い会の 順番：時刻は サーバーが 決める（先生の 端末の 時計は 使わない）

@@ -484,6 +484,11 @@ function makeGas() {
   ok(ro.rejected.length === 0 && sa.ans === 'しらべた こと' && sa.text.includes('1はんの 問い'), '付箋の うらに 書いた ことが 保存され、おもての 文は そのまま');
   ok(O.as('p3' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { ans: 'x' }, u: [] }], del: [], star: [] }]).rejected.length === 1, 'ほかの 班の 付箋の うらには 書けない');
   ok(O.as(T, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { ans: '先生が なおした' }, u: [] }], del: [], star: [] }]).rejected.length === 0 && JSON.parse(O.sheets.items.data.find(r => r[0] === 's1')[3]).ans === '先生が なおした', '先生は 付箋の うらも 直せる');
+  // 整理モード：切の 組では 整理役で なくても 動かせる（組ごと）
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { starOut: 'off', research: 'on', orgMode: 'off' }) } }]);
+  ok(JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).orgMode === 'off' && O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { x: 20 }, u: [] }], del: [], star: [] }]).rejected.length === 0, '整理モードを 切に すると 整理役で なくても 動かせる');
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { starOut: 'off', orgMode: 'on' }) } }]);
+  ok(O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { x: 25 }, u: [] }], del: [], star: [] }]).rejected.length === 1, '整理モードを 入に もどすと また 整理役だけ');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }
