@@ -257,7 +257,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 11 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 12 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -291,7 +291,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[7])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -429,8 +429,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
     return { tsv: opinionTSV(), r0, r1, r2, ai: aiText('next') };
   });
   ok(!gx.tsv.includes('やまだ') && gx.r0[5] === '○', 'しらべた人の 名前は 一覧に 入らない（○だけ）');
-  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[7]) && /第2回 面白い！1/.test(gx.r0[7]), 'シールは 前の 回も ふくめて 回ごとに 出る');
-  ok(gx.r1[9] && gx.r1[9].includes('（上）') && gx.r2[9] === gx.r1[9].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
+  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[8]) && /第2回 面白い！1/.test(gx.r0[8]), 'シールは 前の 回も ふくめて 回ごとに 出る');
+  ok(gx.r1[10] && gx.r1[10].includes('（上）') && gx.r2[10] === gx.r1[10].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
   ok(gx.ai.startsWith('次の表は') && gx.ai.includes('\n\n組\t班') && !gx.ai.includes('やまだ'), 'Gemini 用は 指示文の あとに 表が つく');
   }
   {
@@ -690,6 +690,27 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=cmt-purge]');
   ok(!(await page.evaluate(id => S.comments.some(c => c.noteId === id && c.text === 'ふさわしくない ことば'), cn)), '先生は コメントを 1つずつ 消せる');
   }
+  // 調べモード：はじめは 切（めくれ なし）→ 先生が 入れると めくれ → うらに わかった ことを 書ける
+  await who('A01'); await page.click('.face[data-face=front]');
+  const rn = await page.evaluate(() => S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).id);
+  ok(!(await page.isVisible('#board .curl')) && (await page.evaluate(() => S.modes.A.research)) !== 'on', '調べモードは はじめ 切（めくれは 出ない）');
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=research][data-v=on]');
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(await page.isVisible(`#board .note[data-id="${rn}"] .curl`), '調べモードを 入れると 付箋の 右下に めくれが 出る');
+  const cb2 = await page.locator(`#board .note[data-id="${rn}"] .curl`).boundingBox(), nb4 = await page.locator(`#board .note[data-id="${rn}"]`).boundingBox();
+  ok(Math.abs(cb2.x + cb2.width - (nb4.x + nb4.width)) < 3 && Math.abs(cb2.y + cb2.height - (nb4.y + nb4.height)) < 3, 'めくれは 付箋の 右下の 角');
+  await page.click(`#board .note[data-id="${rn}"] .curl`);
+  ok(await page.isVisible('.bignote.back #w-ans'), 'めくれを 押すと 付箋の うらが 出て 書ける');
+  await page.fill('#w-ans', '市の ホームページで しらべた');
+  await page.keyboard.press('Escape');
+  ok(await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた' && await page.isVisible(`#board .note[data-id="${rn}"] .curl.has`), 'うらに 書いた ことは とじると 保存され、めくれの 色が かわる');
+  await page.click(`#board .note[data-id="${rn}"]`); await page.click('[data-act=flip]');
+  ok((await page.inputValue('#w-ans')) === '市の ホームページで しらべた', 'おもての 画面からも うらへ めくれる');
+  await page.keyboard.press('Escape');
+  ok((await page.evaluate(() => opinionTSV())).includes('市の ホームページで しらべた'), '意見の 一覧に わかったこと（うら）が 入る');
+  await who('teacher'); await page.click('[data-act=research][data-v=off]');
+  await who('A01'); await page.click('.face[data-face=front]');
+  ok(!(await page.isVisible('#board .curl')) && await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた', '調べモードを 切っても 書いた ことは のこる');
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');

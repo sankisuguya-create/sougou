@@ -476,6 +476,14 @@ function makeGas() {
   const mStop = JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]);
   ok(mStop.rot === null && mStop.starOut === 'off', '「やめる」で シール（班の外）も 切に なる');
   O.ctx.Date = Date;
+  // 調べモード：組ごとに 保存。うらの 文（ans）は 同じ 班の 児童が 書け、ほかの 項目と 別に のこる
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { starOut: 'off', research: 'on' }) } }]);
+  ok(JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).research === 'on', '調べモードが 組ごとに 保存される');
+  ro = O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { ans: 'しらべた こと' }, u: [] }], del: [], star: [] }]);
+  const sa = JSON.parse(O.sheets.items.data.find(r => r[0] === 's1')[3]);
+  ok(ro.rejected.length === 0 && sa.ans === 'しらべた こと' && sa.text.includes('1はんの 問い'), '付箋の うらに 書いた ことが 保存され、おもての 文は そのまま');
+  ok(O.as('p3' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { ans: 'x' }, u: [] }], del: [], star: [] }]).rejected.length === 1, 'ほかの 班の 付箋の うらには 書けない');
+  ok(O.as(T, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { ans: '先生が なおした' }, u: [] }], del: [], star: [] }]).rejected.length === 0 && JSON.parse(O.sheets.items.data.find(r => r[0] === 's1')[3]).ans === '先生が なおした', '先生は 付箋の うらも 直せる');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }

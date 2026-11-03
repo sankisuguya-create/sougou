@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 11;
+var API_VER = 12;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -165,7 +165,7 @@ function slots_(){
   cache_().put('slots', JSON.stringify(m), 21600);
   return m;
 }
-function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5}; }
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, research:'off'}; }
 function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
   var c = cache_().get('modes');
@@ -402,8 +402,8 @@ function apply(ops){
       if(x && x.p && typeof x.p === 'object'){
         // 変わった 項目だけ：いまの 付箋に 重ねる（ほかの 項目は さわらない）
         var ri = index[id], er = ri !== undefined && ri >= 0 ? irows[ri] : null;
-        // 先生は 文だけ 直せる（ふさわしくない ことば・誤字の 手当て）
-        var tEdit = u.role === 'teacher' && !(x.u || []).length && Object.keys(x.p).length && Object.keys(x.p).every(function(k){ return k === 'text'; });
+        // 先生は 文（おもて・うら）だけ 直せる（ふさわしくない ことば・誤字の 手当て）
+        var tEdit = u.role === 'teacher' && !(x.u || []).length && Object.keys(x.p).length && Object.keys(x.p).every(function(k){ return k === 'text' || k === 'ans'; });
         if(!er || er[5] || (!tEdit && (u.role !== 'child' || String(er[1]) !== u.team))){ rejected.push(id); return; }
         var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
         if(!cur){ rejected.push(id); return; }
@@ -554,7 +554,8 @@ function apply(ops){
           starOut:SCOPE_KEYS.indexOf(m.starOut) >= 0 ? m.starOut : 'off',
           round:Math.max(1, Math.min(20, Math.floor(Number(m.round) || 1))),
           orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5,
-          rotMin:ROT_MINS.indexOf(Number(m.rotMin)) >= 0 ? Number(m.rotMin) : 4
+          rotMin:ROT_MINS.indexOf(Number(m.rotMin)) >= 0 ? Number(m.rotMin) : 4,
+          research:m.research === 'on' ? 'on' : 'off'
         };
         // 見合い会の 順番：時刻は サーバーが 決める（先生の 端末の 時計は 使わない）
         var rot = (modes[cls] || {}).rot || null, act = String(m.rotAct || ''), t0 = Date.now();
