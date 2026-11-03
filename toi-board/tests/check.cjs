@@ -518,12 +518,18 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await tp.goto(FILE + '?trial=1');
   await tp.waitForSelector('.trial');
   ok(await tp.isVisible('.trial b:has-text("① ボードで 付箋を 編集する")') && await tp.locator('#board .note').count() >= 4 && await tp.isVisible('.fab'), '① 児童の ボード（見本の 付箋つき）から 始まる');
+  await tp.click('.trial [data-act=trial-min]');
+  ok(await tp.isVisible('.trial.min') && !(await tp.isVisible('.trial ul')) && (await tp.getAttribute('.trialfold', 'aria-expanded')) === 'false', '体験の 案内は たためる');
+  await tp.click('.trial [data-act=trial-min]');
+  ok(await tp.isVisible('.trial ul') && (await tp.getAttribute('.trialfold', 'aria-expanded')) === 'true', '体験の 案内を また ひらける');
   await tp.click('.trial [data-act=trial-go][data-n="1"]');
   ok(await tp.isVisible('.book') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
   await tp.click('.trial [data-act=trial-go][data-n="2"]');
   ok(await tp.isVisible('.stage') && await tp.locator('.stnote .s').count() > 0, '③ 見られる班の 画面（見本の シールが 1まいずつ）');
   await tp.click('.trial [data-act=trial-go][data-n="3"]');
   ok(await tp.isVisible('h2:has-text("シールの 集計")') && (await tp.$$eval('table.tally td.num:not(.zero)', els => els.length)) > 0, '③ 先生の 集計（見本の シールが 入っている）');
+  const cw = await tp.$$eval('table.tally .c1', els => els.map(e => Math.round(e.getBoundingClientRect().width)));
+  ok(cw.length >= 2 && cw.every(w => w === cw[0]), 'シールの 集計の コメントは 横幅が そろう');
   await tp.click('.trial [data-act=trial-go][data-n="4"]');
   ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=rotmin]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
   await tp.screenshot({ path: SHOTS + '/14-trial.png' });
@@ -679,6 +685,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const cn = await page.evaluate(() => { const n = S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); S.comments.push({ noteId: n.id, viewer: 'B03', text: 'ふさわしくない ことば' }); Platform.push(null); return n.id; });
   await page.click('[data-act=ttab][data-k=board]');
   await page.click(`#board .note[data-id="${cn}"] .cicon`);
+  await page.click('[data-act=cmt-purge]');
+  ok(await page.isVisible('text=もう一度 押すと 消えます') && await page.evaluate(id => S.comments.some(c => c.noteId === id && c.text === 'ふさわしくない ことば'), cn), 'コメントを 消す 前に もう一度 たしかめる（1回目では 消えない）');
   await page.click('[data-act=cmt-purge]');
   ok(!(await page.evaluate(id => S.comments.some(c => c.noteId === id && c.text === 'ふさわしくない ことば'), cn)), '先生は コメントを 1つずつ 消せる');
   }
