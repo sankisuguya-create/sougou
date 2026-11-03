@@ -246,6 +246,8 @@ td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 .ttab.on{background:#fff;border-color:var(--line);color:var(--ink)}
 .trial{position:fixed;right:12px;bottom:12px;width:min(420px,calc(100% - 120px));background:#fff;border:3px solid var(--cat-2);border-radius:14px;padding:10px 14px;z-index:90;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:15px}
 .trial.min{width:auto;padding:6px}
+.trialfold{display:block;width:100%;min-height:40px;margin:0 0 6px;border:0;background:transparent;text-align:left;font-weight:700;font-size:15px;color:var(--ink)}
+.trial.min .trialfold{margin:0;padding:0 8px}
 .trial ul{margin:6px 0;padding-left:20px}
 .trial li{margin:3px 0}
 .trial-tabs{display:flex;gap:4px;margin-bottom:6px}
@@ -1547,7 +1549,7 @@ document.addEventListener('click', function(e){
   }
   if(act === 'tround'){ ui.tRound = +b.getAttribute('data-r'); render(); return; }
   if(act === 'trial-go'){ trialGo(+b.getAttribute('data-n')); return; }
-  if(act === 'trial-reset'){ if(ui.armed !== 'trial'){ ui.armed = 'trial'; render(); setTimeout(function(){ if(ui.armed === 'trial'){ ui.armed = false; render(); } }, 3000); return; } ui.armed = false; S = fresh(); trialSeed(); trialGo(0); return; }
+  if(act === 'trial-reset'){ if(!arm('trial')) return; S = fresh(); trialSeed(); trialGo(0); return; }
   if(act === 'trial-min'){ ui.trialMin = !ui.trialMin; render(); return; }
   if(act === 'tcls'){ ui.tCls = b.getAttribute('data-c'); render(); return; }
   if(act === 'round-next'){
@@ -1627,8 +1629,8 @@ var TRIAL_STEPS = [
   {who:'A01', title:'① ボードで 付箋を 編集する（児童）', view:true, items:[
     '左下の ＋ で 付箋を 書く（大きな 付箋に そのまま 書く）。下の「？のたね」で 言葉が 入る',
     '付箋を タップ → 大きな 付箋で そのまま 文字を 直せる（とじると 保存）。左に 調査済み・見てほしい・→うらへ・→🗑️へ、右に いいね と 重なり',
-    '左の「整理する」を 押した 子だけが 決まった 時間（先生が 3〜15分で 決める）付箋・わくを うごかせる（班で 1人・先着）。ほかの 付箋の 上に 落とすと 重なる',
-    'いいねは 付箋の 右に、メンバーごとの 色で つく',
+    '左の「整理する」を 押した 子だけが、先生が 決めた 時間 付箋・わくを うごかせる（班で 1人・先着）。ほかの 付箋の 上に 落とすと 重なる',
+    'いいねは 付箋の 右に、メンバーごとの 色で つく。見てほしい付箋は 1つの 班で 8まいまで',
     '左の 道具：やじるし（2まいを 順に タップ）・わく・さがす・もどす（Ctrl+Z）。上の タブで うらがわ・いただきもの・ゴミばこ']},
   {who:'A05', title:'② 見合い会で シールを 貼る（児童）', star:true, rot:true, items:[
     '先生が「はじめる」を 押した あとの 画面です（今は A組 2はんの 児童。いまは 1はんの 番）',
@@ -1636,22 +1638,21 @@ var TRIAL_STEPS = [
     '貼った シールを タップ →「はがす」。付箋の 右下の 💬 で コメント（だれが 書いたかは 出ません）',
     '決まった 時間ごとに 1はん → 7はん と 自動で 切り替わり、おわると 全員 ボードに もどる']},
   {who:'A01', title:'③ 見合い会で 見られる 班（児童）', star:true, rot:true, items:[
-    '自分の 班の 番の 時の 1はんの 児童の 画面です',
-    '見るだけに なり、見てほしい付箋に シールが 1まいずつ ふえる（まとめず 実際の まい数、付箋は 縦に のびる）',
+    '自分の 班の 番の 時の 1はんの 児童の 画面です。見るだけに なります',
+    '見てほしい付箋に シールが 1まいずつ ふえる（まとめず 実際の まい数、付箋は 縦に のびる）',
     '💬 に 指を のせると コメントが 読める']},
   {who:'teacher', title:'④ 集計・一覧・付箋の 手当て（先生）', tally:true, items:[
-    'シールの 集計：班ごと・付箋ごとに、どの シールが 何まいか（回を えらべる）',
-    '「班の ボード」で 付箋を タップすると 文字を 直せる・完全に 消せる。整理役も 決められる・はずせる',
-    '「意見の 一覧」で しぼって「表を コピー」（Gemini に 貼れる）。「CSV を ダウンロード」で 番号つきの 記録']},
-  {who:'teacher', title:'⑤ 児童の 画面の 設定を 変える（先生）', mode:true, items:[
-    '共同閲覧・アイデア提案・シール（班の中／外）を 組ごとに「切／同じ組／学年」で 決める',
-    '見合い会：シール（班の外）を 入れると 待ち画面 →「開いた 児童」が そろったら「はじめる」。1つの 班の 時間・一時停止・つぎの 班へ・やめる。今の 班の 児童と 同じ 画面も 見える',
-    '整理役の 時間：3・5・10・15分',
-    '「第2回を はじめる」で 見合い会の 回を 進める。本番では 児童の 画面に 10秒ほどで 届く',
-    '上の「見本の 切り替え」で 児童に して、変わった 画面を たしかめる']}
+    'シールの 集計：班ごと・付箋ごとに、どの シールが 何まいか と コメント（回を えらべる）',
+    '「班の ボード」で 付箋を タップすると 文字を 直せる・完全に 消せる（2回 押し）。整理役も 決められる・はずせる',
+    '「意見の 一覧」で しぼって「表を コピー」や「Gemini 用」。「書き出し」の CSV は 番号つきの 記録']},
+  {who:'teacher', title:'⑤ 授業の 設定（先生）', mode:true, star:true, items:[
+    '「ふだんの 活動」：共同閲覧・アイデア提案を「切／同じ組／学年」、整理役の 時間',
+    '「見合い会」：見合い会の 画面を 入れると 待ち画面 →「開いた 児童」が そろったら「はじめる」。1つの 班の 時間・一時停止・つぎの 班へ・やめる',
+    '「第2回に すすめる」で 回を 進める。もどせない 操作は 2回 押し（1回目で 赤く なり、何が 起きるか 出る）',
+    '本番では 児童の 画面に 10秒ほどで 届く。上の「見本の 切り替え」で 児童に して たしかめる']}
 ];
 function trialGo(n){
-  var st = TRIAL_STEPS[n]; ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front', trialStep:n};
+  var st = TRIAL_STEPS[n]; ui = {face:'front', viewTeam:null, tool:'move', arrowFrom:null, sheet:null, toast:'', tCls:'A', tTeam:'A-1', armed:false, pop:null, fCls:'all', fFace:'front', trialStep:n, trialMin:ui.trialMin};
   S.modes.A = S.modes.A || blankModes();
   S.modes.A.starOut = st.star ? 'class' : 'off';
   S.modes.A.rot = st.rot ? {min:4, start:nowMs(), paused:null} : null;
@@ -1661,11 +1662,12 @@ function trialGo(n){
 }
 function trialHTML(){
   var n = ui.trialStep || 0, st = TRIAL_STEPS[n];
-  if(ui.trialMin) return '<div class="trial min"><button class="btn" data-act="trial-min">体験の 案内を ひらく</button></div>';
-  return '<div class="trial"><div class="trial-tabs">' + TRIAL_STEPS.map(function(x, i){ return '<button class="' + (i === n ? 'on' : '') + '" data-act="trial-go" data-n="' + i + '">' + '①②③④⑤'[i] + '</button>'; }).join('')
-    + '<button data-act="trial-min" title="小さく する">－</button></div><b>' + esc(st.title) + '</b><ul>' + st.items.map(function(t){ return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
+  var fold = '<button class="trialfold" data-act="trial-min" aria-expanded="' + !ui.trialMin + '">' + (ui.trialMin ? '▶ 体験の 案内（' + '①②③④⑤'[n] + '）を ひらく' : '▼ 体験の 案内（たたむ）') + '</button>';
+  if(ui.trialMin) return '<div class="trial min">' + fold + '</div>';
+  return '<div class="trial">' + fold + '<div class="trial-tabs">' + TRIAL_STEPS.map(function(x, i){ return '<button class="' + (i === n ? 'on' : '') + '" data-act="trial-go" data-n="' + i + '">' + '①②③④⑤'[i] + '</button>'; }).join('')
+    + '</div><b>' + esc(st.title) + '</b><ul>' + st.items.map(function(t){ return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
     + '<div class="row" style="margin:6px 0 0">' + (n > 0 ? '<button class="btn" data-act="trial-go" data-n="' + (n - 1) + '">← まえ</button>' : '') + (n < TRIAL_STEPS.length - 1 ? '<button class="btn primary" data-act="trial-go" data-n="' + (n + 1) + '">つぎ →</button>' : '')
-    + '<button class="btn danger" data-act="trial-reset">' + (ui.armed === 'trial' ? 'もう一度 押すと 最初から' : '最初から') + '</button></div></div>';
+    + confirmBtn('trial', 'trial-reset', '', '最初から', 'もう一度 押すと 最初から', '体験で 書いた 付箋・シールが 消えます（本番の データは そのまま）') + '</div></div>';
 }
 /* 体験用の 見本：付箋・重なり・見てほしい・シール・コメント・調査済み・いただきもの */
 function trialSeed(){
@@ -1677,7 +1679,13 @@ function trialSeed(){
     [a1[0], a1[1], a3[0], a3[1]].forEach(function(n, j){ if((i + j) % 3 !== 2) S.stars.push({noteId:n.id, viewer:v, k:kinds[(i + j) % 4], rd:1}); });
   });
   S.comments.push({noteId:a1[0].id, viewer:'A06', text:'それは だれが きめたの？'}, {noteId:a1[1].id, viewer:'A10', text:'いつ わかったの？'});
-  a1[2].done = true; a1[2].doneBy = 'たろう';
+  a1[2].done = true; a1[2].doneBy = 'たろう'; a1[2].showcase = 0; a1[3].showcase = 0;
+  // ほかの 班にも シール・コメント・調査済み（集計・見合い会で 見えるように）
+  S.items.filter(function(x){ return x.kind === 'note' && x.face === 'front' && x.showcase && clsOf(x.team) === 'A' && x.team !== 'A-1' && x.team !== 'A-3'; }).forEach(function(n, i){
+    ['A01','A02','A05'].forEach(function(v, j){ if((i + j) % 2 === 0 && S.roster.some(function(c){ return c.id === v && c.team !== n.team; })) S.stars.push({noteId:n.id, viewer:v, k:kinds[(i + j) % 4], rd:1}); });
+  });
+  S.comments.push({noteId:a3[0].id, viewer:'A01', text:'どうして そこに 作ったの？'}, {noteId:a3[1].id, viewer:'A05', text:'今も のこって いるの？'});
+  S.items.filter(function(x){ return x.kind === 'note' && x.face === 'front' && !x.showcase; }).slice(0, 4).forEach(function(x){ x.done = true; });
   a1[3].stackOf = a1[2].id;
   S.items.push({id:nid(), kind:'note', team:'A-1', face:'front', x:a1[2].x, y:a1[2].y, text:'だれが うめたの？', author:'A03', stackOf:a1[2].id, t:Date.now()});
   S.items.push({id:nid(), kind:'note', team:'A-1', face:'gift', x:1, y:1, text:'ホームベースは だれが ふむの？', author:'A09', fromTeam:'A-3', t:Date.now()});
@@ -1711,7 +1719,7 @@ function seed(){
       var members = S.roster.filter(function(c){ return c.team === s.team; });
       if(!members.length) return;
       Q[(s.no - 1) % Q.length].forEach(function(t, i){
-        S.items.push({id:nid(), kind:'note', team:s.team, face:'front', x:1 + (i%4)*(NOTE_W+1), y:2 + Math.floor(i/4)*(NOTE_H+2), text:t, author:members[i % members.length].id, mark:i%3 === 1 ? 1 : 0, showcase:i < 2});
+        S.items.push({id:nid(), kind:'note', team:s.team, face:'front', x:1 + (i%4)*(NOTE_W+1), y:2 + Math.floor(i/4)*(NOTE_H+2), text:t, author:members[i % members.length].id, mark:i%3 === 1 ? 1 : 0, showcase:i < 4 ? 1 : 0});
       });
       S.items.push({id:nid(), kind:'note', team:s.team, face:'back', x:1, y:1, text:'どこに あるの？', author:members[0].id});
     });

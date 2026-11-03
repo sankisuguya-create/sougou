@@ -518,6 +518,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await tp.goto(FILE + '?trial=1');
   await tp.waitForSelector('.trial');
   ok(await tp.isVisible('.trial b:has-text("① ボードで 付箋を 編集する")') && await tp.locator('#board .note').count() >= 4 && await tp.isVisible('.fab'), '① 児童の ボード（見本の 付箋つき）から 始まる');
+  await tp.click('.trial [data-act=trial-min]');
+  ok(await tp.isVisible('.trial.min') && !(await tp.isVisible('.trial ul')) && (await tp.getAttribute('.trialfold', 'aria-expanded')) === 'false', '体験の 案内は たためる');
+  await tp.click('.trial [data-act=trial-min]');
+  ok(await tp.isVisible('.trial ul') && (await tp.getAttribute('.trialfold', 'aria-expanded')) === 'true', '体験の 案内を また ひらける');
   await tp.click('.trial [data-act=trial-go][data-n="1"]');
   ok(await tp.isVisible('.book') && await tp.locator('.big').count() > 0, '② シール貼りの 画面に なる');
   await tp.click('.trial [data-act=trial-go][data-n="2"]');
