@@ -19,7 +19,7 @@ var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
 var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 var STAR_PER_TEAM = 2;
-var SHOW_PER_TEAM = 4;  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで（指導案の「4つ選ぶ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
+var SHOW_PER_TEAM = 8;  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで（指導案の「本命の 問い 8つ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
 /* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
 function doGet(e){

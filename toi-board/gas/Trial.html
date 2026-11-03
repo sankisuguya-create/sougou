@@ -672,7 +672,7 @@ var KINDS = [
 ];
 /* 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで（4種類×2＝8まいが その班への 持ち分）。同じ付箋に 同じ種類は 1まい */
 var STAR_PER_TEAM = 2;
-var SHOW_PER_TEAM = 4;  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで（指導案の「4つ選ぶ」）
+var SHOW_PER_TEAM = 8;  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで（指導案の「本命の 問い 8つ」）
 function usedIn(team, k){ var r = curRound(team); return S.stars.filter(function(s){ var n = item(s.noteId); return s.viewer === me && kindOf(s) === k && rdOf(s) === r && n && n.team === team; }).length; }
 function leftIn(team, k){ return Math.max(0, STAR_PER_TEAM - usedIn(team, k)); }
 /* シール貼り画面で 選べるのは use の 4種類だけ（ほかは 予備。データは 読める） */

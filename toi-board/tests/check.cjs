@@ -662,14 +662,15 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('.fab');
   ok(await page.getAttribute('#w-text', 'maxlength') === '200', '付箋の 文は 200字で 入力が 止まる');
   await page.keyboard.press('Escape');
-  // 見てほしい付箋は 4まいまで
-  await page.evaluate(() => commit(() => { for (let i = 0; i < 5; i++) S.items.push({ id: nid(), kind: 'note', team: 'A-1', face: 'front', x: 1 + i * 8, y: 60, text: 'え' + i, author: me }); }));
-  const five = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).slice(-5).map(x => x.id));
-  await page.evaluate(ids => commit(() => { S.items.forEach(x => { if (x.team === 'A-1' && shownNow(x) && !ids.includes(x.id)) x.showcase = 0; }); ids.slice(0, 4).forEach(id => { item(id).showcase = curRound('A-1'); }); }), five);
-  await page.locator(`#board .note[data-id="${five[4]}"]`).scrollIntoViewIfNeeded();
-  await page.click(`#board .note[data-id="${five[4]}"]`);
-  await page.click(`[data-act=showcase][data-id="${five[4]}"]`);
-  ok(await page.isVisible('text=見てほしい付箋は 4まいまで') && !(await page.evaluate(id => shownNow(item(id)), five[4])), '見てほしい付箋は 4まいまで（5まい目は 知らせて とめる）');
+  // 見てほしい付箋は SHOW_PER_TEAM（8）まいまで
+  const LIM = await page.evaluate(() => SHOW_PER_TEAM);
+  await page.evaluate(n => commit(() => { for (let i = 0; i <= n; i++) S.items.push({ id: nid(), kind: 'note', team: 'A-1', face: 'front', x: 1 + (i % 6) * 8, y: 60 + Math.floor(i / 6) * 7, text: 'え' + i, author: me }); }), LIM);
+  const five = await page.evaluate(n => S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).slice(-(n + 1)).map(x => x.id), LIM);
+  await page.evaluate(([ids, n]) => commit(() => { S.items.forEach(x => { if (x.team === 'A-1' && shownNow(x) && !ids.includes(x.id)) x.showcase = 0; }); ids.slice(0, n).forEach(id => { item(id).showcase = curRound('A-1'); }); }), [five, LIM]);
+  await page.locator(`#board .note[data-id="${five[LIM]}"]`).scrollIntoViewIfNeeded();
+  await page.click(`#board .note[data-id="${five[LIM]}"]`);
+  await page.click(`[data-act=showcase][data-id="${five[LIM]}"]`);
+  ok(LIM === 8 && await page.isVisible('text=見てほしい付箋は 8まいまで') && !(await page.evaluate(id => shownNow(item(id)), five[LIM])), '見てほしい付箋は 8まいまで（9まい目は 知らせて とめる）');
   await page.keyboard.press('Escape');
   // 先生：見てほしい付箋が ない 班を 知らせる
   await who('teacher');

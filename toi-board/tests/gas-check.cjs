@@ -370,14 +370,14 @@ function makeGas() {
   ], del: [], star: [] }]);
   const okRow = G.sheets.items.data.find(x => x[0] === 'ok1');
   ok(r.rejected.includes('bad1') && okRow && JSON.parse(okRow[3]).text.length === 200, '大きすぎる 付箋は その1まいだけ はねて、ほかは 保存（長い 文は 200字まで）');
-  // 見てほしい付箋は 1つの 班で 今の 回に 4まいまで
-  const sh = ['sh1', 'sh2', 'sh3', 'sh4', 'sh5'];
-  r = G.as('a02' + D, 'apply', [{ up: sh.map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 1 + i * 8, y: 46, text: '見て' + i })), del: [], star: [] }]);
+  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで
+  const sh = ['sh1', 'sh2', 'sh3', 'sh4', 'sh5', 'sh6', 'sh7', 'sh8', 'sh9'];
+  r = G.as('a02' + D, 'apply', [{ up: sh.map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 1 + (i % 6) * 8, y: 46 + Math.floor(i / 6) * 7, text: '見て' + i })), del: [], star: [] }]);
   const rdA = JSON.parse(G.sheets.modes.data.find(x => x[0] === 'A')[1]).round || 1;
   const already = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
   r = G.as('a02' + D, 'apply', [{ up: sh.map(id => ({ id, team: 'A-1', p: { showcase: rdA }, u: [] })), del: [], star: [] }]);
   const nowShown = G.sheets.items.data.filter(x => x[1] === 'A-1' && !x[5] && (o => o.face === 'front' && (o.showcase === true ? 1 : +o.showcase || 0) === rdA)(JSON.parse(x[3]))).length;
-  ok(nowShown === Math.max(4, already) && r.rejected.length === sh.length - Math.max(0, 4 - already), '見てほしい付箋は 1つの 班で 今の 回に 4まいまで（サーバーでも）');
+  ok(nowShown === Math.max(8, already) && r.rejected.length === sh.length - Math.max(0, 8 - already), '見てほしい付箋は 1つの 班で 今の 回に 8まいまで（サーバーでも）');
   // 先生は コメントを 1つずつ 消せる、児童は 消せない
   G.fill('comments', [[ids[0] + '|b01' + D, ids[0], 'A-1', 'b01' + D, 'ふさわしくない ことば', true, 1]]);
   r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], cmtDel: [{ noteId: ids[0], viewer: 'b01' + D }] }]);
