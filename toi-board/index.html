@@ -266,6 +266,7 @@ table.tally td.text{word-break:break-all}
 table.tally td.cms{vertical-align:top}
 table.tally .c1{display:block;width:100%;box-sizing:border-box;margin:2px 0;padding:4px 8px;background:#F4F7FB;border-radius:8px;font-size:14px;line-height:1.5;word-break:break-all}
 table.tally .none{color:#B8BCC2}
+.cbtn2{display:inline-flex;flex-direction:column;align-items:center;min-height:56px;line-height:1.2}.cbtn2 small{font-size:11px;font-weight:400;color:var(--sub)}
 .tcard{border:2px solid var(--line);border-radius:14px;padding:4px 14px 10px;margin:10px 0;background:#fff}
 .tcard h3{margin:10px 0 6px;font-size:18px}
 .mlabel{min-width:150px;font-weight:700}
@@ -315,7 +316,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 12, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 13, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -338,7 +339,7 @@ var MODES = [
   {k:'propose', label:'アイデア提案',      desc:'ほかの班の「いただきもの」に 付箋を 貼れる',   scoped:true},
   {k:'starOut', label:'見合い会の 画面',  desc:'入れると、この 組の 児童の 画面が 見合い会の 待ち画面に なる', scoped:true}
 ];
-function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, rotMin:4, rot:null, research:'off'}; }
+function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, rotMin:4, rot:null, research:'off', orgMode:'on'}; }
 /* 調べモード：組ごと。入れると 付箋の 右下に めくれが 出て、うらに しらべて わかった ことを 書ける */
 function researchOn(team){ return ((S.modes || {})[clsOf(team)] || {}).research === 'on'; }
 
@@ -682,9 +683,12 @@ function orgOf(team){
   var end = o.end || o.until; if(!end || end <= Date.now()) return null;
   return {mine:o.mine != null ? o.mine : o.id === me, no:o.no, end:end, by:o.by || ''};
 }
-function canArrange(){ var o = orgOf(myTeam()); return isMine() && ui.face !== 'trash' && !!o && o.mine; }
+/* 整理モード（組ごと・はじめは 入）：入なら 動かせるのは 整理役 1人、切なら 班の だれでも */
+function orgModeOn(){ return M().orgMode !== 'off'; }
+function canArrange(){ if(!isMine() || ui.face === 'trash') return false; if(!orgModeOn()) return true; var o = orgOf(myTeam()); return !!o && o.mine; }
 function mmss(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
 function orgButton(){
+  if(!orgModeOn()) return '';
   var o = orgOf(myTeam());
   if(o && o.mine) return '<button class="tbtn org on" data-act="org-end"><span class="i">✋</span>おわる<small class="orgleft">' + mmss(o.end - Date.now()) + '</small></button>';
   if(o) return '<button class="tbtn org" disabled><span class="i">🔒</span>' + o.no + 'ばん<small class="orgleft">' + mmss(o.end - Date.now()) + '</small></button>';
@@ -1242,7 +1246,11 @@ function viewTeacher(){
   if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童の 画面に 10秒ほどで 届きます（ページの 更新は いりません）。</div>';
   if(tab === 'tally') return h + '</div>' + viewTally();
   if(tab === 'mode'){
-    h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '">' + c + '組</button>'; }).join('') + '<span class="hint">' + ui.tCls + '組の 児童の 画面だけを 決めます</span></div>';
+    /* 設定は 組ごと。組の ボタンに その組で 入って いる ものを 小さく 出す（ほかの 組に 切り替えなくても 見える） */
+    var sum = function(c){ var m = S.modes[c] || blankModes(), o = [];
+      if(modeOn(m.view)) o.push('閲覧'); if(modeOn(m.propose)) o.push('提案'); if(m.research === 'on') o.push('調べ'); if(m.orgMode === 'off') o.push('整理なし'); if(modeOn(m.starOut)) o.push('見合い会');
+      return o.length ? o.join('・') : 'ぜんぶ 切'; };
+    h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn cbtn2' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '"><b>' + c + '組</b><small>' + sum(c) + '</small></button>'; }).join('') + '<span class="hint">ここで えらんだ 組（' + ui.tCls + '組）の 設定だけが 変わります。ほかの 組は そのまま</span></div>';
     var modeRow = function(x, opts){
       return '<div class="mode"><span class="mlabel">' + x.label + '</span><span class="seg">' + opts.map(function(o){ return '<button class="' + (tm[x.k] === o[0] ? 'on' : '') + '" data-act="mode" data-k="' + x.k + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</span><span class="mdesc">' + x.desc + '</span></div>';
     };
@@ -1253,7 +1261,10 @@ function viewTeacher(){
       + '<p class="hint">「同じ組」は ' + ui.tCls + '組の 班どうし、「学年」は ほかの 組の 班とも つながります。</p>';
     var om = ORG_MINS.indexOf(Number(tm.orgMin)) >= 0 ? Number(tm.orgMin) : 5;
     h += '<div class="mode"><span class="mlabel">調べモード</span><span class="seg">' + [['off','切'],['on','入']].map(function(o){ return '<button class="' + ((tm.research === 'on') === (o[0] === 'on') ? 'on' : '') + '" data-act="research" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</span><span class="mdesc">入れると、付箋の 右下に めくれが 出て、うらに しらべて わかった ことを 書ける（切っても 書いた ことは のこる）</span></div>';
-    h += '<div class="mode"><span class="mlabel">整理役の 時間</span><span class="seg">' + ORG_MINS.map(function(n){ return '<button class="' + (om === n ? 'on' : '') + '" data-act="orgmin" data-v="' + n + '">' + n + '分</button>'; }).join('') + '</span><span class="mdesc">付箋・わくを 動かせる 子は 班に 1人。この 時間で 交代（次に なる 子から 適用）</span></div></section>';
+    var omOn = tm.orgMode !== 'off';
+    h += '<div class="mode"><span class="mlabel">整理モード</span><span class="seg">' + [['off','切'],['on','入']].map(function(o){ return '<button class="' + (omOn === (o[0] === 'on') ? 'on' : '') + '" data-act="orgmode" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</span><span class="mdesc">入：付箋・わくを 動かせるのは 班で「整理する」を 押した 1人だけ（動かしが ぶつからない）。切：班の だれでも 動かせる</span></div>';
+    if(omOn) h += '<div class="mode"><span class="mlabel">整理役の 時間</span><span class="seg">' + ORG_MINS.map(function(n){ return '<button class="' + (om === n ? 'on' : '') + '" data-act="orgmin" data-v="' + n + '">' + n + '分</button>'; }).join('') + '</span><span class="mdesc">この 時間で 交代（次に なる 子から 適用）</span></div>';
+    h += '</section>';
     var rd = tm.round || 1;
     h += '<section class="tcard"><h3>見合い会（シール・コメント）</h3>';
     h += '<div class="mode"><span class="mlabel">いまの 回</span><b class="bignum">第' + rd + '回</b>'
@@ -1280,7 +1291,8 @@ function viewTeacher(){
   h += '<div class="faces" style="margin:6px 0">' + FACES.map(function(f){ return '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '</button>'; }).join('') + '</div>';
   if(ui.face === 'trash') h += '<div class="tools" style="padding:0 0 8px">' + trashSortHTML() + '</div>';
   var og = orgOf(ui.tTeam), mem = S.roster.filter(function(c){ return c.team === ui.tTeam; }).sort(function(a, b){ return a.no - b.no; });
-  h += '<div class="filters"><b>整理役（付箋を 動かせる 人・' + orgMs(ui.tTeam) / 60000 + '分）：</b>' + (og ? og.no + 'ばん（のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span>）' : 'なし')
+  if(((S.modes || {})[clsOf(ui.tTeam)] || {}).orgMode === 'off') h += '<div class="filters"><b>整理モード：切</b>（' + clsOf(ui.tTeam) + '組は 班の だれでも 付箋を 動かせます）</div>';
+  else h += '<div class="filters"><b>整理役（付箋を 動かせる 人・' + orgMs(ui.tTeam) / 60000 + '分）：</b>' + (og ? og.no + 'ばん（のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span>）' : 'なし')
     + mem.map(function(c){ return '<button class="btn' + (og && og.no === c.no ? ' on' : '') + '" data-act="org-set" data-t="' + ui.tTeam + '" data-no="' + c.no + '">' + c.no + 'ばん</button>'; }).join('')
     + (og ? '<button class="btn" data-act="org-set" data-t="' + ui.tTeam + '" data-no="0">はずす</button>' : '') + '</div>';
     return h + '</div>' + boardHTML(ui.tTeam, ui.face);
@@ -1636,6 +1648,7 @@ document.addEventListener('click', function(e){
     ui.modeNote = ui.tCls; render(); return;
   }
   if(act === 'research'){ var rv = b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.research = rv; }); ui.modeNote = ui.tCls; render(); return; }
+  if(act === 'orgmode'){ var omv = b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.orgMode = omv; }); ui.modeNote = ui.tCls; render(); return; }
   if(act === 'orgmin'){
     var mn = +b.getAttribute('data-v');
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.orgMin = mn; });
