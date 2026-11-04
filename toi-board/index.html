@@ -282,6 +282,8 @@ b.bignum{font-size:20px}
 .rotsteps li.done b::after{content:" ✓"}
 .note.kb,.note.kbdeck,.note.kbdeck .layer{background:var(--kb)}
 .note.kbdeck{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;color:#0B3F73;cursor:pointer}
+.kbdeck .kbt{font-size:17px;line-height:1.35}
+.kbfolder{width:24px;height:20px;flex:none;vertical-align:-4px}
 .kbdeck .kbn{font-size:13px;font-weight:700;background:#fff;border-radius:99px;padding:0 8px}
 .kbicon{display:inline-block;width:18px;height:14px;background:var(--kb);border:2px solid #2C6FB0;border-radius:2px;vertical-align:-2px;box-shadow:2px 2px 0 #9CC2E8}
 .kbicon.big2{width:30px;height:22px}
@@ -372,9 +374,10 @@ function setKb(n, on){
     }
   });
 }
+var FOLDER_SVG = '<svg class="kbfolder" viewBox="0 0 24 20" aria-hidden="true"><path d="M1.5 3.5Q1.5 2 3 2H8.6L10.8 4.4H21Q22.5 4.4 22.5 5.9V16.5Q22.5 18 21 18H3Q1.5 18 1.5 16.5Z" fill="#8EC3EE" stroke="#2C6FB0" stroke-width="1.6" stroke-linejoin="round"/><path d="M1.5 7.2H22.5" stroke="#2C6FB0" stroke-width="1.4"/></svg>';
 function kbButton(team){
   var n = kbOf(team, 'front').length;
-  return n ? '<button class="btn kbbtn" data-act="kb" data-t="' + team + '"><span class="kbicon"></span>知っててほしい<b>' + n + '</b></button>' : '';
+  return n ? '<button class="btn kbbtn" data-act="kb" data-t="' + team + '">' + FOLDER_SVG + '知っててほしい<b>' + n + '</b></button>' : '';
 }
 function researchOn(team){ return ((S.modes || {})[clsOf(team)] || {}).research === 'on'; }
 
@@ -819,7 +822,7 @@ function noteHTML(n, opt){
 /* 知っててほしいこと の 山（青）。タップで 一覧 */
 function deckHTML(an, n){
   var layers = ''; for(var i = Math.min(n - 1, 4); i >= 1; i--) layers += '<div class="layer" style="transform:translate(' + (i*3) + 'px,' + (i*3) + 'px) rotate(' + (i % 2 ? 1.2 : -0.8) + 'deg)"></div>';
-  return '<div class="item note kbdeck" data-id="' + an.id + '" data-kids="' + (n - 1) + '" style="left:' + (clampX(an.x)*GRID) + 'px;top:' + (an.y*GRID) + 'px">' + layers + '<span class="kbicon big2"></span>知っててほしい こと<span class="kbn">' + n + 'まい</span></div>';
+  return '<div class="item note kbdeck" data-id="' + an.id + '" data-kids="' + (n - 1) + '" style="left:' + (clampX(an.x)*GRID) + 'px;top:' + (an.y*GRID) + 'px">' + layers + '<span class="kbt">みんなに<br>知っていて<br>ほしいこと</span><span class="kbn">' + n + 'まい</span></div>';
 }
 /* 枠の タイトルの 位置：枠の 辺の 上を 一周 0〜1 で もつ（左上から 時計まわり） */
 function edgePoint(W, H, lp){
@@ -1018,7 +1021,7 @@ function viewChild(){
   var team = boardTeam(), sp = spot(team), mine = isMine(), m = M();
   var faces = visibleFaces();
   if(!faces.some(function(f){ return f.k === ui.face; })) ui.face = faces[0] ? faces[0].k : 'front';
-  var h = '<div class="head"><h1>' + esc(sp.name) + '</h1>' + kbButton(team) + '<div class="faces">';
+  var h = '<div class="head"><h1>' + esc(sp.name) + '</h1><div class="faces">';
   faces.forEach(function(f){
     var n = S.items.filter(function(x){ return x.team === team && x.face === f.k && x.kind === 'note'; }).length;
     h += '<button class="face' + (ui.face === f.k ? ' on' : '') + '" data-face="' + f.k + '">' + f.label + '<span class="n">' + n + '</span></button>';
@@ -1031,6 +1034,8 @@ function viewChild(){
     own.forEach(function(s){ h += '<button class="btn' + (team === s.team ? ' on' : '') + '" data-act="look" data-t="' + s.team + '">' + s.no + '</button>'; });
     if(other) h += '<button class="btn' + (clsOf(team) !== myCls() ? ' on' : '') + '" data-act="teams">ほかの組</button>';
   }
+  var kbb = kbButton(team);
+  if(kbb) h += L.length ? kbb : kbb.replace('class="btn kbbtn"', 'class="btn kbbtn" style="margin-left:auto"');
   h += '</div>';
   if(!mine){
     h += '<div class="viewing">' + teamLabel(team) + '「' + esc(sp.name) + '」を 見ています'
@@ -1077,8 +1082,7 @@ function viewSheet(){
         }).join('') : '<p>見つかりません</p>') + '</div>';
   } else if(s.type === 'kb'){
     var kl = kbOf(s.team).filter(function(n){ return n.face !== 'trash'; }), own = s.team === myTeam() || isTeacher();
-    h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0"><span class="kbicon"></span> ' + teamLabel(s.team) + '「' + esc(spot(s.team).name) + '」の 知っててほしい こと（' + kl.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
-      + '<p class="hint" style="margin:4px 0">アピールしたい 問いの 前に 知っておいて ほしい こと。付箋の うら（しらべて わかった こと）を 出して います' + (own ? '。タップで 直せます' : '') + '</p>'
+    h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + FOLDER_SVG + ' ' + teamLabel(s.team) + '「' + esc(spot(s.team).name) + '」の みんなに 知っていて ほしいこと（' + kl.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<div class="hits kbhits">' + (kl.length ? kl.map(function(n){
           return '<button class="kbcard" ' + (own && !isTeacher() || isTeacher() ? 'data-act="kbopen" data-id="' + n.id + '"' : 'disabled') + '><span class="q">' + esc(n.text) + '</span><span class="a">' + (n.ans ? esc(n.ans) : '<i>うらは まだ 書いて いません</i>') + '</span>' + (n.done ? '<span class="donemark" style="position:static">✓ もう知ってる</span>' : '') + '</button>';
         }).join('') : '<p>まだ ありません</p>') + '</div>';
@@ -1473,7 +1477,7 @@ document.addEventListener('pointerup', function(e){
   var t = x.kind === 'note' ? noteAt(boardPoint(e), d.id) : null;
   if(f && f !== ui.face && f !== 'gift'){ moveFace(x, f); return; }
   if(x.kb){ var nx = clampX(Math.round(clampX(d.ox, NOTE_W) + dx/GRID), NOTE_W), ny = Math.max(0, Math.round(d.oy + dy/GRID)); commit(function(){ kbOf(x.team, x.face).forEach(function(k){ k.x = nx; k.y = ny; }); }); return; }
-  if(t && item(t) && item(t).kb){ setKb(x, true); toast('「知っててほしい こと」に 入れました'); return; }
+  if(t && item(t) && item(t).kb){ setKb(x, true); toast('「みんなに 知っていて ほしいこと」に 入れました'); return; }
   if(t && item(t)){ stackOnto(x, item(t)); return; }
   commit(function(){ x.x = clampX(Math.round(clampX(d.ox, x.w) + dx/GRID), x.kind === 'frame' ? x.w : NOTE_W); x.y = Math.max(0, Math.round(d.oy + dy/GRID)); });
 });
@@ -1534,7 +1538,7 @@ document.addEventListener('click', function(e){
   if(act === 'close' && e.target !== b) return;
   if(ui.sheet && ui.sheet.type === 'note' && !/^tane/.test(act || '')) flushNote();
   if(act === 'close' || act === 'note-close'){ ui.sheet = null; render(); return; }
-  if(act === 'kbtag'){ var kn = item(id); if(!kn) return; var on2 = !kn.kb; ui.sheet = null; setKb(kn, on2); toast(on2 ? '「知っててほしい こと」に 入れました（青）' : '「知っててほしい」を はずしました'); return; }
+  if(act === 'kbtag'){ var kn = item(id); if(!kn) return; var on2 = !kn.kb; ui.sheet = null; setKb(kn, on2); toast(on2 ? '「みんなに 知っていて ほしいこと」に 入れました（青）' : '「知っててほしい」を はずしました'); return; }
   if(act === 'kb'){ ui.sheet = {type:'kb', team:b.getAttribute('data-t')}; render(); return; }
   if(act === 'kbopen'){ ui.sheet = {type:'note', id:id, side:'back', from:'kb'}; render(); return; }
   if(act === 'flip'){ ui.sheet.side = ui.sheet.side === 'back' ? 'front' : 'back'; ui.sheet.seeds = false; render(); return; }
@@ -1795,7 +1799,7 @@ var TRIAL_STEPS = [
   {who:'A01', title:'① ボードで 付箋を 編集する（児童）', view:true, items:[
     '左下の ＋ で 付箋を 書く（大きな 付箋に そのまま 書く）。下の「？のたね」で 言葉が 入る',
     '付箋を タップ → 大きな 付箋で そのまま 文字を 直せる（とじると 保存）。左に もう知ってる（緑）・知っててほしい（青）・見てほしい・→うらへ・→🗑️へ、右に いいね と 重なり',
-    '「知っててほしい」に した 付箋は 青い 山「知っててほしい こと」に まとまる。上の 青い アイコンか 山を タップで 一覧（うらの わかった ことも 出る）',
+    '「知っててほしい」に した 付箋は 青い 山「みんなに 知っていて ほしいこと」に まとまる。右上の フォルダの ボタンか 山を タップで 一覧（うらの わかった ことも 出る）',
     '左の「整理する」を 押した 子だけが、先生が 決めた 時間 付箋・わくを うごかせる（班で 1人・先着）。ほかの 付箋の 上に 落とすと 重なる',
     'いいねは 付箋の 右に、メンバーごとの 色で つく。見てほしい付箋は 1つの 班で 8まいまで',
     '左の 道具：やじるし（2まいを 順に タップ）・わく・さがす・もどす（Ctrl+Z）。上の タブで うらがわ・いただきもの・ゴミばこ']},
@@ -1807,7 +1811,7 @@ var TRIAL_STEPS = [
   {who:'A05', title:'③ 見合い会で シールを 貼る（児童）', star:true, rot:true, items:[
     '先生が「はじめる」を 押した あとの 画面です（今は A組 2はんの 児童。いまは 1はんの 番）',
     '右の シール帳で 星（面白い・知りたい 問いに 2まい）か 流れ星（とくに 面白い・知りたい 問いに 1まい）を えらび、付箋を タップして 貼る',
-    '貼った シールを タップ →「はがす」。付箋の 右下の 💬 で「何が 面白い？ 何が 気に なる？」を コメント（だれが 書いたかは 出ません）。上の 青い アイコンで その 班の 知っててほしい こと も 読める',
+    '貼った シールを タップ →「はがす」。付箋の 右下の 💬 で「何が 面白い？ 何が 気に なる？」を コメント（だれが 書いたかは 出ません）。上の フォルダの ボタンで その 班の「みんなに 知っていて ほしいこと」も 読める',
     '決まった 時間ごとに 1はん → 7はん と 自動で 切り替わり、おわると 全員 ボードに もどる']},
   {who:'A01', title:'④ 見合い会で 見られる 班（児童）', star:true, rot:true, items:[
     '自分の 班の 番の 時の 1はんの 児童の 画面です。見るだけに なります',
