@@ -57,6 +57,12 @@ var FRONT = {
   pick:{ d:(function(){ var p = []; for(var i = 0; i < 16; i++){ var r = i % 2 ? 3.7 : 6.1, a = -Math.PI/2 + i*Math.PI/8; p.push((7.6 + r*Math.cos(a)).toFixed(2) + " " + (7.2 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })(),
          colors:['#FFF27A', '#FFC23A'], glint:'<path d="M5.2 6.2L6.4 4.8" />' }
 };
+// 流れ星（とくに 面白い・知りたい）：右上の 星と、左下へ のびる 尾（尾は 後ろの 形として 別の 色）
+SHAPES.shoot = (function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 4.9 : 9.6, a = -Math.PI/2 + i*Math.PI/5; p.push((21.4 + r*Math.cos(a)).toFixed(2) + ' ' + (11.6 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })();
+GLINT.shoot = '<path d="M14.6 9.2L17.4 8.8" />';
+FRONT.shoot = { d:'M15.2 9.4Q8 15 2.4 29.2Q4.6 27.6 6.4 28.2Q8.4 22.6 11 20.2Q11.2 24 13.2 25.2Q14.6 20 18.6 17.4Z',
+  colors:['#C9F0FF', '#8FA6FF'], glint:'<path d="M6.6 23.2Q8.4 18.4 11.2 15.2" />' };
+STICKER_COLORS['#FFD54A'] = ['#FFF7A6', '#FFC23A'];  // 流れ星の 星：クリーム → 山吹（ふつうの 星より 明るく）
 // 柄の ツヤ（柄の 左上がわの 輪郭に 平行）
 GLINT.pick += rot('<path d="M14.5 15.5L14.5 25.5" />', 40, 16, 16.5);
 function frontLayer(F, gid){
@@ -105,7 +111,7 @@ function sticker(shape, color, size, variant){
     + '</svg>';
 }
 `;
-const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF'], ['thumb', '#8EDB8A'], ['pick', '#7FB8FF'], ['wow', '#C9A8FF'], ['bulb', '#FFB38A'],
+const KINDS = [['star', '#E0A43A'], ['circle', '#FF8FB5'], ['bolt', '#7CC4FF'], ['thumb', '#8EDB8A'], ['pick', '#7FB8FF'], ['wow', '#C9A8FF'], ['bulb', '#FFB38A'], ['shoot', '#FFD54A'],
   ['thumb', '#8EDB8A', 'thumb1'], ['thumb', '#8EDB8A', 'thumb2'], ['thumb', '#8EDB8A', 'thumb3'], ['thumb', '#8EDB8A', 'thumb4'], ['thumb', '#8EDB8A', 'thumb5']];
 const SIZE = 128; // 表示は最大 64px 程度。2倍密度の画面でも足りる大きさ
 (async () => {

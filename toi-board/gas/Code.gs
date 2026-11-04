@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 13;
+var API_VER = 14;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号'],
@@ -17,8 +17,10 @@ var TEACHER_DOMAIN = '@edu.nishi.or.jp';
 var FACE_KEYS = ['front', 'back', 'gift', 'trash'];
 var KINDS = ['note', 'arrow', 'frame'];
 var SCOPE_KEYS = ['off', 'class', 'grade'];
-var STAR_KINDS = ['star', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
+var STAR_KINDS = ['star', 'shoot', 'pick', 'wow', 'bulb', 'circle', 'bolt', 'thumb'];
 var STAR_PER_TEAM = 2;
+var STAR_QUOTA = {shoot:1};  // 流れ星は 1つの 班に 1まい（星は 2まい）
+function quota_(k){ return STAR_QUOTA[k] || STAR_PER_TEAM; }
 var SHOW_PER_TEAM = 8;  // 見てほしい付箋は 1つの 班で 今の 回に 8まいまで（指導案の「本命の 問い 8つ」）  // 1人が 1つの班に 貼れるのは 種類ごとに 2まいまで
 
 /* ?trial=1 で 体験版（見本の データ。ブラウザの 中だけで 動き、本番の シートには 書かない） */
@@ -203,9 +205,10 @@ function rotState_(modes, cls, now){
 /* 今 見られている 班（その班の 児童は 見るだけ） */
 function onStage_(modes, team){ var st = rotState_(modes, clsOf_(team)); return (st.phase === 'run' || st.phase === 'pause') && st.team === String(team); }
 /* 児童に その行を 見せるか */
-function visible_(u, modes, team, face, showcase){
+function visible_(u, modes, team, face, showcase, kb){
   if(u.role === 'teacher' || team === u.team) return true;
-  if(face === 'front') return reach_(u, modes, 'view', team) || (!!showcase && reach_(u, modes, 'starOut', team));
+  // 見合い会では 見てほしい付箋と「知っててほしい」付箋（前提の 情報）が 届く
+  if(face === 'front') return reach_(u, modes, 'view', team) || ((!!showcase || !!kb) && reach_(u, modes, 'starOut', team));
   if(face === 'gift') return reach_(u, modes, 'propose', team);
   return false;
 }
@@ -342,7 +345,7 @@ function pull_(u, spec){
     var id = String(r[0]), team = String(r[1]), ver = Number(r[4]), since = sinceOf(team);
     if(!id || since === null || ver <= since) return;
     var x = null; try{ x = JSON.parse(r[3]); }catch(e){}
-    var ok = x && !r[5] && visible_(u, modes, team, String(r[2]), x.showcase);
+    var ok = x && !r[5] && visible_(u, modes, team, String(r[2]), x.showcase, x.kb);
     if(!ok){ if(since) items.push({id:id, del:true}); return; }
     if(u.role !== 'teacher') delete x.author;
     items.push(x);
@@ -409,7 +412,7 @@ function apply(ops){
         var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
         if(!cur){ rejected.push(id); return; }
         var moves = Object.keys(x.p).concat(x.u || []).some(function(k){ return ARRANGE.indexOf(k) >= 0; });
-        if(moves && !canArrange() && !(cur.face === 'trash' || x.p.face)){ rejected.push(id); return; }
+        if(moves && !canArrange() && !(cur.face === 'trash' || x.p.face || 'kb' in x.p || (x.u || []).indexOf('kb') >= 0)){ rejected.push(id); return; }
         Object.keys(x.p).forEach(function(k){ if(KEEP.indexOf(k) < 0) cur[k] = x.p[k]; });
         (x.u || []).forEach(function(k){ if(KEEP.indexOf(k) < 0) delete cur[k]; });
         if(KINDS.indexOf(cur.kind) < 0 || FACE_KEYS.indexOf(cur.face) < 0){ rejected.push(id); return; }
@@ -488,7 +491,7 @@ function apply(ops){
         // 回は サーバーが 決める（その 付箋の 組の 今の 回）
         var rd = like ? 0 : (t ? roundOf_(modes, t.team) : 1);
         var key0 = nId + '|' + k + '|' + rd + '|' + u.id, was = sidx[key0] !== undefined && sidx[key0] >= 0 && !!srows[sidx[key0]][4], hk = t && (t.team + '|' + k + '|' + rd);
-        if(ok && !like && s.on && !was && (have[hk] || 0) >= STAR_PER_TEAM) ok = false;
+        if(ok && !like && s.on && !was && (have[hk] || 0) >= quota_(k)) ok = false;
         if(!ok){ rejected.push('*' + nId + '|' + k); return; }
         if(s.on && !was) have[hk] = (have[hk] || 0) + 1;
         if(!s.on && was) have[hk] = (have[hk] || 1) - 1;

@@ -158,14 +158,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('.rothead:has-text("1はん")') && await page.isVisible('.book'), '1はんの 番：シール貼り画面と 右の シール帳');
   ok(await page.isVisible(`.big[data-id="${c}"]`) && await page.isVisible(`.big[data-id="${e}"]`), '今の 班の 見てほしい付箋が 大きく 出る');
   ok(!(await page.isVisible(`.big[data-id="${own.id}"]`)), '自分の班の 付箋は 出ない');
-  ok(await page.locator('.book .page').count() === 4 && await page.locator('.book .page img').count() === 8 && !(await page.locator('.gal svg').count()), 'シール帳は 4種類 × 2まい（画像で 出る）');
+  ok(await page.locator('.book .page').count() === 2 && await page.locator('.book .page[data-kind=star] img').count() === 2 && await page.locator('.book .page[data-kind=shoot] img').count() === 1 && !(await page.locator('.gal svg').count()), 'シール帳は 星2まい・流れ星1まい（画像で 出る）');
   const bk = await page.$$eval('.book .page[data-kind=star] .slot', els => els.map(e => e.getBoundingClientRect()));
-  ok(bk.length === 2 && Math.abs(bk[0].y - bk[1].y) < 2 && bk[1].x > bk[0].x && await page.isVisible('.book .page[data-kind=pick] .cap:has-text("「知りたい！」の シール")'), '同じ 種類の 2まいは 横に ならび、下に 説明');
+  ok(bk.length === 2 && Math.abs(bk[0].y - bk[1].y) < 2 && bk[1].x > bk[0].x && await page.isVisible('.book .page[data-kind=shoot] .cap:has-text("「流れ星」の シール")'), '同じ 種類の 2まいは 横に ならび、下に 説明');
   await page.waitForTimeout(1800);
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   const bigC = await page.locator(`.big[data-id="${c}"]`).boundingBox();
   await page.mouse.click(bigC.x + 180, bigC.y + 130);
-  await page.click('[data-act=kind][data-k=pick]');
+  await page.click('[data-act=kind][data-k=shoot]');
   await page.locator(`.big[data-id="${c}"]`).scrollIntoViewIfNeeded();
   Object.assign(bigC, await page.locator(`.big[data-id="${c}"]`).boundingBox());
   await page.mouse.click(bigC.x + 50, bigC.y + 140);
@@ -178,7 +178,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const sealTops = await page.$$eval(`.big[data-id="${c}"] .seal`, els => els.map(e => e.getBoundingClientRect().top));
   ok(sealTops.length === 2 && sealTops.every(t => t >= textBottom - 2), 'シールは 付箋の 下の 帯に 貼られ、文字に かからない');
   await page.screenshot({ path: SHOTS + '/5-gallery.png' });
-  await page.click(`.big[data-id="${c}"] .seal >> nth=0`);
+  await page.click(`.big[data-id="${c}"] .seal[data-key$="|star"]`);
   await page.click('[data-act=peel]');
   s = await st();
   ok(s.stars.filter(x => x.viewer === 'A05' && x.noteId === c).length === 1, 'はがせる');
@@ -191,14 +191,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.mouse.click(bigC2.x + 200, bigC2.y + 40);
 
   // 持ち分：1つの班に 種類ごとに 2まいまで
-  ok(await used('star') === 1 && await used('pick') === 1, 'シール帳は 貼った 分だけ 空く（★ のこり1）');
+  ok(await used('star') === 1 && await used('shoot') === 1, 'シール帳は 貼った 分だけ 空く（★ のこり1）');
   const third = await page.evaluate(() => { const id = nid(); commit(() => { S.items.push({ id, kind: 'note', team: 'A-1', face: 'front', x: 40, y: 1, text: '3まいめの 付箋', author: 'A01', showcase: true }); }); return id; });
   await page.reload();
   await page.click('[data-act=kind][data-k=star]');
   for (const id of [e, third]) { await page.locator(`.big[data-id="${id}"]`).scrollIntoViewIfNeeded(); const bx = await page.locator(`.big[data-id="${id}"]`).boundingBox(); await page.mouse.click(bx.x + 120, bx.y + 60); await page.waitForTimeout(150); }
   s = await st();
   const starA1 = s.stars.filter(x => x.viewer === 'A05' && x.k === 'star' && s.items.find(n => n.id === x.noteId).team === 'A-1');
-  ok(starA1.length === 2 && await page.isVisible('text=この 班には もう 面白い！ を 2まい 貼りました'), '同じ班に 同じ種類は 3まい目を 貼れない');
+  ok(starA1.length === 2 && await page.isVisible('text=この 班には もう 星 を 2まい 貼りました'), '同じ班に 同じ種類は 3まい目を 貼れない');
   ok(await used('star') === 2, 'シール帳の ★が 2まいとも 空く');
   await page.evaluate(id => commit(() => { S.items = S.items.filter(x => x.id !== id); S.stars = S.stars.filter(x => x.noteId !== id); }), third);
   await rotTo('A-3'); await who('A05');
@@ -220,14 +220,14 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
   const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
-  const sStar = await page.locator(`[data-stars="${c}"] [data-kind=star]`).boundingBox(), sCirc = await page.locator(`[data-stars="${c}"] [data-kind=pick]`).boundingBox();
+  const sStar = await page.locator(`[data-stars="${c}"] [data-kind=star]`).boundingBox(), sCirc = await page.locator(`[data-stars="${c}"] [data-kind=shoot]`).boundingBox();
   ok(Math.abs(sStar.y - sCirc.y) < 6 && sStar.x < sCirc.x && sStar.x < nb.x + nb.width / 3 && sStar.y + sStar.height <= nb.y + nb.height + 2, 'シールは 種類ごとに 決まった 位置（★は 最下段の 左、つるはしは その右）で 付箋の 中に 貼られる');
   const textBox = await page.$eval(`#board .note[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild.nodeType === 3 ? el.firstChild : el.childNodes[[...el.childNodes].findIndex(n => n.nodeType === 3)]); return r.getBoundingClientRect().bottom; });
   ok(sCirc.y >= textBox - 2, 'シールは 文字に かからない');
   const cb = await page.locator(`[data-stars="${c}"] [data-kind=star] .cnt`).boundingBox(), ib = await page.locator(`[data-stars="${c}"] [data-kind=star] img`).boundingBox();
   const cx = cb.x + cb.width / 2, cy = cb.y + cb.height / 2;
   ok(cx > ib.x + ib.width / 2 && cy > ib.y + ib.height / 2 && cb.x < ib.x + ib.width && cb.y < ib.y + ib.height, '数（7）は シールの 右下に 重ねて 出る（×は つけない）');
-  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star] .cnt`)).trim() === '7' && await page.locator(`[data-stars="${c}"] [data-kind=pick]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
+  ok((await page.textContent(`[data-stars="${c}"] [data-kind=star] .cnt`)).trim() === '7' && await page.locator(`[data-stars="${c}"] [data-kind=shoot]`).count() === 1, '自分の班の ボードでは 種類ごとに まとめて 出る（×7 など）');
   await who('A05'); await page.click('[data-act=look][data-t="A-1"]');
   ok(!(await page.locator(`[data-stars="${c}"] .cnt`).count()), 'ほかの班では シールの数は 見えない（自分が貼った 種類だけ）');
   await page.click('[data-act=home]');
@@ -260,7 +260,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
-  ok(lines[0].split('\t').length === 12 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
+  ok(lines[0].split('\t').length === 13 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
   await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
@@ -277,8 +277,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const starHits = await page.$$eval('.hits .hcard', els => els.length);
   const starred = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.kind === 'note' && S.stars.some(s => s.noteId === x.id)).length);
   ok(starHits === starred && starHits > 0, 'シールが ある 付箋だけに しぼれる');
-  await page.click('[data-act=s-kind][data-k=pick]');
-  const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'pick')).length);
+  await page.click('[data-act=s-kind][data-k=shoot]');
+  const circ = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && S.stars.some(s => s.noteId === x.id && s.k === 'shoot')).length);
   ok(await page.locator('.hits .hcard').count() === circ && circ > 0, 'シールの 種類で しぼれる');
   await page.click('[data-act=s-kind][data-k=""]');
   await page.fill('#s-text', 'うめた');
@@ -294,7 +294,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#t-q', '');
   await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
-  ok(ts.length > 0 && ts.every(l => /面白い！\d/.test(l.split('\t')[8])), '先生の 一覧を シールの 種類で しぼれる');
+  ok(ts.length > 0 && ts.every(l => /星\d/.test(l.split('\t')[9])), '先生の 一覧を シールの 種類で しぼれる');
 
   // 背景色：いただきもの 茶／うらがわ 灰／ゴミばこ 薄青
   await who('A01');
@@ -407,7 +407,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#c-text', 'ホームベースは どこに あるの？');
   await page.click('[data-act=c-save]');
   s = await st();
-  ok(s.comments.some(c => c.noteId === tops[1] && c.viewer === 'A05' && c.text.includes('ホームベース')) && !s.stars.some(x => x.viewer === 'A05' && x.noteId === tops[1] && x.k === 'pick'), 'コメントを 書ける（シールは 貼られない）');
+  ok(s.comments.some(c => c.noteId === tops[1] && c.viewer === 'A05' && c.text.includes('ホームベース')) && !s.stars.some(x => x.viewer === 'A05' && x.noteId === tops[1] && x.k === 'shoot'), 'コメントを 書ける（シールは 貼られない）');
   await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01'); await page.click('.face[data-face=front]');
   const ci = await page.locator(`#board .note[data-id="${tops[1]}"] .cicon`).boundingBox(), nb2 = await box(tops[1]);
@@ -425,15 +425,15 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const gx = await page.evaluate(() => {
     const free = tm => S.items.filter(x => x.kind === 'note' && x.team === tm && x.face === 'front' && !x.stackOf && !stackOf(x.id).length);
     const ns = free(SPOTS.map(s => s.team).find(tm => free(tm).length >= 3));
-    commit(() => { ns[0].done = true; ns[0].doneBy = 'やまだ はなこ'; ns[2].stackOf = ns[1].id; S.stars.push({ noteId: ns[0].id, viewer: 'A09', k: 'pick', rd: 1 }, { noteId: ns[0].id, viewer: 'A10', k: 'star', rd: 2 }); });
+    commit(() => { ns[0].done = true; ns[0].doneBy = 'やまだ はなこ'; ns[2].stackOf = ns[1].id; S.stars.push({ noteId: ns[0].id, viewer: 'A09', k: 'shoot', rd: 1 }, { noteId: ns[0].id, viewer: 'A10', k: 'star', rd: 2 }); });
     ui.fFace = 'all'; ui.fCls = 'all'; ui.fQ = ''; ui.fKind = '';
     const rows = opinionTSV().split('\n').map(l => l.split('\t'));
     const r0 = rows.find(r => r[4] === ns[0].text), r1 = rows.find(r => r[4] === ns[1].text), r2 = rows.find(r => r[4] === ns[2].text);
     return { tsv: opinionTSV(), r0, r1, r2, ai: aiText('next') };
   });
   ok(!gx.tsv.includes('やまだ') && gx.r0[5] === '○', 'しらべた人の 名前は 一覧に 入らない（○だけ）');
-  ok(/第1回 [^／]*知りたい！1/.test(gx.r0[8]) && /第2回 面白い！1/.test(gx.r0[8]), 'シールは 前の 回も ふくめて 回ごとに 出る');
-  ok(gx.r1[10] && gx.r1[10].includes('（上）') && gx.r2[10] === gx.r1[10].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
+  ok(/第1回 [^／]*流れ星1/.test(gx.r0[9]) && /第2回 星1/.test(gx.r0[9]), 'シールは 前の 回も ふくめて 回ごとに 出る');
+  ok(gx.r1[11] && gx.r1[11].includes('（上）') && gx.r2[11] === gx.r1[11].replace('（上）', ''), '重なりは 同じ まとまり番号で 出る');
   ok(gx.ai.startsWith('次の表は') && gx.ai.includes('\n\n組\t班') && !gx.ai.includes('やまだ'), 'Gemini 用は 指示文の あとに 表が つく');
   }
   {
@@ -549,8 +549,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await tp.isVisible('[data-pane="0"] .stage') && await tp.isVisible('[data-pane="1"] .rotnow'), '⑥「はじめる」で 左（1はん）は 見るだけ、右に 進み方');
   await tp.selectOption('#splitwho', 'A05');
   ok(await tp.isVisible('[data-pane="0"] .book'), '⑥ 左を 2はんの 子に すると シール帳で 貼れる');
-  await tp.click('[data-pane="0"] .book .page[data-kind=pick]');
-  const bx6 = await tp.locator('[data-pane="0"] .big >> nth=0').boundingBox(); await tp.mouse.click(bx6.x + 60, bx6.y + bx6.height - 40);
+  await tp.click('[data-pane="0"] .book .page[data-kind=star]');
+  const bx6 = await tp.locator('[data-pane="0"] .big >> nth=1').boundingBox(); await tp.mouse.click(bx6.x + 60, bx6.y + bx6.height - 40);
   ok(await tp.evaluate(() => S.stars.some(x => x.viewer === 'A05' && x.x != null)), '⑥ 左の 画面で シールを 貼れる');
   await tp.click('[data-pane="1"] [data-act=rot][data-v=stop]'); await tp.click('[data-pane="1"] [data-act=rot][data-v=stop]');
   ok(await tp.isVisible('[data-pane="0"] #board'), '⑥ 右で やめると 左が ボードに もどる');
@@ -661,7 +661,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('.sheet [data-act=del]');
   // ・調査済みは 色だけに たよらない
   await page.evaluate(() => commit(() => { const n = S.items.find(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf); n.done = true; }));
-  ok(await page.locator('#board .note.done .donemark:has-text("調査済み")').count() > 0, '調査済みは 緑に 加えて「✓ 調査済み」の 文字');
+  ok(await page.locator('#board .note.done .donemark:has-text("もう知ってる")').count() > 0, '調査済みは 緑に 加えて「✓ 調査済み」の 文字');
   // ・先生：ひとおしで ぜんぶ 切に もどせる
   await who('teacher');
   await page.click('[data-act=mode][data-k=view][data-v=class]');
@@ -744,6 +744,45 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('B01');
   ok(await page.isVisible('[data-act=org-claim]'), 'B組は 整理モードの まま');
   await who('teacher'); await page.click('[data-act=orgmode][data-v=on]');
+  // 知っててほしい（青）：付箋を 青に すると 1つの 山に まとまり、上に アイコン。山を タップで 一覧（うらを 出す）
+  {
+  await who('A01'); await page.click('.face[data-face=front]');
+  const kn = await page.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf && !x.kb && !stackOf(x.id).length).map(x => x.id));
+  ok(!(await page.isVisible('[data-act=kb]')), '知っててほしい 付箋が なければ 上の アイコンは 出ない');
+  await page.click(`#board .note[data-id="${kn[0]}"]`); await page.click(`[data-act=kbtag][data-id="${kn[0]}"]`);
+  ok(await page.isVisible('#board .kbdeck') && await page.isVisible('.head [data-act=kb]') && !(await page.isVisible(`#board .note[data-id="${kn[0]}"]:not(.kbdeck)`)), '知っててほしい に すると 青い 山に なり、上に アイコンが 出る');
+  await page.evaluate(id => { commit(() => { item(id).ans = 'しらべた 基本の こと'; }); }, kn[0]);
+  await page.click(`#board .note[data-id="${kn[1]}"]`); await page.click(`[data-act=kbtag][data-id="${kn[1]}"]`);
+  const kp = await page.evaluate(([a, b]) => [item(a).x, item(a).y, item(b).x, item(b).y], [kn[0], kn[1]]);
+  ok(kp[0] === kp[2] && kp[1] === kp[3] && (await page.textContent('#board .kbdeck')).includes('2まい') && (await page.textContent('.head [data-act=kb]')).includes('2'), '2まい目も 同じ 山に 自動で 重なる');
+  await page.click('#board .kbdeck');
+  ok(await page.isVisible('.kbhits .kbcard:has-text("しらべた 基本の こと")'), '山を タップすると 一覧に なり、うら（わかった こと）が 出る');
+  await page.click('.kbcard:has-text("しらべた 基本の こと")');
+  ok(await page.isVisible('.bignote.back #w-ans'), '一覧から うらを 直せる（調べモードが 切でも）');
+  await page.keyboard.press('Escape');
+  await claim();
+  const dk = await page.locator('#board .kbdeck').boundingBox(), n3 = await box(kn[2]);
+  await page.mouse.move(n3.x + n3.width / 2, n3.y + n3.height * 0.6); await page.mouse.down(); await page.mouse.move(n3.x + n3.width / 2 + 20, n3.y + n3.height * 0.6, { steps: 3 }); await page.mouse.move(dk.x + dk.width / 2, dk.y + dk.height / 2, { steps: 8 }); await page.mouse.up();
+  ok(await page.evaluate(id => !!item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('3まい'), '付箋を 山の 上に 落としても 知っててほしい に 入る');
+  // 見合い会でも 見られる
+  await rotTo('A-1'); await who('A05');
+  ok(await page.isVisible('.rothead [data-act=kb]'), '見合い会の 間も 今の 班の 知っててほしい こと を 開ける');
+  await page.click('.rothead [data-act=kb]');
+  ok(await page.isVisible('.kbhits .kbcard:has-text("しらべた 基本の こと")') && await page.isDisabled('.kbcard >> nth=0'), 'ほかの 班の 子は 読むだけ');
+  await page.keyboard.press('Escape');
+  await who('A01');
+  ok(await page.isVisible('.rothead [data-act=kb]'), '見られる 班の 子も 見られる');
+  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  // 先生：しるしで しぼって ならべて Gemini 用に
+  await page.click('[data-act=ttab][data-k=list]'); await page.click('[data-act=fcls][data-c=A]'); await page.click('[data-act=ftag][data-v=kb]');
+  const kt = await page.evaluate(() => opinionTSV().split('\n').slice(1));
+  ok(kt.length === 3 && kt.every(l => l.split('\t')[6] === '○'), '先生の 一覧を「知っててほしい」で しぼれる');
+  await page.click('[data-act=ftag][data-v=""]'); await page.click('[data-act=fsort][data-v=aiueo]');
+  const ka = await page.evaluate(() => opinionRows().filter(r => r[1] === '1はん').map(r => r[4]));
+  ok(ka.length > 3 && ka.every((x, i) => !i || new Intl.Collator('ja').compare(ka[i - 1], x) <= 0), 'ならべかたを えらべる（あいうえお順）');
+  const kai = await page.evaluate(() => aiText('kb'));
+  ok(kai.includes('知っててほしい') && kai.split('\n').filter(l => /^A組\t/.test(l)).length === 3 && kai.includes('しらべた 基本の こと'), 'Gemini 用「班ごとの 基本情報」は 知っててほしい 付箋だけ を うら つきで 出す');
+  }
   // 見た目 80%：ブラウザの ズーム 80% と 同じ 見え方で、ボードは 画面の 幅いっぱい、ドラッグ・めくれも 動く
   {
   const zp = await ctx.newPage(); await zp.goto(FILE + '?trial=1&zoom=80'); await zp.waitForSelector('.trial');
