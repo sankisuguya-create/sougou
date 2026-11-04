@@ -1,3 +1,3 @@
-更新日時: 2026-11-04 21:08 (日本時間)
-コミット: cd7c2c6
-内容: Merge pull request #16 from sankisuguya-create/toi-board-zoom
+更新日時: 2026-11-04 22:21 (日本時間)
+コミット: e38f0c4
+内容: Merge pull request #17 from sankisuguya-create/toi-board-shoot
