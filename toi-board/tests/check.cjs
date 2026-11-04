@@ -10,6 +10,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+  await ctx.addInitScript(() => { if (!/zoom=/.test(location.search)) window.TOI_ZOOM = 1; });  // 寸法の 検査は 100% で（80% は 下で べつに 確かめる）
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'assert') errors.push(m.text()); });
@@ -246,7 +247,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=grade]');
   await who('A05');
   ok(await page.isVisible('[data-act=teams]'), '学年にすると「ほかの組」が 出る');
-  await page.click('[data-act=teams]'); await page.click('[data-act=look][data-t="B-3"]');
+  await page.click('[data-act=teams]');
+  await page.waitForTimeout(150);
+  await page.click('[data-act=look][data-t="B-3"]');
   ok(await page.isVisible('text=B組3はん「御前浜・香櫨園浜」を 見ています'), 'ほかの組の班を 見られる');
   await who('B01');
   ok(!(await page.isVisible('[data-act=look]')), 'モードは 組ごと（B組は 切のまま）');
@@ -381,7 +384,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   for (const id of tops) await page.locator(`#board .note[data-id="${id}"]`).scrollIntoViewIfNeeded();
   await claim();
   const sk1 = await box(tops[1]); const sk0 = await box(tops[0]);
-  await page.mouse.move(sk1.x + 30, sk1.y + 30); await page.mouse.down(); await page.mouse.move(sk1.x + 60, sk1.y + 60, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
+  await page.mouse.move(sk1.x + sk1.width / 2, sk1.y + sk1.height * 0.6); await page.mouse.down(); await page.mouse.move(sk1.x + sk1.width / 2 + 30, sk1.y + sk1.height * 0.6 + 30, { steps: 4 }); await page.mouse.move(sk0.x + 60, sk0.y + 50, { steps: 8 }); await page.mouse.up();
   const lay = await page.$eval(`#board .note[data-id="${tops[0]}"] .layer`, el => el.style.transform);
   ok(/translate\(\d+px,\s?\d+px\)\s?rotate/.test(lay), '下の 付箋は 斜めに 少し ずれて 見える');
   await page.click(`#board .note[data-id="${tops[0]}"]`); await page.click('[data-act=stackpop].stackbtn');
@@ -741,6 +744,25 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await who('B01');
   ok(await page.isVisible('[data-act=org-claim]'), 'B組は 整理モードの まま');
   await who('teacher'); await page.click('[data-act=orgmode][data-v=on]');
+  // 見た目 80%：ブラウザの ズーム 80% と 同じ 見え方で、ボードは 画面の 幅いっぱい、ドラッグ・めくれも 動く
+  {
+  const zp = await ctx.newPage(); await zp.goto(FILE + '?trial=1&zoom=80'); await zp.waitForSelector('.trial');
+  await zp.click('.trial [data-act=trial-go][data-n="1"]'); await zp.click('.trial [data-act=trial-min]');
+  const zz = await zp.evaluate(() => [getComputedStyle(document.documentElement).zoom, document.querySelector('.wrap').getBoundingClientRect().right, innerWidth, document.querySelector('.wrap').getBoundingClientRect().bottom, innerHeight]);
+  ok(Math.abs(zz[0] - 0.8) < 0.01 && zz[2] - zz[1] < 20 && zz[1] <= zz[2] && zz[4] - zz[3] < 30, '見た目は 80%（ボードは 画面の 幅と 高さに おさまる）');
+  const zt = await zp.evaluate(() => S.items.filter(x => x.team === 'A-1' && x.face === 'front' && x.kind === 'note' && !x.stackOf).map(x => x.id));
+  await zp.click('[data-act=org-claim]');
+  const z0 = await zp.locator(`#board .note[data-id="${zt[3]}"]`).boundingBox(), zx0 = await zp.evaluate(id => item(id).x, zt[3]);
+  await zp.mouse.move(z0.x + z0.width / 2, z0.y + z0.height / 2); await zp.mouse.down(); await zp.mouse.move(z0.x + z0.width / 2 + 40, z0.y + z0.height / 2, { steps: 4 }); await zp.mouse.move(z0.x + z0.width / 2 + 96, z0.y + z0.height / 2, { steps: 6 }); await zp.mouse.up();
+  const zx1 = await zp.evaluate(id => item(id).x, zt[3]);
+  ok(zx1 - zx0 === 5, '80% でも 付箋は 指の 動いた ぶんだけ 動く（96px ÷ 0.8 ÷ 24 = 5 マス）');
+  const za = await zp.locator(`#board .note[data-id="${zt[0]}"]`).boundingBox(), zb = await zp.locator(`#board .note[data-id="${zt[1]}"]`).boundingBox();
+  await zp.mouse.move(zb.x + zb.width / 2, zb.y + zb.height / 2); await zp.mouse.down(); await zp.mouse.move(zb.x + zb.width / 2 + 20, zb.y + zb.height / 2, { steps: 3 }); await zp.mouse.move(za.x + za.width / 2, za.y + za.height / 2, { steps: 8 }); await zp.mouse.up();
+  ok(await zp.evaluate(([a, b]) => item(b).stackOf === a, [zt[0], zt[1]]), '80% でも 付箋の 上に 落とすと 重なる');
+  await zp.click('#board .curl >> nth=0');
+  ok(await zp.isVisible('.bignote.back'), '80% でも めくれを 押すと うらが 出る');
+  await zp.close();
+  }
   ok(errors.length === 0, 'コンソールに エラー・アサートが無い' + (errors.length ? '：' + errors.join(' / ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} 件 失敗` : '\nすべて合格');
