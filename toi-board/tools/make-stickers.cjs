@@ -74,6 +74,29 @@ function frontLayer(F, gid){
     + '<path d="' + F.d + '" fill="none" stroke="#fff" stroke-width="0.95" stroke-linejoin="round"/>'
     + '<g fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" filter="url(#f' + gid + ')">' + (F.glint || '') + '</g>';
 }
+/* 流れ星：星と 3本の 帯（尾）を 1つの シールに。黒い 縁と 白い 縁は 星＋尾 を 合わせた 形から フィルタで 作る
+   （形ごとに 縁を 描くと 継ぎ目に 線が 出るため。黒は 外へ 広げ、白は 内側の 細い 輪） */
+function shootSVG(size){
+  var star = (function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 5.3 : 10.5, a = -Math.PI/2 - 0.12 + i*Math.PI/5; p.push((12.5 + r*Math.cos(a)).toFixed(2) + ' ' + (19.6 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })();
+  var tail = 'M9.6 14.2Q18 4.6 28.2 2.8L30.1 7.6L30.6 12.6L29.2 17.8Q22.6 17.4 15.6 23.6Z';
+  var b1 = 'M9.6 14.2Q18 4.6 28.2 2.8L30.1 7.6Q20.4 9.2 12.2 17Z';
+  var b2 = 'M12.2 17Q20.4 9.2 30.1 7.6L30.6 12.6Q21.8 13.2 14.4 20.6Z';
+  var b3 = 'M14.4 20.6Q21.8 13.2 30.6 12.6L29.2 17.8Q22.6 17.4 15.6 23.6Z';
+  var U = '<path d="' + tail + '"/><path d="' + star + '"/>';
+  var g = function(id, a, b){ return '<linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + a + '"/><stop offset="1" stop-color="' + b + '"/></linearGradient>'; };
+  return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '"' : '') + ' aria-hidden="true"><defs>'
+    + g('shS', '#FFF6A8', '#FFC94A') + g('sh1', '#FFD3E6', '#F79CC6') + g('sh2', '#D6F1FF', '#9FD2F5') + g('sh3', '#E6E0FF', '#B9AEEB')
+    + '<filter id="shO" x="-20%" y="-20%" width="140%" height="140%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.15" result="d"/><feFlood flood-color="#1A1A1A"/><feComposite in2="d" operator="in"/></filter>'
+    + '<filter id="shR" x="-20%" y="-20%" width="140%" height="140%"><feMorphology in="SourceAlpha" operator="erode" radius="0.55" result="e"/><feComposite in="SourceAlpha" in2="e" operator="out" result="ring"/><feFlood flood-color="#fff"/><feComposite in2="ring" operator="in"/><feGaussianBlur stdDeviation="0.18"/></filter>'
+    + '</defs>'
+    + '<g filter="url(#shO)" transform="translate(0.65 0.65)">' + U + '</g>'
+    + '<g filter="url(#shO)">' + U + '</g>'
+    + '<path d="' + b1 + '" fill="url(#sh1)"/><path d="' + b2 + '" fill="url(#sh2)"/><path d="' + b3 + '" fill="url(#sh3)"/>'
+    + '<path d="' + star + '" fill="url(#shS)"/>'
+    + '<g filter="url(#shR)">' + U + '</g>'
+    + '<path d="M6.4 17.6L9.6 17" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
+    + '</svg>';
+}
 /* 班の中の いいね：メンバーごとに 色を 変える（緑・赤・青・黄・紫。絵と 光の 向きは 同じ） */
 var VARIANT = {
   thumb1:{c:['#DDF8A8', '#6CCB8E'], v:[0, 0, 1, 1]},  // 緑（元の いいね）
@@ -83,6 +106,7 @@ var VARIANT = {
   thumb5:{c:['#F0DEFF', '#AA80FF'], v:[0, 0, 1, 1]}   // 紫
 };
 function sticker(shape, color, size, variant){
+  if(shape === 'shoot') return shootSVG(size);
   var V = VARIANT[variant] || null;
   var d = SHAPES[shape], c = V ? V.c : (STICKER_COLORS[color] || [color, color]), gid = 'g' + (variant || shape) + color.replace('#', '');
   var gv = V ? V.v : [0, 0, 1, 1];
