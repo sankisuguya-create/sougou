@@ -184,9 +184,9 @@ function makeGas() {
   ok(bigs.length === 1 && bigs[0] === ids[0], '今の 班の「見てほしい付箋」だけが 届く（共同閲覧が 切でも）');
   const bb = await a05p.locator(`.big[data-id="${ids[0]}"]`).boundingBox();
   await a05p.mouse.click(bb.x + 60, bb.y + 60);
-  await a05p.click('[data-act=kind][data-k=pick]');
+  await a05p.click('[data-act=kind][data-k=shoot]');
   await a05p.mouse.click(bb.x + 150, bb.y + 90);
-  ok(await a05p.locator('.book .page[data-kind=star] .slot.used').count() === 1 && await a05p.locator('.book .page[data-kind=pick] .slot.used').count() === 1, 'シール帳から 貼った 分が へる');
+  ok(await a05p.locator('.book .page[data-kind=star] .slot.used').count() === 1 && await a05p.locator('.book .page[data-kind=shoot] .slot.used').count() === 1, 'シール帳から 貼った 分が へる');
   G.as('a06' + D, 'apply', [{ up: [], del: [], star: [{ noteId: ids[0], k: 'star', on: true, x: 20, y: 20, r: 3 }] }]);
   await sleep(1600); await settle();  // シールは 1.5秒 ためて 送る
   ok(await a01.locator(`.stnote[data-id="${ids[0]}"] .s`).count() === 3, '見られている 班には シールが 実際の まい数だけ ふえて いく');
@@ -205,6 +205,9 @@ function makeGas() {
   const aNotes = G.as('ta@edu.nishi.or.jp', 'poll', [{ all: 0 }]).items.filter(x => x.team === 'A-1' && x.kind === 'note' && x.face === 'front').map(x => x.id);
   r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 3).map(id => ({ noteId: id, k: 'wow', on: true })) }]);
   ok(aNotes.length >= 3 && r.rejected.length === 1 && r.rejected[0] === '*' + aNotes[2] + '|wow', 'サーバーも 同じ班への 同じ種類の 3まい目を はねる');
+  r = G.as('a02' + D, 'apply', [{ up: [], del: [], star: [] }]);
+  { const rq = G.as('a06' + D, 'apply', [{ up: [], del: [], star: aNotes.slice(0, 2).map(id => ({ noteId: id, k: 'shoot', on: true })) }]);
+    ok(rq.rejected.length === 1 && rq.rejected[0] === '*' + aNotes[1] + '|shoot', '流れ星は 1つの 班に 1まいまで（サーバーでも）'); }
   r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: [{ noteId: aNotes[0], k: 'wow', on: false }, { noteId: aNotes[2], k: 'wow', on: true }] }]);
   ok(r.rejected.length === 0, 'はがせば また 貼れる');
 
@@ -250,17 +253,17 @@ function makeGas() {
   await ta.click('[data-act=tcls][data-c=A]'); await ta.click('[data-act=mode][data-k=starOut][data-v=class]'); await ta.click('[data-act=rot][data-v=start]');
   await sleep(1500);
   ok(await busy.isVisible('.book'), '見合い会も ページの 開き直し なしで 切りかわる');
+  G.as('a05' + D, 'apply', [{ up: [], del: [], star: ['star', 'shoot'].map(k => ({ noteId: ids[0], k, on: false })) }]); await reload(busy); await sleep(600);
   const ap0 = calls.apply || 0;
   const bigs2 = await busy.$$eval('.big', els => els.map(e => e.dataset.id));
-  for (const [i, kk] of [['star', 0], ['pick', 1], ['wow', 2]].map((x, j) => [j, x[0]])) {
+  for (const [i, kk] of [['star', 0], ['shoot', 1]].map((x, j) => [j, x[0]])) {
     await busy.click(`[data-act=kind][data-k=${kk}]`);
     const bb = await busy.locator(`.big[data-id="${bigs2[0]}"]`).boundingBox(); await busy.mouse.click(bb.x + 40 + i * 40, bb.y + 60);
   }
   await sleep(2600);
-  ok((calls.apply || 0) - ap0 === 1, 'シールを 3まい つづけて 貼っても 書きこみは 1回に まとまる');
+  ok((calls.apply || 0) - ap0 === 1, 'シールを つづけて 貼っても 書きこみは 1回に まとまる');
   const ap1 = calls.apply || 0;
-  await busy.click('[data-act=kind][data-k=bulb]');
-  { const bb2 = await busy.locator(`.big[data-id="${bigs2[0]}"]`).boundingBox(); await busy.mouse.click(bb2.x + 160, bb2.y + 60); }
+  await busy.click(`.big[data-id="${bigs2[0]}"] .seal[data-key$="|star"]`); await busy.click('[data-act=peel]');
   await busy.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await sleep(300);
   ok((calls.apply || 0) - ap1 === 1, 'ためている 間に 画面を はなれても すぐ 送る（消えない）');
@@ -489,6 +492,13 @@ function makeGas() {
   ok(JSON.parse(O.sheets.modes.data.find(r => r[0] === 'A')[1]).orgMode === 'off' && O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { x: 20 }, u: [] }], del: [], star: [] }]).rejected.length === 0, '整理モードを 切に すると 整理役で なくても 動かせる');
   O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { starOut: 'off', orgMode: 'on' }) } }]);
   ok(O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { x: 25 }, u: [] }], del: [], star: [] }]).rejected.length === 1, '整理モードを 入に もどすと また 整理役だけ');
+  // 知っててほしい：整理役で なくても 青に できる（山へ 動く）。見合い会では ほかの 班にも 届く
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { starOut: 'off', orgMode: 'on' }) } }]);
+  ok(O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { kb: true, kbAt: 1, x: 30, y: 2 }, u: [] }], del: [], star: [] }]).rejected.length === 0, '整理役で なくても 知っててほしい に できる（山の 位置へ 動く）');
+  ok(O.as('p2' + D, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { x: 40 }, u: [] }], del: [], star: [] }]).rejected.length === 1, 'ただの 移動は これまで どおり 整理役だけ');
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { rotAct: 'start' }) } }]);
+  ok(O.as('p3' + D, 'poll', [{ teams: { 'A-1': 0 } }]).items.some(x => x.id === 's1' && x.kb), '見合い会では ほかの 班の 子にも 知っててほしい 付箋が 届く');
+  O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { rotAct: 'stop' }) } }]);
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }
