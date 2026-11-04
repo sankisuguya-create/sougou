@@ -78,10 +78,11 @@ function frontLayer(F, gid){
    （形ごとに 縁を 描くと 継ぎ目に 線が 出るため。黒は 外へ 広げ、白は 内側の 細い 輪） */
 function shootSVG(size){
   var star = (function(){ var p = []; for(var i = 0; i < 10; i++){ var r = i % 2 ? 5.3 : 10.5, a = -Math.PI/2 - 0.12 + i*Math.PI/5; p.push((12.5 + r*Math.cos(a)).toFixed(2) + ' ' + (19.6 + r*Math.sin(a)).toFixed(2)); } return 'M' + p.join('L') + 'Z'; })();
-  var tail = 'M9.6 14.2Q18 4.6 28.2 2.8L30.1 7.6L30.6 12.6L29.2 17.8Q22.6 17.4 15.6 23.6Z';
-  var b1 = 'M9.6 14.2Q18 4.6 28.2 2.8L30.1 7.6Q20.4 9.2 12.2 17Z';
-  var b2 = 'M12.2 17Q20.4 9.2 30.1 7.6L30.6 12.6Q21.8 13.2 14.4 20.6Z';
-  var b3 = 'M14.4 20.6Q21.8 13.2 30.6 12.6L29.2 17.8Q22.6 17.4 15.6 23.6Z';
+  // 裾は ギザギザ（帯の 境目が とがり、帯の まん中が くぼむ）
+  var tail = 'M9.6 14.2Q18 4.6 28 2.6L25.4 5.6L29.8 7.8L26.4 10.4L30.2 12.8L26.6 15.2L28.6 18.2Q22.6 17.4 15.6 23.6Z';
+  var b1 = 'M9.6 14.2Q18 4.6 28 2.6L25.4 5.6L29.8 7.8Q20.4 9.2 12.2 17Z';
+  var b2 = 'M12.2 17Q20.4 9.2 29.8 7.8L26.4 10.4L30.2 12.8Q21.8 13.2 14.4 20.6Z';
+  var b3 = 'M14.4 20.6Q21.8 13.2 30.2 12.8L26.6 15.2L28.6 18.2Q22.6 17.4 15.6 23.6Z';
   var U = '<path d="' + tail + '"/><path d="' + star + '"/>';
   var g = function(id, a, b){ return '<linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + a + '"/><stop offset="1" stop-color="' + b + '"/></linearGradient>'; };
   return '<svg viewBox="0 0 33 33"' + (size ? ' width="' + size + '" height="' + size + '"' : '') + ' aria-hidden="true"><defs>'
