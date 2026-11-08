@@ -1123,7 +1123,7 @@ function viewSheet(){
       if(s.ans == null) s.ans = n.ans || '';
       var L2 = ed ? '<button class="btn' + (n.done ? ' on' : '') + '" data-act="done" data-id="' + n.id + '" aria-pressed="' + !!n.done + '">もう知ってる</button>' : '';
       h += '<div class="ngrid"><div class="ncol">' + L2 + '</div><div class="bignote back"><div class="q">問い：' + esc(n.text) + '</div>'
-        + (txt ? '<textarea id="w-ans" maxlength="400" placeholder="しらべて わかった ことを 書こう（本・Gem・インターネット・聞いた こと など）">' + esc(s.ans) + '</textarea>' : '<div class="txt ans">' + (n.ans ? esc(n.ans) : '<span class="hint">まだ 書いて いません</span>') + '</div>')
+        + (txt ? '<textarea id="w-ans" maxlength="400" placeholder="しらべて わかった ことを 書こう（本・インターネット・聞いた こと など）">' + esc(s.ans) + '</textarea>' : '<div class="txt ans">' + (n.ans ? esc(n.ans) : '<span class="hint">まだ 書いて いません</span>') + '</div>')
         + '<span class="sidetag">うら</span></div><div class="ncol r">' + R + '</div></div>';
     } else
     h += '<div class="ngrid"><div class="ncol">' + L + '</div><div class="bignote' + (n.done ? ' done' : '') + (n.fromTeam ? ' gift' : '') + '">'
