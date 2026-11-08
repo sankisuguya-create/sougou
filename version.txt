@@ -1,3 +1,14 @@
-更新日時: 2026-11-05 05:46 (日本時間)
-コミット: d0611dd
-内容: Merge pull request #18 from sankisuguya-create/toi-board-goodq
+更新日時: 2026-11-08 10:56 (日本時間)
+版: v2026.1108.105559
+コミット: 3f91108b5ba1ebc37f1ab3e59df5346f4b7c2450
+内容: Merge pull request #19 from sankisuguya-create/claude/pin-version
+
+貼るファイル（この版に固定。古くならない。3つとも同じ版から貼る）:
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1108.105559/toi-board/gas/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1108.105559/toi-board/gas/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1108.105559/toi-board/gas/Trial.html
+
+タグで開けない時（コミット番号で固定）:
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@3f91108b5ba1ebc37f1ab3e59df5346f4b7c2450/toi-board/gas/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@3f91108b5ba1ebc37f1ab3e59df5346f4b7c2450/toi-board/gas/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@3f91108b5ba1ebc37f1ab3e59df5346f4b7c2450/toi-board/gas/Trial.html
