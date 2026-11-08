@@ -1,6 +1,11 @@
-# push のたびに version.txt（更新日時・コミット）を更新する。
-# 校務PCでは jsDelivr 経由で @main/version.txt を開き、届いている版を確認する。
-# 続けて jsDelivr の @main キャッシュを全ファイル・全フォルダ分消し、数分で反映させる。
+# push のたびに：
+#   1. 版のタグ（v年.月日.時分秒、日本時間）をこのコミットに付ける
+#   2. version.txt に、貼るファイルのアドレスを「タグ付き」「コミット番号付き」で書く
+#      （タグ・コミット番号で指したファイルは中身が変わらないので、jsDelivr が古いものを返さない）
+#   3. jsDelivr の @main のキャッシュ削除を依頼し、応答の本文を記録に残す
+#   4. @main/version.txt が新しい版になったかを確かめ、届かなければ警告を出す
+# @main は最大12時間ほど古いものを返すことがあり、削除依頼も当てにならない（2026-11-05、11/2 の版で止まった）。
+# 校務PCでは version.txt の「貼るファイル」の行のアドレス（固定の版）から貼る。
 name: version.txt を更新
 
 on:
@@ -11,19 +16,45 @@ on:
 permissions:
   contents: write
 
+env:
+  # 貼るファイル（toi-board/gas/README.md の手順2）。増えたらここに足す
+  PASTE_FILES: toi-board/gas/Code.gs toi-board/gas/Index.html toi-board/gas/Trial.html
+
 jobs:
   stamp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: version.txt を書き出す
+        with:
+          fetch-depth: 0
+
+      - name: 版のタグを付ける
+        id: tag
         run: |
+          tag="v$(TZ=Asia/Tokyo date '+%Y.%m%d.%H%M%S')"
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: version.txt を書き出す
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          cdn="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}"
           {
             echo "更新日時: $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M') (日本時間)"
-            echo "コミット: ${GITHUB_SHA::7}"
+            echo "版: ${TAG}"
+            echo "コミット: ${GITHUB_SHA}"
             echo "内容: $(git log -1 --format=%s)"
+            echo ""
+            echo "貼るファイル（この版に固定。古くならない。3つとも同じ版から貼る）:"
+            for f in $PASTE_FILES; do echo "${cdn}@${TAG}/${f}"; done
+            echo ""
+            echo "タグで開けない時（コミット番号で固定）:"
+            for f in $PASTE_FILES; do echo "${cdn}@${GITHUB_SHA}/${f}"; done
           } > version.txt
           cat version.txt
+
       - name: コミットして push
         run: |
           git config user.name "github-actions[bot]"
@@ -31,11 +62,34 @@ jobs:
           git add version.txt
           git commit -m "version.txt を更新 [skip ci]" || exit 0
           git push
-      - name: jsDelivr の @main キャッシュを消す
+
+      - name: jsDelivr の @main キャッシュ削除を依頼する（応答の本文を残す）
         run: |
           base="https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main"
-          { git ls-files; git ls-files | xargs -n1 dirname | sort -u | grep -v '^\.$' | sed 's|$|/|'; echo ""; } |
-          while IFS= read -r path; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$base/$path")
-            echo "$code /$path"
+          # 変わったファイル＋version.txt＋フォルダの一覧だけを、間隔を空けて依頼する（連続の依頼は無視されることがある）
+          before="${{ github.event.before }}"
+          { git diff --name-only "$before" HEAD 2>/dev/null || git ls-files; echo version.txt; } | sort -u > /tmp/paths
+          sed 's|/[^/]*$|/|' /tmp/paths | grep '/$' | sort -u >> /tmp/paths
+          echo "/" >> /tmp/paths
+          while IFS= read -r p; do
+            p="${p#/}"
+            body=$(curl -s -w '\n%{http_code}' "$base/$p")
+            code=$(echo "$body" | tail -n1)
+            json=$(echo "$body" | sed '$d')
+            throttled=$(echo "$json" | jq -r '[.. | objects | .throttled? // empty] | any' 2>/dev/null || echo "?")
+            status=$(echo "$json" | jq -r '.status // "?"' 2>/dev/null || echo "?")
+            echo "$code status=$status throttled=$throttled /$p"
+            [ "$throttled" = "true" ] && echo "::warning::jsDelivr が削除依頼を受け付けなかった（throttled）: /$p"
+            sleep 2
+          done < /tmp/paths
+
+      - name: '@main/version.txt に新しい版が届いたかを確かめる'
+        run: |
+          url="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main/version.txt"
+          for i in 1 2 3 4 5 6; do
+            sleep 30
+            got=$(curl -s "$url" | grep '^コミット:' | awk '{print $2}')
+            echo "${i}回目 ($((i*30))秒後): 届いている版 = ${got:-（読めない）}"
+            if [ -n "$got" ] && [ "${GITHUB_SHA#"$got"}" != "$GITHUB_SHA" ]; then echo "@main に新しい版が届いた"; exit 0; fi
           done
+          echo "::warning::3分たっても @main/version.txt が古いまま（届いている版: ${got:-不明}）。校務PCでは version.txt の固定の版のアドレスを使う。"
