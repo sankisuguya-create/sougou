@@ -291,6 +291,8 @@ b.bignum{font-size:20px}
 .kbbtn b{background:#2C6FB0;color:#fff;border-radius:99px;padding:0 7px;font-size:13px}
 .btn.kbtag.on{background:var(--kb);border-color:#2C6FB0;color:#0B3F73}
 .kbhits{display:grid !important;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.kbwrap{position:relative;display:flex}.kbwrap .kbcard{flex:1}
+.kbdel{position:absolute;right:6px;bottom:6px;width:40px;height:40px;border-radius:50%;border:2px solid var(--line);background:#fff;font-size:18px}
 .kbcard{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--kb);border:0;border-radius:3px;padding:16px 14px;box-shadow:0 2px 5px rgba(0,0,0,.18);min-height:150px}
 .kbcard .q{font-size:13px;font-weight:700;color:#0B3F73}
 .kbcard .a{font-size:17px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
@@ -1247,7 +1249,8 @@ function viewSheet(){
     var kl = kbOf(s.team).filter(function(n){ return n.face !== 'trash'; }), own = s.team === myTeam() || isTeacher();
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + FOLDER_SVG + ' ' + teamLabel(s.team) + '「' + esc(spot(s.team).name) + '」の みんなに 知っていて ほしいこと（' + kl.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<div class="hits kbhits">' + (kl.length ? kl.map(function(n){
-          return '<button class="kbcard" ' + (own && !isTeacher() || isTeacher() ? 'data-act="kbopen" data-id="' + n.id + '"' : 'disabled') + '><span class="q">' + esc(n.text) + '</span><span class="a">' + (n.ans ? esc(n.ans) : '<i>うらは まだ 書いて いません</i>') + '</span>' + (n.done ? '<span class="donemark" style="position:static">✓ もう知ってる</span>' : '') + '</button>';
+          var del = s.team === myTeam() && !isTeacher() ? '<button class="kbdel" data-act="toface" data-f="trash" data-id="' + n.id + '" aria-label="ゴミばこへ" title="ゴミばこへ">🗑️</button>' : '';
+          return '<div class="kbwrap"><button class="kbcard" ' + (own && !isTeacher() || isTeacher() ? 'data-act="kbopen" data-id="' + n.id + '"' : 'disabled') + '><span class="q">' + esc(n.text) + '</span><span class="a">' + (n.ans ? esc(n.ans) : '<i>うらは まだ 書いて いません</i>') + '</span>' + (n.done ? '<span class="donemark" style="position:static">✓ もう知ってる</span>' : '') + '</button>' + del + '</div>';
         }).join('') : '<p>まだ ありません</p>') + '</div>';
   } else if(s.type === 'teams'){
     var L = lookable().filter(function(x){ return x.cls !== myCls(); }), cs = {};
@@ -1285,6 +1288,7 @@ function viewSheet(){
     if(back){
       if(s.ans == null) s.ans = n.ans || '';
       var L2 = ed ? '<button class="btn' + (n.done ? ' on' : '') + '" data-act="done" data-id="' + n.id + '" aria-pressed="' + !!n.done + '">もう知ってる</button>' : '';
+      if(ed && n.kb) L2 += '<button class="btn kbtag on" data-act="kbtag" data-id="' + n.id + '" aria-pressed="true">知っててほしい</button><button class="btn" data-act="toface" data-f="trash" data-id="' + n.id + '">→🗑️へ</button>';
       h += '<div class="ngrid"><div class="ncol">' + L2 + '</div><div class="bignote back"><div class="q">問い：' + esc(n.text) + '</div>'
         + (txt ? '<textarea id="w-ans" maxlength="400" placeholder="しらべて わかった ことを 書こう（本・インターネット・聞いた こと など）">' + esc(s.ans) + '</textarea>' : '<div class="txt ans">' + (n.ans ? esc(n.ans) : '<span class="hint">まだ 書いて いません</span>') + '</div>')
         + '<span class="sidetag">うら</span></div><div class="ncol r">' + R + '</div></div>';
@@ -1638,6 +1642,7 @@ document.addEventListener('pointerup', function(e){
   if(d.grip){ commit(function(){ x.w = Math.max(4, Math.min(boardCols() - clampX(d.ox, d.ow) - 1, Math.round(d.ow + dx/GRID))); x.h = Math.max(3, Math.round(d.oh + dy/GRID)); }); return; }
   var f = x.kind === 'note' ? faceAt(e) : null;
   var t = x.kind === 'note' ? noteAt(boardPoint(e), d.id) : null;
+  if(f && f !== ui.face && f !== 'gift' && x.kb){ var ks = kbOf(x.team, x.face); ks.forEach(function(k){ moveFace(k, f); }); toast(ks.length + 'まいを ' + faceLabel(f) + 'へ うつしました'); return; }
   if(f && f !== ui.face && f !== 'gift'){ moveFace(x, f); return; }
   if(x.kb){ var nx = clampX(Math.round(clampX(d.ox, NOTE_W) + dx/GRID), NOTE_W), ny = Math.max(0, Math.round(d.oy + dy/GRID)); commit(function(){ kbOf(x.team, x.face).forEach(function(k){ k.x = nx; k.y = ny; }); }); return; }
   if(t && item(t) && item(t).kb){ setKb(x, true); toast('「みんなに 知っていて ほしいこと」に 入れました'); return; }
@@ -1655,6 +1660,7 @@ function stackOnto(x, target){
 }
 function moveFace(x, f){
   commit(function(){
+    if(f === 'trash' && x.kb){ delete x.kb; delete x.kbAt; var fp = freeSpot(x.team, x.face); x.x = fp.x; x.y = fp.y; }  // ゴミばこへ 入れると 青い 山から はずれる（もどすと ふつうの 付箋）
     x.face = f; x.pick = 0; x.stackOf = null;
     stackOf(x.id).forEach(function(k){ k.face = f; });
     dropArrows(x.id);
@@ -1805,7 +1811,7 @@ document.addEventListener('click', function(e){
     var who2 = $id('d-text').value.trim();
     ui.sheet = null; commit(function(){ var x = item(id); x.done = true; if(who2) x.doneBy = who2.slice(0, 40); else delete x.doneBy; }); return;
   }
-  if(act === 'toface'){ ui.sheet = null; moveFace(item(id), b.getAttribute('data-f')); return; }
+  if(act === 'toface'){ if(!(ui.sheet && ui.sheet.type === 'kb')) ui.sheet = null; moveFace(item(id), b.getAttribute('data-f')); return; }
   if((act === 'totop' || act === 'unstack') && !canArrange()){ toast(orgHint()); return; }
   if(act === 'totop'){
     /* 下の 付箋を いちばん上に：位置・えらんだ順・矢印は 上の 付箋から 受けつぐ */
