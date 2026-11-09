@@ -766,6 +766,11 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.evaluate(id => !!item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('3まい'), '付箋を 山の 上に 落としても 知っててほしい に 入る');
   // ゴミばこへ：一覧の 🗑️ で 1まい すてると 山から はずれ、ゴミばこでは ふつうの 付箋
   await page.click('#board .kbdeck');
+  await page.click(`.kbwrap:has([data-id="${kn[1]}"]) .kbout`);
+  ok(await page.evaluate(id => !item(id).kb && item(id).face === 'front', kn[1]) && await page.isVisible(`#board .note[data-id="${kn[1]}"]:not(.kbdeck)`) && (await page.textContent('#board .kbdeck')).includes('2まい'), '青い 山から とりだすと ふつうの 付箋に もどり、ボードに 出る');
+  await page.click(`.kbwrap:has([data-id="${kn[0]}"]) .kbout`).catch(() => {});
+  await page.evaluate(id => setKb(item(id), true), kn[0]); await page.evaluate(id => setKb(item(id), true), kn[1]);
+  await page.click('#board .kbdeck').catch(() => {});
   await page.click(`.kbwrap:has([data-id="${kn[2]}"]) .kbdel`);
   ok(await page.evaluate(id => item(id).face === 'trash' && !item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('2まい') && await page.isVisible('.kbhits'), '知っててほしい 付箋も 一覧から ゴミばこへ うつせる（一覧は ひらいた まま）');
   await page.keyboard.press('Escape');
