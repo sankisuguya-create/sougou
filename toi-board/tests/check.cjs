@@ -764,6 +764,18 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const dk = await page.locator('#board .kbdeck').boundingBox(), n3 = await box(kn[2]);
   await page.mouse.move(n3.x + n3.width / 2, n3.y + n3.height * 0.6); await page.mouse.down(); await page.mouse.move(n3.x + n3.width / 2 + 20, n3.y + n3.height * 0.6, { steps: 3 }); await page.mouse.move(dk.x + dk.width / 2, dk.y + dk.height / 2, { steps: 8 }); await page.mouse.up();
   ok(await page.evaluate(id => !!item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('3まい'), '付箋を 山の 上に 落としても 知っててほしい に 入る');
+  // ゴミばこへ：一覧の 🗑️ で 1まい すてると 山から はずれ、ゴミばこでは ふつうの 付箋
+  await page.click('#board .kbdeck');
+  await page.click(`.kbwrap:has([data-id="${kn[1]}"]) .kbout`);
+  ok(await page.evaluate(id => !item(id).kb && item(id).face === 'front', kn[1]) && await page.isVisible(`#board .note[data-id="${kn[1]}"]:not(.kbdeck)`) && (await page.textContent('#board .kbdeck')).includes('2まい'), '青い 山から とりだすと ふつうの 付箋に もどり、ボードに 出る');
+  await page.click(`.kbwrap:has([data-id="${kn[0]}"]) .kbout`).catch(() => {});
+  await page.evaluate(id => setKb(item(id), true), kn[0]); await page.evaluate(id => setKb(item(id), true), kn[1]);
+  await page.click('#board .kbdeck').catch(() => {});
+  await page.click(`.kbwrap:has([data-id="${kn[2]}"]) .kbdel`);
+  ok(await page.evaluate(id => item(id).face === 'trash' && !item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('2まい') && await page.isVisible('.kbhits'), '知っててほしい 付箋も 一覧から ゴミばこへ うつせる（一覧は ひらいた まま）');
+  await page.keyboard.press('Escape');
+  await page.evaluate(id => commit(() => { const x = item(id); x.face = 'front'; }), kn[2]);
+  await page.click(`#board .note[data-id="${kn[2]}"]`); await page.click(`[data-act=kbtag][data-id="${kn[2]}"]`);
   // 見合い会でも 見られる
   await rotTo('A-1'); await who('A05');
   ok(await page.isVisible('.rothead [data-act=kb]'), '見合い会の 間も 今の 班の 知っててほしい こと を 開ける');
