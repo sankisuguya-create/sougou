@@ -186,8 +186,14 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .stnote .cm .tip p{margin:4px 0}
 .gal.wait .order{font-size:22px;line-height:1.9}.gal.wait .order li.me{font-weight:700;color:var(--cat-1)}
 .rotpanel{border:2px solid var(--line);border-radius:14px;padding:6px 12px;margin:8px 0;background:#fff}
+.facil .facilhead{display:flex;align-items:center;gap:12px}.facil .facilhead h3{margin:10px 0 4px;flex:1}
+.fstep{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.fno{flex:none;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-weight:700;display:grid;place-items:center}
+.fbar{position:sticky;top:0;z-index:25;background:#fff;padding:6px 0;border-bottom:2px solid var(--line)}
+.fbar .rothead{position:static;font-size:24px;padding:4px 0}
+.fdone{font-size:18px}
 .rotnow{margin-top:6px}.rotnow .rothead{position:static;font-size:20px}
-.btn.big{min-height:64px;font-size:18px}
+.btn.bigbtn{min-height:64px;font-size:18px}
 .stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;padding:12px 4px}
 .stnote{width:260px;background:var(--fill-b);box-shadow:0 2px 5px rgba(0,0,0,.18);padding:22px 16px 16px;border-radius:2px;position:relative}
 .stnote::before{content:"";position:absolute;top:-9px;left:50%;width:84px;height:18px;margin-left:-42px;background:rgba(255,255,255,.65)}
@@ -1265,7 +1271,7 @@ function rotPanel(tm){
   var kids = S.roster.filter(function(c){ return c.cls === ui.tCls; }), here = S.here || {};
   var ok = kids.filter(function(c){ return here[c.id] != null && here[c.id] < 30000; }), miss = kids.filter(function(c){ return ok.indexOf(c) < 0; });
   if(ph === 'wait' || ph === 'done') h += '<div class="mode"><span class="mlabel">開いた 児童</span>' + (Platform.demo ? '<span class="mdesc">体験版では 数えません</span>' : '<b class="bignum">' + ok.length + '／' + kids.length + '人</b>' + (miss.length ? '<span class="mdesc">まだ：' + miss.map(function(c){ return teamLabel(c.team) + ' ' + c.no + 'ばん'; }).join('・') + '（30秒 以内に 確かめた 児童を 数えます）</span>' : '<span class="mdesc">全員 そろいました</span>')) + '</div>';
-  if(ph === 'wait') return h + '<div class="row"><button class="btn primary big" data-act="rot" data-v="start">はじめる（' + ts.map(function(t){ return spot(t).no; }).join('→') + 'はん、' + rm + '分ずつ）</button></div></div>';
+  if(ph === 'wait') return h + '<div class="row"><button class="btn primary bigbtn" data-act="rot" data-v="start">はじめる（' + ts.map(function(t){ return spot(t).no; }).join('→') + 'はん、' + rm + '分ずつ）</button></div></div>';
   if(ph === 'done') return h + '<p><b>おわりました。</b>児童の 画面は ボードに もどっています。</p><div class="row"><button class="btn" data-act="rot" data-v="start">もう一度 1はんから はじめる</button><button class="btn" data-act="rot" data-v="stop">見合い会の 画面を 切に する</button></div></div>';
   h += '<div class="rotnow">' + rotHead(st) + '<div class="row">'
     + (ph === 'pause' ? '<button class="btn primary" data-act="rot" data-v="resume">つづける</button>' : '<button class="btn" data-act="rot" data-v="pause">一時停止</button>')
@@ -1273,6 +1279,32 @@ function rotPanel(tm){
     + confirmBtn('rotstop', 'rot', 'data-v="stop"', 'やめる（全員 ボードへ）', 'もう一度 押すと やめます', '順番は 最初に もどります（貼った シール・コメントは のこります）')
     + '</div><p class="hint">' + spot(st.team).no + 'はんの 児童が 見ている 画面（先生には コメントを ひらいて 出します）：</p>' + stageHTML(st.team, st, true) + '</div>';
   return h + '</div>';
+}
+/* 見合い会の 進行役の 画面：①開いた 人数 → ②はじめる → ③今の 班と のこり時間 → ④一時停止・つぎへ・やめる → ⑤今の 班と 同じ 画面。
+   操作の 帯は 上に 固定（下の 見本を 見ながらでも 押せる） */
+function facilHTML(tm){
+  var st = rotState(ui.tCls), ph = st.phase, rm = ROT_MINS.indexOf(Number(tm.rotMin)) >= 0 ? Number(tm.rotMin) : 4, ts = rotTeams(ui.tCls), rd = tm.round || 1;
+  var step = function(n, label, on, done){ return '<li class="' + (on ? 'on' : done ? 'done' : '') + '"><b>' + n + '</b>' + label + '</li>'; };
+  var h = '<section class="tcard facil"><div class="facilhead"><h3>見合い会の 進行（' + ui.tCls + '組・第' + rd + '回）</h3><button class="btn" data-act="fullset">くわしい 設定 ▶</button></div>'
+    + '<ol class="rotsteps">' + step(1, '全員 ひらけたか 確かめる', ph === 'wait', ph !== 'wait') + step(2, '「はじめる」', false, running(st) || ph === 'done') + step(3, '班が 自動で 切り替わる', running(st), ph === 'done') + step(4, 'おわると 全員 ボードへ', ph === 'done', false) + '</ol>';
+  if(ph === 'wait'){
+    var kids = S.roster.filter(function(c){ return c.cls === ui.tCls; }), here = S.here || {};
+    var ok = kids.filter(function(c){ return here[c.id] != null && here[c.id] < 30000; }), miss = kids.filter(function(c){ return ok.indexOf(c) < 0; });
+    var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
+    h += '<div class="fstep"><span class="fno">1</span><div><b>ひらいた 児童</b>　' + (Platform.demo ? '<span class="mdesc">体験版では 数えません</span>' : '<b class="bignum">' + ok.length + '／' + kids.length + '人</b>' + (miss.length ? '<div class="mdesc">まだ：' + miss.map(function(c){ return teamLabel(c.team) + ' ' + c.no + 'ばん'; }).join('・') + '</div>' : '<span class="mdesc">　全員 そろいました</span>')) + '</div></div>'
+      + (noShow.length ? '<p class="warn">⚠ 見てほしい付箋が ない 班：' + noShow.map(function(sp){ return sp.no + 'はん'; }).join('・') + '（その 班の 番に なっても 付箋が 出ません）</p>' : '')
+      + '<div class="fstep"><span class="fno">2</span><div><div class="mode" style="margin:0 0 8px"><span class="mlabel">1つの 班の 時間</span><span class="seg">' + ROT_MINS.map(function(n){ return '<button class="' + (rm === n ? 'on' : '') + '" data-act="rotmin" data-v="' + n + '">' + n + '分</button>'; }).join('') + '</span><span class="mdesc">合計 ' + ts.length * rm + '分</span></div>'
+      + '<button class="btn primary bigbtn" data-act="rot" data-v="start">はじめる（' + ts.map(function(t){ return spot(t).no; }).join('→') + 'はん、' + rm + '分ずつ）</button></div></div>'
+      + '<div class="row"><button class="btn" data-act="mode" data-k="starOut" data-v="off">見合い会を とりやめる（児童は ボードへ）</button></div>';
+    return h + '</section>';
+  }
+  if(ph === 'done') return h + '<p class="fdone"><b>おわりました。</b>児童の 画面は ボードに もどっています。</p><div class="row"><button class="btn" data-act="rot" data-v="start">もう一度 1はんから はじめる</button><button class="btn primary" data-act="rot" data-v="stop">見合い会を 切に する</button></div></section>';
+  h += '<div class="fbar"><div class="fnow">' + rotHead(st) + '</div><div class="row">'
+    + (ph === 'pause' ? '<button class="btn primary bigbtn" data-act="rot" data-v="resume">▶ つづける</button>' : '<button class="btn bigbtn" data-act="rot" data-v="pause">⏸ 一時停止</button>')
+    + '<button class="btn bigbtn" data-act="rot" data-v="next">' + (st.idx + 1 < st.n ? '⏭ つぎの 班へ（' + spot(ts[st.idx + 1]).no + 'はん）' : '⏭ ここで おわる') + '</button>'
+    + confirmBtn('rotstop', 'rot', 'data-v="stop"', 'やめる（全員 ボードへ）', 'もう一度 押すと やめます', '順番は 最初に もどります（貼った シール・コメントは のこります）')
+    + '</div></div><div class="rotnow"><p class="hint">' + spot(st.team).no + 'はんの 児童が 見ている 画面（先生には コメントを ひらいて 出します）：</p>' + stageHTML(st.team, st, true) + '</div>';
+  return h + '</section>';
 }
 /* Gemini 用：目的を えらぶと 指示文を 表の 前に つけて コピー */
 var AI_GOALS = [
@@ -1331,6 +1363,10 @@ function viewTeacher(){
       if(modeOn(m.view)) o.push('閲覧'); if(modeOn(m.propose)) o.push('提案'); if(m.research === 'on') o.push('調べ'); if(m.orgMode === 'off') o.push('整理なし'); if(modeOn(m.starOut)) o.push('見合い会');
       return o.length ? o.join('・') : 'ぜんぶ 切'; };
     h += '<div class="ctabs">' + cs.map(function(c){ return '<button class="btn cbtn2' + (ui.tCls === c ? ' on' : '') + '" data-act="tcls" data-c="' + c + '"><b>' + c + '組</b><small>' + sum(c) + '</small></button>'; }).join('') + '<span class="hint">ここで えらんだ 組（' + ui.tCls + '組）の 設定だけが 変わります。ほかの 組は そのまま</span></div>';
+    /* 見合い会の 間は「進行役の 画面」だけを 出す（上から 順に 押せば よく、スクロールしない）。ほかの 設定は「くわしい 設定」 */
+    var phF = rotState(ui.tCls).phase;
+    if(phF !== 'off' && !ui.fullSet) return h + facilHTML(tm) + '</div>';
+    if(phF !== 'off') h += '<div class="row"><button class="btn primary" data-act="fullset">◀ 見合い会の 進行に もどる</button><span class="hint">見合い会は つづいて います</span></div>';
     var modeRow = function(x, opts){
       return '<div class="mode"><span class="mlabel">' + x.label + '</span><span class="seg">' + opts.map(function(o){ return '<button class="' + (tm[x.k] === o[0] ? 'on' : '') + '" data-act="mode" data-k="' + x.k + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</span><span class="mdesc">' + x.desc + '</span></div>';
     };
@@ -1353,7 +1389,7 @@ function viewTeacher(){
     var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
     if(noShow.length) h += '<p class="warn">⚠ 第' + rd + '回の 見てほしい付箋が まだ ない 班：' + noShow.map(function(sp){ return sp.no + 'はん'; }).join('・') + '（見合い会で その 班の 番に なっても、付箋が 出ません）</p>';
     h += modeRow(M3.starOut, [['off','切'],['class','入']]);
-    h += rotPanel(tm) + '</section>';
+    h += (rotState(ui.tCls).phase === 'off' ? rotPanel(tm) : '<p class="hint">見合い会の 進行中です。「◀ 見合い会の 進行に もどる」で 進行の 画面へ。</p>') + '</section>';
     var anyOn = MODES.some(function(x){ return modeOn(tm[x.k]); });
     h += '<div class="row"><button class="btn" data-act="modes-off"' + (anyOn ? '' : ' disabled') + '>' + ui.tCls + '組を ぜんぶ 切に もどす</button><span class="hint">共同閲覧・アイデア提案・見合い会の 画面を 切に します（付箋や シールは 消えません）</span></div>';
     return h + '</div>';
@@ -1731,11 +1767,12 @@ document.addEventListener('click', function(e){
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.round = (mm.round || 1) + 1; }, true);
     ui.modeNote = ui.tCls; render(); toast(ui.tCls + '組を 第' + roundOf(ui.tCls) + '回に しました'); return;
   }
+  if(act === 'fullset'){ ui.fullSet = !ui.fullSet; render(); return; }
   if(act === 'rotmin'){ var rmv = +b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.rotMin = rmv; }); render(); return; }
   if(act === 'rot'){
     var ra = b.getAttribute('data-v');
     if(ra === 'stop' && running(rotState(ui.tCls)) && !arm('rotstop')) return;
-    ui.armed = false;
+    ui.armed = false; if(ra === 'start') ui.fullSet = false;
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); rotAct(mm, ra); });
     ui.modeNote = ui.tCls; render(); return;
   }
@@ -1752,6 +1789,7 @@ document.addEventListener('click', function(e){
       var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes();
       mm[key] = key === 'starIn' ? val === 'on' : val;
       if(key === 'starOut' && val === 'off') mm.rot = null;
+      if(key === 'starOut') ui.fullSet = false;
     });
     ui.modeNote = ui.tCls; render();
     return;

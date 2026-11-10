@@ -174,7 +174,7 @@ function makeGas() {
   await settle(); await reload(a05p);
   ok(await a05p.isVisible('.gal.wait'), 'シール（班の外）を 入れると 待ち画面に なる');
   await a05p.waitForTimeout(1200); await ta.click('[data-act=ttab][data-k=mode]');
-  ok(await ta.isVisible('text=開いた 児童') && /[1-4]／4人/.test(await ta.textContent('.rotpanel')), '先生に 開いた 児童の 数が 出る（A組 3人中 1人）');
+  ok(await ta.isVisible('text=ひらいた 児童') && /[1-4]／4人/.test(await ta.textContent('.facil')), '先生に 開いた 児童の 数が 出る（A組 3人中 1人）');
   G.as('a01' + D, 'apply', [{ up: ['az1', 'az2'].map((id, i) => ({ id, kind: 'note', team: 'A-1', face: 'front', x: 30 + i * 8, y: 1, text: 'もう1まい' + i })), del: [], star: [] }]);
   await ta.click('[data-act=rot][data-v=start]');
   await settle(); await sleep(600);
@@ -272,7 +272,7 @@ function makeGas() {
   G.as('a05' + D, 'apply', [{ up: [], del: [], star: [{ noteId: bigs2[0], k: 'bulb', on: true }] }]);
   G.ctx.rows_ = orig2;
   ok(itemReads === 0, 'シールだけの 書きこみでは 付箋の シートを 読まない');
-  await ta.click('[data-act=mode][data-k=starOut][data-v=off]'); await sleep(800);
+  await (async () => { if (await ta.isVisible('[data-act=fullset]:has-text("くわしい")')) await ta.click('[data-act=fullset]'); })(); await ta.click('[data-act=mode][data-k=starOut][data-v=off]'); await sleep(800);
   await busy.close();
 
   // データが 勝手に 消えない（サーバー）

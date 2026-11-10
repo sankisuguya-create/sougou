@@ -207,6 +207,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // 今の 班（1はん）の 児童は 見るだけ、シールは 実際の まい数だけ ならぶ。先生も 同じ 画面を 見られる
   await rotTo('A-1');
   ok(await page.isVisible(`.rotnow .stnote[data-id="${e}"]`), '先生は 今の 班と 同じ 画面を 見られる');
+  const fb = await page.locator('.facil .fbar').boundingBox(), rnb = await page.locator('.facil .rotnow').boundingBox();
+  ok(await page.isVisible('.facil .fbar [data-act=rot][data-v=pause]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=next]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=stop]') && fb.y < rnb.y && !(await page.isVisible('[data-act=mode][data-k=view]')), '見合い会の 間は 進行役の 画面（上に 今の 班と 操作、下に 同じ 画面）。ほかの 設定は 出ない');
   await who('A01');
   s = await st();
   const stN = s.stars.filter(x => x.noteId === e && x.k !== 'thumb').length;
@@ -216,7 +218,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.waitForTimeout(1200);
   ok(await page.isVisible('#board'), '最後の 班が おわると 全員 ボードに もどる');
   // 先生が 切ると もどる・集計は 自分の班の ボードに 種類別「×N」、ほかの班には 数を 出さない
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('teacher'); await (async () => { if (await page.isVisible('[data-act=fullset]:has-text("くわしい")')) await page.click('[data-act=fullset]'); })(); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01');
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
   const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
@@ -408,8 +410,9 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=c-save]');
   s = await st();
   ok(s.comments.some(c => c.noteId === tops[1] && c.viewer === 'A05' && c.text.includes('ホームベース')) && !s.stars.some(x => x.viewer === 'A05' && x.noteId === tops[1] && x.k === 'shoot'), 'コメントを 書ける（シールは 貼られない）');
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('teacher'); await (async () => { if (await page.isVisible('[data-act=fullset]:has-text("くわしい")')) await page.click('[data-act=fullset]'); })(); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   await who('A01'); await page.click('.face[data-face=front]');
+  await page.waitForSelector(`#board .note[data-id="${tops[1]}"] .cicon`, { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(1100);
   const ci = await page.locator(`#board .note[data-id="${tops[1]}"] .cicon`).boundingBox(), nb2 = await box(tops[1]);
   ok(ci && ci.x > nb2.x + nb2.width / 2 && ci.y < nb2.y + 20, 'ふだんの 画面では 付箋の 右上に コメントの しるし');
   await page.click(`#board .note[data-id="${tops[1]}"] .cicon`);
@@ -495,7 +498,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.mouse.click(nb3.x + 60, nb3.y + 60);
   s = await st();
   ok(s.stars.some(x => x.noteId === nw && x.viewer === 'A05' && x.rd === 2), '第2回の シールとして 貼られる');
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('teacher'); await (async () => { if (await page.isVisible('[data-act=fullset]:has-text("くわしい")')) await page.click('[data-act=fullset]'); })(); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   const csvRow = await page.evaluate(id => roundSummary(item(id)), before.shown[0]);
   ok(/第1回/.test(csvRow), '前の 回の シールの 数は 一覧（CSV）に のこる');
   }
@@ -556,7 +559,10 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await tp.isVisible('[data-pane="0"] #board'), '⑥ 右で やめると 左が ボードに もどる');
   await tp.click('.trial [data-act=trial-min]'); await tp.click('.trial [data-act=trial-go][data-n="6"]');
   ok(!(await tp.isVisible('[data-pane]')), '⑦では ならべた 画面を やめる');
-  ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=rotmin]') && await tp.isVisible('[data-act=round-next]'), '④ 先生の モード・回の 設定');
+  ok(await tp.isVisible('.facil [data-act=rot][data-v=start]') && await tp.isVisible('.facil [data-act=rotmin]') && !(await tp.isVisible('[data-act=round-next]')), '⑦ 見合い会の 画面が 入って いる 間は 進行役の 画面だけ が 出る');
+  await tp.click('[data-act=fullset]');
+  ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=round-next]') && await tp.isVisible('[data-act=fullset]:has-text("進行に もどる")'), '⑦「くわしい 設定」で ほかの 設定と 回に 行け、進行に もどれる');
+  await tp.click('[data-act=fullset]');
   await tp.screenshot({ path: SHOTS + '/14-trial.png' });
   ok(await page.evaluate(() => localStorage.getItem('toiboard.v3')) === realBefore, '体験の データは 本番の 保存場所に 入らない');
   await tp.close();
@@ -784,7 +790,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.keyboard.press('Escape');
   await who('A01');
   ok(await page.isVisible('.rothead [data-act=kb]'), '見られる 班の 子も 見られる');
-  await who('teacher'); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
+  await who('teacher'); await (async () => { if (await page.isVisible('[data-act=fullset]:has-text("くわしい")')) await page.click('[data-act=fullset]'); })(); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   // 先生：しるしで しぼって ならべて Gemini 用に
   await page.click('[data-act=ttab][data-k=list]'); await page.click('[data-act=fcls][data-c=A]'); await page.click('[data-act=ftag][data-v=kb]');
   const kt = await page.evaluate(() => opinionTSV().split('\n').slice(1));
