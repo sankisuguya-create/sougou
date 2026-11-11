@@ -64,6 +64,7 @@ function makeGas() {
 }
 
 (async () => {
+  const openF = async pg => { if (await pg.isVisible('[data-act=fopen][aria-expanded=false]')) await pg.click('[data-act=fopen]'); };
   const G = makeGas();
   G.ctx.setup();
   const D = '@kyoiku.edu.nishi.or.jp';
@@ -134,13 +135,13 @@ function makeGas() {
   ok(!r.items.some(x => x.team === 'A-1'), 'モードが 切なら サーバーは ほかの班の 付箋を 送らない');
 
   // 先生：A組だけ 学年で 共同閲覧 → B組の 児童には まだ 届かない（モードは 見る側の 組で 決まる）
-  await ta.click('[data-act=mode][data-k=view][data-v=grade]');
+  await ta.selectOption('select[data-chg=view]', 'grade');
   ok(await ta.isVisible('text=10秒ほどで 届きます（ページの 更新は いりません）'), 'モードを 変えると 先生に「10秒ほどで 届く」と 出る');
   await settle();
   ok(!(await b01.isVisible('[data-act=teams]')), 'A組の モードは B組の 児童に 効かない');
   await ta.click('[data-act=tcls][data-c=B]');
-  await ta.click('[data-act=mode][data-k=view][data-v=grade]');
-  await ta.click('[data-act=mode][data-k=propose][data-v=grade]');
+  await ta.selectOption('select[data-chg=view]', 'grade');
+  await ta.selectOption('select[data-chg=propose]', 'grade');
   await settle();
   const bootsBefore = calls.boot;
   ok(await b01.isVisible('[data-act=teams]') && calls.boot === bootsBefore, 'モードは ページを 開き直さなくても ふだんの 確認で 届く（「ほかの組」が 出る）');
@@ -168,7 +169,7 @@ function makeGas() {
   await a01.click('.face[data-face=front]');
   await a01.evaluate(id => commit(() => { item(id).showcase = true; }), ids[0]);
   await ta.click('[data-act=ttab][data-k=mode]'); await ta.click('[data-act=tcls][data-c=A]');
-  await ta.click('[data-act=mode][data-k=view][data-v=off]');
+  await ta.selectOption('select[data-chg=view]', 'off');
   await ta.click('[data-act=mode][data-k=starOut][data-v=class]');
   const a05p = await open('a05' + D);
   await settle(); await reload(a05p);
@@ -505,7 +506,7 @@ function makeGas() {
 
   // 先生の 一覧
   await ta.click('[data-act=ttab][data-k=list]');
-  await ta.click('[data-act=fface][data-f=all]');
+  await openF(ta); await ta.click('[data-act=fface][data-f=all]');
   const tsv = await ta.evaluate(() => opinionTSV());
   ok(tsv.includes('A組\t1はん\t阪急西宮北口\t表がわ\tどうして 北口なの？') && !tsv.includes('@'), '先生の 一覧に ずらりと 出て、メールは 入らない');
   await ta.screenshot({ path: SHOTS + '/g2-teacher.png', fullPage: true });
