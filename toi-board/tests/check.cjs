@@ -8,6 +8,7 @@ let failed = 0;
 const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed++; };
 
 (async () => {
+  const openF = async pg => { if (await pg.isVisible('[data-act=fopen][aria-expanded=false]')) await pg.click('[data-act=fopen]'); };
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   await ctx.addInitScript(() => { if (!/zoom=/.test(location.search)) window.TOI_ZOOM = 1; });  // 寸法の 検査は 100% で（80% は 下で べつに 確かめる）
@@ -119,11 +120,11 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   // 先生：見本・モード
   await who('teacher');
   await page.click('[data-act=ttab][data-k=more]'); await page.click('[data-act=seed]'); await page.click('[data-act=ttab][data-k=mode]');
-  await page.click('[data-act=mode][data-k=view][data-v=class]');
-  await page.click('[data-act=mode][data-k=propose][data-v=class]');
-  await page.click('[data-act=orgmin][data-v="10"]');
+  await page.selectOption('select[data-chg=view]', 'class');
+  await page.selectOption('select[data-chg=propose]', 'class');
+  await page.selectOption('select[data-chg=orgmin]', '10');
   ok(await page.evaluate(() => S.modes.A.orgMin === 10 && orgMs('A-3') === 600000), '先生が 整理役の 時間を 組ごとに 決められる');
-  await page.click('[data-act=orgmin][data-v="5"]');
+  await page.selectOption('select[data-chg=orgmin]', '5');
   await page.screenshot({ path: SHOTS + '/4-teacher.png', fullPage: true });
 
   // 別の班の児童：共同閲覧・提案
@@ -208,7 +209,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await rotTo('A-1');
   ok(await page.isVisible(`.rotnow .stnote[data-id="${e}"]`), '先生は 今の 班と 同じ 画面を 見られる');
   const fb = await page.locator('.facil .fbar').boundingBox(), rnb = await page.locator('.facil .rotnow').boundingBox();
-  ok(await page.isVisible('.facil .fbar [data-act=rot][data-v=pause]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=next]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=stop]') && fb.y < rnb.y && !(await page.isVisible('[data-act=mode][data-k=view]')), '見合い会の 間は 進行役の 画面（上に 今の 班と 操作、下に 同じ 画面）。ほかの 設定は 出ない');
+  ok(await page.isVisible('.facil .fbar [data-act=rot][data-v=pause]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=next]') && await page.isVisible('.facil .fbar [data-act=rot][data-v=stop]') && fb.y < rnb.y && !(await page.isVisible('select[data-chg=view]')), '見合い会の 間は 進行役の 画面（上に 今の 班と 操作、下に 同じ 画面）。ほかの 設定は 出ない');
   await who('A01');
   s = await st();
   const stN = s.stars.filter(x => x.noteId === e && x.k !== 'thumb').length;
@@ -241,12 +242,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
 
   // 別タブへ モードが 届く
   const p2 = await ctx.newPage(); await p2.goto(FILE); await p2.selectOption('#who', 'A09');
-  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=off]'); await page.click('[data-act=mode][data-k=propose][data-v=off]');
+  await who('teacher'); await page.selectOption('select[data-chg=view]', 'off'); await page.selectOption('select[data-chg=propose]', 'off');
   await p2.waitForTimeout(300);
   ok(!(await p2.isVisible('[data-act=look]')), '先生の モード切り替えが 別タブに すぐ届く');
 
   // 組をまたぐ：A組で学年にすると B組の班が 見え、B組は 自分の組の設定（切）のまま
-  await who('teacher'); await page.click('[data-act=mode][data-k=view][data-v=grade]');
+  await who('teacher'); await page.selectOption('select[data-chg=view]', 'grade');
   await who('A05');
   ok(await page.isVisible('[data-act=teams]'), '学年にすると「ほかの組」が 出る');
   await page.click('[data-act=teams]');
@@ -263,7 +264,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   const tsv = await page.evaluate(() => opinionTSV());
   const lines = tsv.split('\n');
   ok(lines[0].split('\t').length === 13 && lines.length > 60 && !/[ABC]\d\d|ばん（/.test(tsv), '一覧は TSV で コピーでき、書いた児童は 入らない');
-  await page.click('[data-act=fcls][data-c=B]');
+  await openF(page); await page.click('[data-act=fcls][data-c=B]');
   ok((await page.evaluate(() => opinionTSV())).split('\n').slice(1).every(l => l.startsWith('B組')), '組で しぼれる');
   await page.screenshot({ path: SHOTS + '/7-teacher-table.png', fullPage: true });
   // 検索：児童は 自分の班だけ。ことば・シールで しぼり、タップで その付箋へ 飛ぶ
@@ -289,12 +290,12 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.screenshot({ path: SHOTS + '/8-search.png' });
   // 先生：学年の 全部を ことば・シールで しぼる（表と コピーに 効く）
   await who('teacher'); await page.click('[data-act=ttab][data-k=list]');
-  await page.click('[data-act=fcls][data-c=all]');
-  await page.fill('#t-q', '灯台');
+  await openF(page); await page.click('[data-act=fcls][data-c=all]');
+  await openF(page); await page.fill('#t-q', '灯台');
   const tq = await page.evaluate(() => opinionTSV().split('\n').slice(1));
   ok(tq.length >= 0 && tq.every(l => l.includes('灯台')), '先生の 一覧を ことばで しぼれる');
-  await page.fill('#t-q', '');
-  await page.click('[data-act=fkind][data-k=star]');
+  await openF(page); await page.fill('#t-q', '');
+  await openF(page); await page.click('[data-act=fkind][data-k=star]');
   const ts = await page.evaluate(() => opinionTSV().split('\n').slice(1));
   ok(ts.length > 0 && ts.every(l => /星\d/.test(l.split('\t')[9])), '先生の 一覧を シールの 種類で しぼれる');
 
@@ -476,7 +477,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=round-next]');
   ok(await page.isVisible('text=もう一度 押すと 第2回に なります'), '回を 進める 前に もう一度 たしかめる');
   await page.click('[data-act=round-next]');
-  ok(await page.isVisible('.mode b:has-text("第2回")'), '先生が 第2回を はじめられる');
+  ok(await page.isVisible('.srow b:has-text("第2回")'), '先生が 第2回を はじめられる');
   await who('A01'); await page.click('.face[data-face=front]');
   const old = before.shown[0];
   ok(await page.isVisible(`#board .note[data-id="${old}"] .show.old:has-text("第1回")`) && !(await page.isVisible(`#board .note[data-id="${old}"] .stars`)), '前の 回の 付箋は「第1回」と 出て、シールの 数は 今の 回の 分だけ（0）');
@@ -542,7 +543,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await tp.isVisible('[data-pane="0"] #board') && await tp.isVisible('[data-pane="1"] .tcard'), '⑥ 左に 児童、右に 先生の 画面が ならぶ');
   await tp.click('.trial [data-act=trial-min]');
   ok(!(await tp.isVisible('[data-pane="0"] [data-act=look]')), '⑥ はじめは 共同閲覧が 切（左に「ほかの班を 見る」が ない）');
-  await tp.click('[data-pane="1"] [data-act=mode][data-k=view][data-v=class]');
+  await tp.selectOption('[data-pane="1"] select[data-chg=view]', 'class');
   ok(await tp.isVisible('[data-pane="0"] [data-act=look]'), '⑥ 右で 共同閲覧を 入れると 左に すぐ 出る');
   await tp.click('[data-pane="1"] [data-act=research][data-v=on]');
   ok(await tp.isVisible('[data-pane="0"] #board .curl'), '⑥ 右で 調べモードを 入れると 左の 付箋に めくれ');
@@ -559,7 +560,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await tp.isVisible('[data-pane="0"] #board'), '⑥ 右で やめると 左が ボードに もどる');
   await tp.click('.trial [data-act=trial-min]'); await tp.click('.trial [data-act=trial-go][data-n="6"]');
   ok(!(await tp.isVisible('[data-pane]')), '⑦では ならべた 画面を やめる');
-  ok(await tp.isVisible('.facil [data-act=rot][data-v=start]') && await tp.isVisible('.facil [data-act=rotmin]') && !(await tp.isVisible('[data-act=round-next]')), '⑦ 見合い会の 画面が 入って いる 間は 進行役の 画面だけ が 出る');
+  ok(await tp.isVisible('.facil [data-act=rot][data-v=start]') && await tp.isVisible('.facil select[data-chg=rotmin]') && !(await tp.isVisible('[data-act=round-next]')), '⑦ 見合い会の 画面が 入って いる 間は 進行役の 画面だけ が 出る');
   await tp.click('[data-act=fullset]');
   ok(await tp.isVisible('[data-act=mode][data-k=starOut]') && await tp.isVisible('[data-act=round-next]') && await tp.isVisible('[data-act=fullset]:has-text("進行に もどる")'), '⑦「くわしい 設定」で ほかの 設定と 回に 行け、進行に もどれる');
   await tp.click('[data-act=fullset]');
@@ -670,8 +671,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.locator('#board .note.done .donemark:has-text("もう知ってる")').count() > 0, '調査済みは 緑に 加えて「✓ 調査済み」の 文字');
   // ・先生：ひとおしで ぜんぶ 切に もどせる
   await who('teacher');
-  await page.click('[data-act=mode][data-k=view][data-v=class]');
-  await page.click('[data-act=modes-off]');
+  await page.selectOption('select[data-chg=view]', 'class');
+  await (async () => { if (!(await page.isVisible('[data-act=modes-off]'))) await page.click('[data-act=moreopen]'); })(); await page.click('[data-act=modes-off]');
   const mA = await page.evaluate(() => S.modes.A);
   ok(mA.view === 'off' && mA.propose === 'off' && mA.starOut === 'off' && await page.isDisabled('[data-act=modes-off]'), '先生は ひとおしで その組を ぜんぶ 切に もどせる');
   }
@@ -792,14 +793,37 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('.rothead [data-act=kb]'), '見られる 班の 子も 見られる');
   await who('teacher'); await (async () => { if (await page.isVisible('[data-act=fullset]:has-text("くわしい")')) await page.click('[data-act=fullset]'); })(); await page.click('[data-act=mode][data-k=starOut][data-v=off]');
   // 先生：しるしで しぼって ならべて Gemini 用に
-  await page.click('[data-act=ttab][data-k=list]'); await page.click('[data-act=fcls][data-c=A]'); await page.click('[data-act=ftag][data-v=kb]');
+  await page.click('[data-act=ttab][data-k=list]'); await openF(page); await page.click('[data-act=fcls][data-c=A]'); await openF(page); await page.click('[data-act=ftag][data-v=kb]');
   const kt = await page.evaluate(() => opinionTSV().split('\n').slice(1));
   ok(kt.length === 3 && kt.every(l => l.split('\t')[6] === '○'), '先生の 一覧を「知っててほしい」で しぼれる');
-  await page.click('[data-act=ftag][data-v=""]'); await page.click('[data-act=fsort][data-v=aiueo]');
+  await openF(page); await page.click('[data-act=ftag][data-v=""]'); await openF(page); await page.click('[data-act=fsort][data-v=aiueo]');
   const ka = await page.evaluate(() => opinionRows().filter(r => r[1] === '1はん').map(r => r[4]));
   ok(ka.length > 3 && ka.every((x, i) => !i || new Intl.Collator('ja').compare(ka[i - 1], x) <= 0), 'ならべかたを えらべる（あいうえお順）');
   const kai = await page.evaluate(() => aiText('kb'));
   ok(kai.includes('知っててほしい') && kai.split('\n').filter(l => /^A組\t/.test(l)).length === 3 && kai.includes('しらべた 基本の こと'), 'Gemini 用「班ごとの 基本情報」は 知っててほしい 付箋だけ を うら つきで 出す');
+  }
+  // 選択肢の 見せ方：入／切は スイッチ1つ、まれな 多択は 今の 値だけ（select）、説明は「？」、しぼり込みは 要約1行
+  {
+  await who('teacher'); await page.click('[data-act=ttab][data-k=mode]'); await page.click('[data-act=tcls][data-c=A]');
+  ok(await page.locator('.tcard .seg').count() === 0 && await page.locator('.tcard [role=switch]').count() >= 3 && await page.locator('.tcard select.ssel').count() >= 2 && !(await page.isVisible('.helptxt')), '授業の 設定は スイッチと 今の 値だけの select で、説明は 出て いない');
+  await page.click('[data-act=help][data-k=research]');
+  ok(await page.isVisible('.helptxt:has-text("めくれ")') && (await page.getAttribute('[data-act=help][data-k=research]', 'aria-expanded')) === 'true', '「？」で 説明が 出る');
+  await page.click('[data-act=help][data-k=research]');
+  ok(!(await page.isVisible('.helptxt')), 'もう一度 押すと しまう');
+  const swOn = await page.getAttribute('[role=switch][data-act=orgmode]', 'aria-checked');
+  await page.click('[role=switch][data-act=orgmode]');
+  ok((await page.getAttribute('[role=switch][data-act=orgmode]', 'aria-checked')) !== swOn && await page.evaluate(() => S.modes.A.orgMode) === (swOn === 'true' ? 'off' : 'on'), 'スイッチ 1回で 入／切が かわり、状態の 文字も 出る');
+  await page.click('[role=switch][data-act=orgmode]');
+  await page.selectOption('select[data-chg=orgmin]', '10');
+  ok(await page.evaluate(() => S.modes.A.orgMin) === 10, 'select で えらぶと すぐ 保存');
+  await page.selectOption('select[data-chg=orgmin]', '5');
+  ok(!(await page.isVisible('[data-act=modes-off]')), 'まれな 操作（ぜんぶ 切）は「くわしく」の 中');
+  await page.click('[data-act=ttab][data-k=list]');
+  if (await page.isVisible('[data-act=fopen][aria-expanded=true]')) await page.click('[data-act=fopen]');
+  ok(await page.isVisible('.fsum .chip') && !(await page.isVisible('[data-act=fface]')) && !(await page.isVisible('[data-act=aicopy]')), '一覧の しぼり込みは 要約1行、Gemini 用は 1つの ボタンに たたむ');
+  await page.click('[data-act=aiopen]');
+  ok(await page.locator('[data-act=aicopy]').count() === 4, 'Gemini 用を 押すと 目的が 出る');
+  await page.click('[data-act=aiopen]');
   }
   // 見た目 80%：ブラウザの ズーム 80% と 同じ 見え方で、ボードは 画面の 幅いっぱい、ドラッグ・めくれも 動く
   {
