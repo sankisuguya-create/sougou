@@ -500,6 +500,13 @@ function makeGas() {
   O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { rotAct: 'start' }) } }]);
   ok(O.as('p3' + D, 'poll', [{ teams: { 'A-1': 0 } }]).items.some(x => x.id === 's1' && x.kb), '見合い会では ほかの 班の 子にも 知っててほしい 付箋が 届く');
   O.as(T, 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, M0, { rotAct: 'stop' }) } }]);
+  // 所見の 記号（共通基盤 §8）：先生だけ、乱数で 1人1つ、2回目も 同じ。名前は 先生にだけ 届く
+  const k1 = O.as(T, 'kigou'), k2 = O.as(T, 'kigou');
+  ok(k1['p1' + D] && /^[a-z0-9]{2}$/.test(k1['p1' + D]) && k1['p1' + D] === k2['p1' + D] && new Set(Object.values(k1)).size === Object.keys(k1).length, '記号は 1人1つ（重ならず、何度 呼んでも 同じ）');
+  let kt = ''; try { O.as('p1' + D, 'kigou'); } catch (e) { kt = e.message; }
+  ok(/NOT_TEACHER/.test(kt), '児童は 記号表を 見られない');
+  O.fill('名簿', [['p9' + D, 'A', 3, 9, '架空 たろう', 'かくう たろう']]); O.ctx.clearWhoCache();
+  ok(O.as(T, 'boot').roster.some(c => c.name === '架空 たろう') && !JSON.stringify(O.as('p9' + D, 'boot')).includes('架空'), '名前は 先生にだけ 届く（児童には 届かない）');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
   }

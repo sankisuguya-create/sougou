@@ -291,6 +291,10 @@ details.more summary::after{content:" ▼"}details.more[open] summary::after{con
 .chip.on2{background:#EEF3F9;border-color:#EEF3F9;color:var(--ink);font-weight:700}
 .fpanel{border:2px solid var(--line);border-radius:12px;padding:4px 10px;margin:0 0 6px;background:#fff}
 .aimenu{display:inline-flex;gap:6px;flex-wrap:wrap}
+.skc{border-top:1px solid #EEF0F2;padding:8px 0}.skc p{margin:6px 0;font-size:16px;line-height:1.6}
+.skl{margin:4px 0 10px;padding-left:20px}.skl li{margin:3px 0}
+.skout{width:100%;min-height:160px;font-size:14px;border:2px solid var(--line);border-radius:10px;padding:8px}
+.skback{white-space:pre-wrap;background:#F4F7FB;border-radius:10px;padding:8px 12px;margin:6px 0}
 .tcard{border:2px solid var(--line);border-radius:14px;padding:4px 14px 10px;margin:10px 0;background:#fff}
 .tcard h3{margin:10px 0 6px;font-size:18px}
 .mlabel{min-width:150px;font-weight:700}
@@ -360,7 +364,7 @@ table.tally th{text-align:center;font-size:12px}
 <script>window.TOI_TRIAL = true;</script>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 14, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 15, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -457,6 +461,13 @@ var Platform = {
   },
   push:function(ops){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} },
   setMe:function(v){ try{ localStorage.setItem(KEY + '.me', v); }catch(e){} },
+  kigou:function(cb){
+    var k = {}; try{ k = JSON.parse(localStorage.getItem(KEY + '.kigou') || '{}'); }catch(e){}
+    var used = {}; Object.keys(k).forEach(function(id){ used[k[id]] = 1; });
+    S.roster.forEach(function(c){ if(k[c.id]) return; var x = ''; while(!x || used[x]) x = KIGOU_CHARS.charAt(Math.floor(Math.random() * KIGOU_CHARS.length)) + KIGOU_CHARS.charAt(Math.floor(Math.random() * KIGOU_CHARS.length)); k[c.id] = x; used[x] = 1; });
+    try{ localStorage.setItem(KEY + '.kigou', JSON.stringify(k)); }catch(e){}
+    cb(k);
+  },
   org:function(act, arg, cb){
     S.org = S.org || {};
     var t = act === 'set' ? arg.team : myTeam(), cur = orgOf(t), ok = true;
@@ -1205,7 +1216,13 @@ function flushNote(){
   var t = s.text != null ? String(s.text).trim().slice(0, 200) : '', a = s.ans != null ? String(s.ans).replace(/\s+$/, '').slice(0, 400) : null;
   var newT = t && t !== n.text, newA = a !== null && a !== (n.ans || '');
   if(!newT && !newA) return;
-  commit(function(){ var x = item(s.id); if(newT) x.text = t; if(newA){ if(a) x.ans = a; else delete x.ans; } });
+  var kid = !isTeacher();
+  commit(function(){
+    var x = item(s.id);
+    /* 所見の 根拠：書き直す 前の 問い（5つまで）と、うらを 書いた 人を のこす（先生の 手直しは のこさない） */
+    if(newT){ if(kid && x.text) x.hist = (x.hist || []).concat([{t:x.text, at:Date.now(), by:me}]).slice(-5); x.text = t; }
+    if(newA){ if(a){ x.ans = a; if(kid) x.ansBy = me; } else { delete x.ans; delete x.ansBy; } }
+  });
   if(newT) s.text = t;
 }
 /* ===== ？のたね ===== */
@@ -1280,6 +1297,8 @@ function selRow(k, label, cur, opts, chg, desc){
 /* select の 変更（data-chg）を ふつうの 操作に つなぐ */
 function doChg(chg, v){
   var mm = function(f){ commit(function(){ var m = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); f(m); }); ui.modeNote = ui.tCls; render(); };
+  if(chg === 'skcls'){ ui.skCls = v; ui.skId = null; render(); return; }
+  if(chg === 'skid'){ ui.skId = v; render(); return; }
   if(chg === 'view' || chg === 'propose') return mm(function(m){ m[chg] = v; });
   if(chg === 'orgmin') return mm(function(m){ m.orgMin = Number(v); });
   if(chg === 'rotmin') return mm(function(m){ m.rotMin = Number(v); });
@@ -1350,6 +1369,120 @@ var AI_GOALS = [
   {k:'next', label:'次に 調べる問いの 候補', prompt:'次の表は、小学3年生が総合的な学習の時間で書いた問いの付箋と、見合い会でほかの班から貼られたシールの数です（星＝「いい問いだ！」、流れ星＝とくに「いい問いだ！」）。「もう知ってる」に○がある問いは調べ終わっています。\n班ごとに、まだ調べていない問いの中から次に調べる候補を3つまで挙げ、星・流れ星の数とコメントと問いの中身から選んだ理由を一言そえてください。3年生が自分たちで調べられるか（見学・聞き取り・本）の見通しも書いてください。'}
 ];
 function aiText(k){ var g = AI_GOALS.filter(function(x){ return x.k === k; })[0], keep = ui.fTag; if(g.tag) ui.fTag = g.tag; var t = g.prompt + '\n\n' + opinionTSV(); ui.fTag = keep; return t; }
+/* ===== 所見（通知表の 総合の 文章所見の 叩き台） =====
+   利用者の 指示による 共通基盤 E6 の 例外：点数・評定は 出さない。根拠（児童が 書いた もの）と 文例の 候補を 出すだけで、決めて 書くのは 先生。
+   Gemini へは 共通基盤 §8 の 書き出し（乱数の 記号・本文中の 名前の 置き換え・先生が 確かめてから 貼る）だけで 渡す */
+var KIGOU_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
+/* 問いの 種類（？のたね と 同じ 言葉で 見る） */
+function qKind(t){
+  t = String(t || '');
+  if(/そもそも/.test(t)) return '前提';
+  if(/関係|つながり|ちがい|違い|くらべ|比べ/.test(t)) return '関係';
+  if(/どうして|なぜ|なんで|どうやって|どのように|わけ|理由/.test(t)) return '理由・しくみ';
+  if(/いつ|どこ|だれ|誰|なに|何|いくつ|どれくらい/.test(t)) return '事実';
+  return 'その他';
+}
+function shokenEvidence(id){
+  var c = child(id), mine = S.items.filter(function(n){ return n.kind === 'note' && n.author === id && n.face !== 'trash'; });
+  var qs = mine.map(function(n){ var st = allStarsOf(n.id).filter(function(x){ return kindOf(x) !== 'thumb'; }); return {n:n, kind:qKind(n.text), star:st.filter(function(x){ return kindOf(x) === 'star'; }).length, shoot:st.filter(function(x){ return kindOf(x) === 'shoot'; }).length, cm:commentsOf(n.id).length}; });
+  var ans = S.items.filter(function(n){ return n.kind === 'note' && n.ansBy === id && n.ans; });
+  var cms = (S.comments || []).filter(function(x){ return x.viewer === id && x.text; }).map(function(x){ return {c:x, n:item(x.noteId)}; }).filter(function(x){ return x.n; });
+  var hist = mine.filter(function(n){ return (n.hist || []).some(function(h){ return h.by === id; }); });
+  return {c:c, qs:qs, ans:ans, cms:cms, hist:hist, kb:mine.filter(function(n){ return n.kb; }), show:mine.filter(function(n){ return showRound(n); })};
+}
+/* 文例の 表：観点 × 場面。どれも できた ことを 書く 書き方。「」の 所に その子の 実際の 問い・ことばを 入れる */
+var SHOKEN_PHRASES = [
+  {id:'rel', kan:'思考・判断・表現', ba:'問いを立てる', when:function(e){ return e.qs.filter(function(q){ return q.kind === '関係' || q.kind === '前提'; }); },
+    text:function(x){ return '「' + x.n.text + '」のように、物事のつながりや そもそもの 意味に 目を 向けた 問いを 立てることが できました。'; }},
+  {id:'why', kan:'思考・判断・表現', ba:'問いを立てる', when:function(e){ return e.qs.filter(function(q){ return q.kind === '理由・しくみ'; }); },
+    text:function(x){ return '「' + x.n.text + '」と、理由や しくみを たずねる 問いを 立て、調べる 見通しを もつことが できました。'; }},
+  {id:'peer', kan:'思考・判断・表現', ba:'見合い会', when:function(e){ return e.qs.filter(function(q){ return q.shoot > 0 || q.cm > 0; }); },
+    text:function(x){ return '友達から「いい 問いだ」と 認められた「' + x.n.text + '」を もとに、調べたい ことを はっきりさせることが できました。'; }},
+  {id:'revise', kan:'主体的に学習に取り組む態度', ba:'問いを直す', when:function(e){ return e.hist; },
+    text:function(x){ var h = (x.hist || []).filter(function(y){ return y.by === x.author; }); return '「' + (h.length ? h[0].t : '') + '」から「' + x.text + '」へと 問いを 見直し、よりよい 問いに しようと 取り組みました。'; }},
+  {id:'ans', kan:'知識・技能', ba:'調べる', when:function(e){ return e.ans; },
+    text:function(x){ return '「' + x.text + '」について 調べ、「' + String(x.ans).slice(0, 40) + (String(x.ans).length > 40 ? '…' : '') + '」と 分かった ことを 自分の 言葉で まとめることが できました。'; }},
+  {id:'kb', kan:'知識・技能', ba:'記事づくり', when:function(e){ return e.kb; },
+    text:function(x){ return '班の みんなに 知っていて ほしい 基本の 情報として「' + x.text + '」を 調べ、伝えようと しました。'; }},
+  {id:'cmt', kan:'主体的に学習に取り組む態度', ba:'見合い会', when:function(e){ return e.cms; },
+    text:function(x){ return '友達の 問いに「' + x.c.text + '」と、その 問いの よさを 言葉に して 伝えることが できました。'; }}
+];
+function shokenSuggest(e){
+  var out = [];
+  SHOKEN_PHRASES.forEach(function(P){ var hits = P.when(e) || []; if(hits.length) out.push({P:P, hit:hits[0], n:hits.length, text:P.text(hits[0].n && !hits[0].text ? hits[0] : hits[0])}); });
+  return out;
+}
+/* ---- 共通基盤 §8：本文中の 名前の 置き換え ---- */
+function hira2kata(s){ return String(s).replace(/[\u3041-\u3096]/g, function(ch){ return String.fromCharCode(ch.charCodeAt(0) + 0x60); }); }
+function normJa(s){ try{ s = String(s).normalize('NFKC'); }catch(e){ s = String(s); } return s.replace(/髙/g, '高').replace(/﨑/g, '崎').replace(/[ \t　]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
+function nameForms(c){
+  var nm = normJa(c.name || '').split(' '), ym = normJa(c.yomi || '').split(' '), out = [];
+  var add = function(sei, mei, kind){ if(sei && mei){ out.push({t:sei + mei, k:'full'}, {t:sei + ' ' + mei, k:'full'}); } if(sei) out.push({t:sei, k:'sei'}); if(mei) out.push({t:mei, k:'mei'}); };
+  if(nm[0]) add(nm[0], nm[1]);
+  if(ym[0]){ add(ym[0], ym[1]); add(hira2kata(ym[0]), ym[1] ? hira2kata(ym[1]) : ''); }
+  return out.filter(function(f){ return f.t; });
+}
+function anonymize(text, kig){
+  var people = S.roster.filter(function(c){ return c.name || c.yomi; }), forms = [];
+  people.forEach(function(c){ nameForms(c).forEach(function(f){ forms.push({t:f.t, k:f.k, id:c.id}); }); });
+  /* 同じ 表記が 複数の 子に 当たる（同姓・同名）時は だれか 1人に せず 共通の 記号 */
+  var by = {}; forms.forEach(function(f){ (by[f.t] = by[f.t] || {})[f.id] = f; });
+  var list = Object.keys(by).map(function(t){ var ids = Object.keys(by[t]); return {t:t, ids:ids, k:by[t][ids[0]].k}; }).sort(function(a, b){ return b.t.length - a.t.length; });
+  var src = normJa(text), marks = [], skipped = [];
+  list.forEach(function(f){
+    var one = f.t.length === 1, re = new RegExp(f.t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (one ? '(?=さん|くん|ちゃん|君)' : ''), 'g');
+    if(one && !re.test(src)){ if(src.indexOf(f.t) >= 0) skipped.push(f.t); return; }
+    re.lastIndex = 0;
+    src = src.replace(re, function(){ var sym = f.ids.length === 1 ? '〔' + (kig[f.ids[0]] || '??') + '〕' : '〔同' + (f.k === 'sei' ? '姓' : '名') + '〕'; marks.push(sym); return sym; });
+  });
+  return {text:src, marks:marks, skipped:skipped, noNames:!people.length};
+}
+function restoreNames(text, kig){
+  var inv = {}; Object.keys(kig).forEach(function(id){ var c = child(id); inv[kig[id]] = c ? (c.name || (teamLabel(c.team) + ' ' + c.no + 'ばん')) : id; });
+  return String(text).replace(/〔([a-z0-9]{2})〕/g, function(m, k){ return inv[k] ? inv[k] : m; });
+}
+function shokenExport(id, kig){
+  var e = shokenEvidence(id), sym = '〔' + (kig[id] || '??') + '〕', L = [];
+  L.push('次は、小学3年生の 総合的な学習の時間（地域の 名所を 調べて 伝える 単元）で、' + sym + 'が 書いた ものです。通知表の 総合の 文章所見（100〜150字、です・ます調、できた ことを 書く。点数や 段階は 書かない）の 叩き台を 2案 書いてください。観点は「探究の 過程（問いを 立てる・調べる・まとめる）で 何が できたか」と「友達と 関わりながら 学びを 深めたか」です。下の 根拠に ない ことは 書かないで ください。');
+  L.push('', '■ 書いた 問い');
+  e.qs.forEach(function(q){ L.push('・' + q.n.text + '（種類：' + q.kind + (q.shoot ? '・流れ星' + q.shoot : '') + (q.star ? '・星' + q.star : '') + (q.cm ? '・コメント' + q.cm : '') + (showRound(q.n) ? '・見てほしいに 選ぶ' : '') + '）'); });
+  if(e.hist.length){ L.push('', '■ 書き直した 問い'); e.hist.forEach(function(n){ (n.hist || []).filter(function(h){ return h.by === id; }).forEach(function(h){ L.push('・' + h.t + ' → ' + n.text); }); }); }
+  if(e.ans.length){ L.push('', '■ 調べて 分かった こと（付箋の うら）'); e.ans.forEach(function(n){ L.push('・' + n.text + '：' + n.ans); }); }
+  if(e.cms.length){ L.push('', '■ 友達の 問いへの コメント（この 問いの どこが いい？）'); e.cms.forEach(function(x){ L.push('・「' + x.n.text + '」へ：' + x.c.text); }); }
+  return anonymize(L.join('\n'), kig);
+}
+function viewShoken(){
+  var cs = classes(), cls = ui.skCls || ui.tCls, kids = S.roster.filter(function(c){ return c.cls === cls; }).sort(function(a, b){ return a.team < b.team ? -1 : a.team > b.team ? 1 : a.no - b.no; });
+  if(!ui.skId || !kids.some(function(c){ return c.id === ui.skId; })) ui.skId = kids[0] && kids[0].id;
+  var h = '<div class="teacher"><h2>所見の 叩き台（総合・文章）</h2><p class="hint">児童が 書いた ものを 根拠に、文例の 候補を 出します。決めて 書くのは 先生です（点数・段階は 出しません）。</p>'
+    + '<div class="srow" style="max-width:720px"><span class="slab">児童</span><select class="ssel" data-chg="skcls" aria-label="組">' + cs.map(function(c){ return '<option value="' + c + '"' + (c === cls ? ' selected' : '') + '>' + c + '組</option>'; }).join('') + '</select>'
+    + '<select class="ssel" data-chg="skid" aria-label="児童" style="min-width:240px">' + kids.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === ui.skId ? ' selected' : '') + '>' + teamLabel(c.team) + ' ' + c.no + 'ばん' + (c.name ? '　' + esc(c.name) : '') + '</option>'; }).join('') + '</select></div>';
+  if(!ui.skId) return h + '<p>名簿が ありません</p></div>';
+  var e = shokenEvidence(ui.skId), sg = shokenSuggest(e);
+  h += '<section class="tcard"><h3>文例の 候補</h3>' + (sg.length ? sg.map(function(x){ return '<div class="skc"><span class="chip on2">' + esc(x.P.kan) + '・' + esc(x.P.ba) + '</span><p>' + esc(x.text) + '</p>' + (x.n > 1 ? '<span class="hint">ほかにも ' + (x.n - 1) + 'つ 根拠が あります</span>' : '') + '<button class="btn" data-act="skcopy" data-t="' + esc(x.text) + '">この 文を コピー</button></div>'; }).join('') : '<p class="warn">根拠が 少ない ため、文例を 出せません（ふだんの 観察で 補って ください）</p>') + '</section>';
+  h += '<section class="tcard"><h3>根拠（といボードの 記録）</h3>'
+    + '<p><b>書いた 問い（' + e.qs.length + '）</b></p><ul class="skl">' + e.qs.map(function(q){ return '<li>' + esc(q.n.text) + ' <span class="chip">' + q.kind + '</span>' + (q.shoot ? ' <span class="chip">流れ星' + q.shoot + '</span>' : '') + (q.star ? ' <span class="chip">星' + q.star + '</span>' : '') + (showRound(q.n) ? ' <span class="chip">見てほしい</span>' : '') + (q.n.kb ? ' <span class="chip">知っててほしい</span>' : '') + '</li>'; }).join('') + '</ul>'
+    + (e.hist.length ? '<p><b>書き直した 問い</b></p><ul class="skl">' + e.hist.map(function(n){ return (n.hist || []).filter(function(y){ return y.by === ui.skId; }).map(function(y){ return '<li>' + esc(y.t) + ' → ' + esc(n.text) + '</li>'; }).join(''); }).join('') + '</ul>' : '')
+    + (e.ans.length ? '<p><b>調べて 分かった こと（うら）</b></p><ul class="skl">' + e.ans.map(function(n){ return '<li>' + esc(n.text) + '：' + esc(n.ans) + '</li>'; }).join('') + '</ul>' : '')
+    + (e.cms.length ? '<p><b>友達の 問いへの コメント</b></p><ul class="skl">' + e.cms.map(function(x){ return '<li>「' + esc(x.n.text) + '」へ：' + esc(x.c.text) + '</li>'; }).join('') + '</ul>' : '')
+    + '<p class="hint">付箋の うらを 書いた 人と 書き直しは、この 機能を 入れた 日から 記録して います。</p></section>';
+  /* Gemini 用（§8）：記号に 置き換えて、先生が 確かめてから コピー */
+  h += '<section class="tcard"><h3>Gemini で 叩き台を 書く</h3>';
+  if(!ui.kigou) h += '<button class="btn primary" data-act="skprep">Gemini 用に 書き出す（名前を 記号に）</button>';
+  else {
+    var ex = shokenExport(ui.skId, ui.kigou);
+    h += (ex.noNames ? '<p class="warn">⚠ 名簿に 名前の 列が ないため、本文中の 名前を 照合できません。コメントや うらに 名前が 書かれて いないか、目で 確かめて ください。</p>' : '')
+      + (ex.skipped.length ? '<p class="warn">⚠ 1文字の 名前（' + ex.skipped.map(esc).join('・') + '）は 一般の 言葉と 区別できないため 置き換えて いません。確かめて ください。</p>' : '')
+      + '<p class="hint">置き換えた 所は 〔記号〕に なって います（' + ex.marks.length + 'か所）。学年・組・番号・メールは 入りません。<b>貼る 前に 目で 確かめて ください。</b></p>'
+      + '<textarea id="sk-out" class="skout" readonly>' + esc(ex.text) + '</textarea>'
+      + '<div class="row"><button class="btn primary" data-act="skgem">確かめた ので コピー</button></div>'
+      + '<p><b>Gemini の 回答を 貼ると、記号を 名前に もどして 表示します</b>（この 画面の 中だけ）</p><textarea id="sk-in" class="skout" placeholder="Gemini の 回答を ここに 貼る">' + esc(ui.skIn || '') + '</textarea>'
+      + (ui.skIn ? '<div class="skback">' + esc(restoreNames(ui.skIn, ui.kigou)) + '</div>' : '');
+  }
+  h += '<p class="hint" style="margin-top:10px">文例を ふやす：<button class="btn" data-act="skphr">文例づくりの 指示を コピー（児童の 情報なし）</button></p></section>';
+  return h + '</div>';
+}
+var SHOKEN_PHRASE_PROMPT = '小学3年生の 総合的な学習の時間（地域の 名所を 調べて 伝える 単元。問いを 立てる→調べる→整理する→まとめて 伝える）の 通知表の 文章所見の 文例を 作ってください。\n条件：1文40〜60字、です・ます調、できた ことを 書く（否定・比較・点数・段階は 書かない）。「」の 部分に 児童の 実際の 問いや ことばを 入れられる 形に する。\n観点（評価規準）：知識・技能「担当スポットについて調べて分かったことを理解している。問いをもって調べることのよさに気付いている」／思考・判断・表現「疑問をもとに問いを立て、必要な情報を集めて整理し、相手に伝わるようにまとめて表現している」／主体的に学習に取り組む態度「友達と協力して進んで調べたり、友達の考えを取り入れて自分の問いや発表を見直したりしようとしている」。\n場面ごと（問いを立てる・見合い会・問いを直す・調べる・記事づくり）に、観点別に 2つずつ、表に して ください。';
 /* 回ごとの シールの まとめ（例：第1回 星2 流れ星1 ／ 第2回 …） */
 function roundSummary(n){
   var by = {};
@@ -1387,12 +1520,13 @@ function viewTally(){
 }
 /* 先生の 画面は 用途ごとの タブに 分ける（同時に 見せる 判断を へらす。理念 原則1）。
    いちばん 使う「授業の 設定」を 最初に 開く。各タブの 主操作は 1つ */
-var TTABS = [{k:'mode', label:'授業の 設定'}, {k:'board', label:'班の ボード'}, {k:'list', label:'意見の 一覧'}, {k:'tally', label:'シールの 集計'}, {k:'more', label:'書き出し・体験'}];
+var TTABS = [{k:'mode', label:'授業の 設定'}, {k:'board', label:'班の ボード'}, {k:'list', label:'意見の 一覧'}, {k:'tally', label:'シールの 集計'}, {k:'shoken', label:'所見'}, {k:'more', label:'書き出し・体験'}];
 function viewTeacher(){
   var tab = ui.ttab || 'mode', cs = classes(), tm = S.modes[ui.tCls] || blankModes();
   var h = '<div class="teacher"><div class="ttabs" role="tablist">' + TTABS.map(function(t){ return '<button role="tab" aria-selected="' + (tab === t.k) + '" class="ttab' + (tab === t.k ? ' on' : '') + '" data-act="ttab" data-k="' + t.k + '">' + t.label + '</button>'; }).join('') + '</div>';
   if(ui.modeNote && !Platform.demo) h += '<div class="viewing">' + ui.modeNote + '組の 児童の 画面に 10秒ほどで 届きます（ページの 更新は いりません）。</div>';
   if(tab === 'tally') return h + '</div>' + viewTally();
+  if(tab === 'shoken') return h + '</div>' + viewShoken();
   if(tab === 'mode'){
     /* 設定は 組ごと。組の ボタンに その組で 入って いる ものを 小さく 出す（ほかの 組に 切り替えなくても 見える） */
     var sum = function(c){ var m = S.modes[c] || blankModes(), o = [];
@@ -1802,6 +1936,10 @@ document.addEventListener('click', function(e){
     commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.round = (mm.round || 1) + 1; }, true);
     ui.modeNote = ui.tCls; render(); toast(ui.tCls + '組を 第' + roundOf(ui.tCls) + '回に しました'); return;
   }
+  if(act === 'skprep'){ Platform.kigou(function(k){ if(!k){ toast('記号を 用意 できませんでした'); return; } ui.kigou = k; render(); }); return; }
+  if(act === 'skgem'){ copyText($id('sk-out').value); toast('コピーしました（Gemini に 貼れます）'); return; }
+  if(act === 'skcopy'){ copyText(b.getAttribute('data-t')); toast('文例を コピーしました'); return; }
+  if(act === 'skphr'){ copyText(SHOKEN_PHRASE_PROMPT); toast('文例づくりの 指示を コピーしました（児童の 情報は 入って いません）'); return; }
   if(act === 'help'){ var hk = b.getAttribute('data-k'); ui.help = ui.help === hk ? null : hk; render(); return; }
   if(act === 'moreopen'){ e.preventDefault(); ui.moreOpen = !ui.moreOpen; render(); return; }
   if(act === 'fopen'){ ui.fOpen = !ui.fOpen; render(); return; }
@@ -1857,7 +1995,7 @@ function onSearchInput(el){
   if(el.id === 's-text' && ui.sheet && ui.sheet.type === 'search'){ ui.sheet.q = el.value; render(); }
   if(el.id === 't-q'){ ui.fQ = el.value; render(); }
 }
-document.addEventListener('input', function(e){ if(e.target.id === 'w-ans' && ui.sheet){ ui.sheet.ans = e.target.value; return; } if(e.target.id === 'w-text' && ui.sheet){ ui.sheet.text = e.target.value; ui.sheet.caret = e.target.selectionStart; return; } if(!e.isComposing) onSearchInput(e.target); });
+document.addEventListener('input', function(e){ if(e.target.id === 'sk-in'){ ui.skIn = e.target.value; clearTimeout(ui.skT); ui.skT = setTimeout(render, 400); return; } if(e.target.id === 'w-ans' && ui.sheet){ ui.sheet.ans = e.target.value; return; } if(e.target.id === 'w-text' && ui.sheet){ ui.sheet.text = e.target.value; ui.sheet.caret = e.target.selectionStart; return; } if(!e.isComposing) onSearchInput(e.target); });
 document.addEventListener('selectionchange', function(){ var a = document.activeElement; if(a && a.id === 'w-text' && ui.sheet) ui.sheet.caret = a.selectionStart; });
 document.addEventListener('compositionend', function(e){ onSearchInput(e.target); });
 /* ショートカット：Ctrl+Z もどす／Ctrl+Y・Ctrl+Shift+Z やり直す／Ctrl+F さがす／Esc とじる。
@@ -1949,6 +2087,8 @@ function trialHTML(){
 /* 体験用の 見本：付箋・重なり・見てほしい・シール・コメント・調査済み・いただきもの */
 function trialSeed(){
   seed();
+  // 体験用の 架空の 名前（所見の 書き出しで 名前が 記号に 置き換わるのを ためす）
+  [['青空 たろう','あおぞら たろう'],['山川 はな','やまかわ はな'],['森 ゆうと','もり ゆうと'],['海野 さくら','うみの さくら'],['星田 けん','ほしだ けん']].forEach(function(nm, i){ var c = S.roster[i]; if(c){ c.name = nm[0]; c.yomi = nm[1]; } });
   var a1 = S.items.filter(function(x){ return x.team === 'A-1' && x.face === 'front'; });
   var a3 = S.items.filter(function(x){ return x.team === 'A-3' && x.face === 'front'; });
   var kinds = ['star', 'shoot'];  // 1人が 1つの 班に 星2・流れ星1 まで
@@ -1970,7 +2110,7 @@ function trialSeed(){
   S.items.filter(function(x){ return x.kind === 'note' && x.face === 'front' && x.showcase && clsOf(x.team) === 'A' && x.team !== 'A-1' && x.team !== 'A-3'; }).forEach(function(n, i){
     ['A01','A02','A05'].forEach(function(v, j){ if((i + j) % 2 === 0 && S.roster.some(function(c){ return c.id === v && c.team !== n.team; })) S.stars.push({noteId:n.id, viewer:v, k:'star', rd:1}); });
   });
-  S.comments.push({noteId:a3[0].id, viewer:'A01', text:'どうして そこに 作ったの？'}, {noteId:a3[1].id, viewer:'A05', text:'今も のこって いるの？'});
+  S.comments.push({noteId:a3[0].id, viewer:'A01', text:'やまかわさんの 問いと つながって いて 面白い'}, {noteId:a3[1].id, viewer:'A05', text:'今も のこって いるの？'});
   S.items.filter(function(x){ return x.kind === 'note' && x.face === 'front' && !x.showcase; }).slice(0, 4).forEach(function(x){ x.done = true; });
   a1[3].stackOf = a1[2].id;
   S.items.push({id:nid(), kind:'note', team:'A-1', face:'front', x:a1[2].x, y:a1[2].y, text:'だれが うめたの？', author:'A03', stackOf:a1[2].id, t:Date.now()});

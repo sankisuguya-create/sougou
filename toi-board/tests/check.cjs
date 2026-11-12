@@ -72,6 +72,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click(`[data-act=toface][data-f=trash][data-id="${d}"]`);
   s = await st();
   ok(s.items.some(x => x.id === d && x.text === 'なおした 問い' && x.face === 'trash'), '直した 文は ほかの ボタンを 押しても 保存される');
+  ok(await page.evaluate(id => (item(id).hist || []).some(h => h.by === 'A01' && h.t !== 'なおした 問い'), d), '所見の 根拠：書き直す 前の 問いを のこす');
   await page.click('.face[data-face=trash]'); await page.click(`#board .note[data-id="${d}"]`);
   await page.click(`[data-act=toface][data-f=front][data-id="${d}"]`); await page.click('.face[data-face=front]');
   await page.click(`#board .note[data-id="${d}"]`);
@@ -258,7 +259,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(!(await page.isVisible('[data-act=look]')), 'モードは 組ごと（B組は 切のまま）');
   // 先生の 意見の一覧
   await who('teacher');
-  ok(await page.isVisible('.ttab.on:has-text("授業の 設定")') && await page.locator('.ttab').count() === 5, '先生画面は 用途ごとの タブに 分かれ、はじめは「授業の 設定」');
+  ok(await page.isVisible('.ttab.on:has-text("授業の 設定")') && await page.locator('.ttab').count() === 6, '先生画面は 用途ごとの タブに 分かれ、はじめは「授業の 設定」');
   await page.click('[data-act=ttab][data-k=list]');
   ok(await page.isVisible('text=意見の 一覧'), '先生画面に 意見の一覧が 出る');
   const tsv = await page.evaluate(() => opinionTSV());
@@ -736,6 +737,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.fill('#w-ans', '市の ホームページで しらべた');
   await page.keyboard.press('Escape');
   ok(await page.evaluate(id => item(id).ans, rn) === '市の ホームページで しらべた' && await page.isVisible(`#board .note[data-id="${rn}"] .curl.has`), 'うらに 書いた ことは とじると 保存され、めくれの 色が かわる');
+  ok(await page.evaluate(id => item(id).ansBy, rn) === 'A01', '所見の 根拠：うらを 書いた 人を のこす');
   await page.click(`#board .note[data-id="${rn}"]`); await page.click('[data-act=flip]');
   ok((await page.inputValue('#w-ans')) === '市の ホームページで しらべた', 'おもての 画面からも うらへ めくれる');
   await page.keyboard.press('Escape');
@@ -768,6 +770,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('.bignote.back #w-ans'), '一覧から うらを 直せる（調べモードが 切でも）');
   await page.keyboard.press('Escape');
   await claim();
+  await page.waitForSelector(`#board .note[data-id="${kn[2]}"]`, { timeout: 5000 }).catch(() => {}); await page.locator(`#board .note[data-id="${kn[2]}"]`).scrollIntoViewIfNeeded().catch(() => {});
   const dk = await page.locator('#board .kbdeck').boundingBox(), n3 = await box(kn[2]);
   await page.mouse.move(n3.x + n3.width / 2, n3.y + n3.height * 0.6); await page.mouse.down(); await page.mouse.move(n3.x + n3.width / 2 + 20, n3.y + n3.height * 0.6, { steps: 3 }); await page.mouse.move(dk.x + dk.width / 2, dk.y + dk.height / 2, { steps: 8 }); await page.mouse.up();
   ok(await page.evaluate(id => !!item(id).kb, kn[2]) && (await page.textContent('#board .kbdeck')).includes('3まい'), '付箋を 山の 上に 落としても 知っててほしい に 入る');
@@ -824,6 +827,20 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=aiopen]');
   ok(await page.locator('[data-act=aicopy]').count() === 4, 'Gemini 用を 押すと 目的が 出る');
   await page.click('[data-act=aiopen]');
+  }
+  // 所見の 叩き台：根拠と 文例の 候補。Gemini 用は 名前を 記号に（共通基盤 §8）
+  {
+  const sp = await ctx.newPage(); await sp.goto(FILE + '?trial=1'); await sp.waitForSelector('.trial'); await sp.click('.trial [data-act=trial-min]');
+  await sp.selectOption('#who', 'teacher'); await sp.click('[data-act=ttab][data-k=shoken]');
+  await sp.selectOption('select[data-chg=skid]', 'A01');
+  ok(await sp.locator('.skc').count() >= 2 && !(await sp.textContent('.teacher')).match(/評定|成績/), '所見：児童を えらぶと 根拠と 文例の 候補が 出る（評定・成績の 語は 使わない）');
+  await sp.click('[data-act=skprep]');
+  const ex = await sp.inputValue('#sk-out');
+  ok(/〔[a-z0-9]{2}〕/.test(ex) && !ex.includes('青空') && !ex.includes('やまかわ') && !ex.includes('A01') && !/[ABC]組|ばん/.test(ex), 'Gemini 用は 記号に 置き換わり、名前（本文中の 友だちの 名前も）・番号・組が 入らない');
+  const sym = ex.match(/〔([a-z0-9]{2})〕/)[0];
+  await sp.fill('#sk-in', sym + 'さんは 問いを 立てました'); await sp.waitForTimeout(600);
+  ok((await sp.textContent('.skback')).includes('青空 たろう'), 'Gemini の 回答を 貼ると 記号を 名前に もどして 見せる');
+  await sp.close();
   }
   // 見た目 80%：ブラウザの ズーム 80% と 同じ 見え方で、ボードは 画面の 幅いっぱい、ドラッグ・めくれも 動く
   {

@@ -189,6 +189,7 @@ var Platform = (function(){
     loading:function(team){ return role !== 'teacher' && team === watching && !got[team]; },
     setMe:function(){},
     /* 整理役：サーバーが ロックの 中で 決める（返事が 来るまで 整理役に しない） */
+    kigou:function(cb){ run('kigou', [], function(r){ cb(r || {}); }, function(){ cb(null); }); },
     org:function(act, arg, cb){
       var fn = act === 'claim' ? 'orgClaim' : act === 'release' ? 'orgRelease' : 'orgSet';
       var args = act === 'set' ? [arg.team, arg.no] : [];

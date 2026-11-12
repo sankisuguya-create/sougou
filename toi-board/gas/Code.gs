@@ -2,10 +2,11 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 14;
-var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes'};
+var API_VER = 15;
+var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes', kigou:'記号'};
 var HEAD = {
-  '名簿':['メール', '組', '班', '番号'],
+  '名簿':['メール', '組', '班', '番号', '名前（姓 名・なくてもよい）', 'よみ（せい めい・なくてもよい）'],
+  '記号':['メール', '記号'],
   '先生':['メール', '組（空なら最初の組）'],
   'スポット':['組', '班', 'スポット名'],
   'items':['id', 'team', 'face', 'json', 'ver', 'del', 'by', 'at'],
@@ -74,7 +75,7 @@ function selfCheck(){
 }
 /* 班（1-1 など）や id を 入れる 列。スプレッドシートは「1-1」を 日付に、「12」を 数に 自動で 変えるので、
    この 列だけ 書式を 文字（@）に する。シート全体を 文字に すると 削除の 印（false）が 文字の "FALSE" に なり、消えた 扱いに なるので しない */
-var TEXT_COLS = {items:[1, 2, 3], stars:[1, 2, 3, 4, 7], comments:[1, 2, 3, 4], modes:[1]};
+var TEXT_COLS = {items:[1, 2, 3], stars:[1, 2, 3, 4, 7], comments:[1, 2, 3, 4], modes:[1], '記号':[1, 2]};
 function textFormat_(n, sh){
   (TEXT_COLS[n] || []).forEach(function(c){ sh.getRange(1, c, sh.getMaxRows(), 1).setNumberFormat('@'); });
 }
@@ -262,6 +263,24 @@ function orgRelease(){
   finally { lock.releaseLock(); }
 }
 /* 先生：班の 整理役を 決める（番号）／はずす（no を 空に） */
+/* 所見の 叩き台の Gemini 用：児童ごとの 記号（乱数・年度の 中は 固定）。先生だけ。共通基盤 §8 */
+var KIGOU_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
+function kigou(){
+  var u = who_(); if(u.role !== 'teacher') throw new Error('NOT_TEACHER');
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try{
+    var sh = sheet_(SH.kigou), have = {}, used = {};
+    rows_(SH.kigou).forEach(function(r){ if(r[0] !== ''){ have[low_(r[0])] = String(r[1]); used[String(r[1])] = 1; } });
+    var add = [];
+    rows_(SH.roster).forEach(function(r){
+      var id = low_(r[0]); if(!id || have[id]) return;
+      var k = ''; for(var n = 0; n < 1000 && (!k || used[k]); n++){ k = KIGOU_CHARS.charAt(Math.floor(Math.random() * KIGOU_CHARS.length)) + KIGOU_CHARS.charAt(Math.floor(Math.random() * KIGOU_CHARS.length)); }
+      have[id] = k; used[k] = 1; add.push([id, k]);
+    });
+    if(add.length){ textFormat_(SH.kigou, sh); sh.getRange(sh.getLastRow() + 1, 1, add.length, 2).setValues(add); }
+    return have;
+  } finally { lock.releaseLock(); }
+}
 function orgSet(team, no){
   var u = who_(); if(u.role !== 'teacher') throw new Error('NOT_TEACHER');
   team = String(team);
@@ -281,7 +300,7 @@ function boot(){
   var u = who_();
   ensureFormat_();
   var roster = u.role === 'teacher'
-    ? rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).map(function(r){ var cls = String(r[1]).trim(); return {id:low_(r[0]), cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; })
+    ? rows_(SH.roster).filter(function(r){ return r[0] !== ''; }).map(function(r){ var cls = String(r[1]).trim(); return {id:low_(r[0]), cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3]), name:String(r[4] || '').trim(), yomi:String(r[5] || '').trim()}; })
     : [{id:u.id, cls:u.cls, team:u.team, no:u.no}];
   var p;
   if(u.role === 'teacher'){ var v = getVer_(); p = pull_(u, 0); p.all = v; }
