@@ -365,7 +365,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 15, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 16, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -494,7 +494,10 @@ function myTeam(){ var c = child(me); return c ? c.team : ''; }
 function myCls(){ var c = child(me); return c ? c.cls : ui.tCls; }
 function clsOf(team){ return String(team).split('-')[0]; }
 function boardTeam(){ return isTeacher() ? ui.tTeam : (ui.viewTeam || myTeam()); }
-function isMine(){ return !isTeacher() && boardTeam() === myTeam(); }
+function tEditing(){ return isTeacher() && !!ui.tEdit && (ui.ttab || 'mode') === 'board' && !!ui.tTeam; }
+/* 書きこむ 班：児童は 自分の班、先生は「編集する」が 入の 時に 開いている 班 */
+function editTeam(){ return isTeacher() ? (tEditing() ? ui.tTeam : '') : myTeam(); }
+function isMine(){ return isTeacher() ? tEditing() : boardTeam() === myTeam(); }
 function spot(t){ return SPOTS.filter(function(s){ return s.team === t; })[0] || {team:t, cls:clsOf(t), no:String(t).split('-')[1], name:t}; }
 /* 同じ組なら「3はん」、ほかの組なら「B組3はん」 */
 function teamLabel(t){ var s = spot(t); return (isTeacher() || s.cls !== myCls() ? s.cls + '組' : '') + s.no + 'はん'; }
@@ -769,7 +772,7 @@ function orgOf(team){
 }
 /* 整理モード（組ごと・はじめは 入）：入なら 動かせるのは 整理役 1人、切なら 班の だれでも */
 function orgModeOn(){ return M().orgMode !== 'off'; }
-function canArrange(){ if(!isMine() || ui.face === 'trash') return false; if(!orgModeOn()) return true; var o = orgOf(myTeam()); return !!o && o.mine; }
+function canArrange(){ if(!isMine() || ui.face === 'trash') return false; if(isTeacher() || !orgModeOn()) return true; var o = orgOf(myTeam()); return !!o && o.mine; }
 function mmss(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
 function orgButton(){
   if(!orgModeOn()) return '';
@@ -1133,7 +1136,7 @@ function viewSheet(){
     var kl = kbOf(s.team).filter(function(n){ return n.face !== 'trash'; }), own = s.team === myTeam() || isTeacher();
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + FOLDER_SVG + ' ' + teamLabel(s.team) + '「' + esc(spot(s.team).name) + '」の みんなに 知っていて ほしいこと（' + kl.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<div class="hits kbhits">' + (kl.length ? kl.map(function(n){
-          var del = s.team === myTeam() && !isTeacher() ? '<span class="kbops"><button class="btn kbout" data-act="kbout" data-id="' + n.id + '">とりだす</button><button class="kbdel" data-act="toface" data-f="trash" data-id="' + n.id + '" aria-label="ゴミばこへ" title="ゴミばこへ">🗑️</button></span>' : '';
+          var del = s.team === editTeam() ? '<span class="kbops"><button class="btn kbout" data-act="kbout" data-id="' + n.id + '">とりだす</button><button class="kbdel" data-act="toface" data-f="trash" data-id="' + n.id + '" aria-label="ゴミばこへ" title="ゴミばこへ">🗑️</button></span>' : '';
           return '<div class="kbwrap"><button class="kbcard" ' + (own && !isTeacher() || isTeacher() ? 'data-act="kbopen" data-id="' + n.id + '"' : 'disabled') + '><span class="q">' + esc(n.text) + '</span><span class="a">' + (n.ans ? esc(n.ans) : '<i>うらは まだ 書いて いません</i>') + '</span>' + (n.done ? '<span class="donemark" style="position:static">✓ もう知ってる</span>' : '') + '</button>' + del + '</div>';
         }).join('') : '<p>まだ ありません</p>') + '</div>';
   } else if(s.type === 'teams'){
@@ -1581,7 +1584,14 @@ function viewTeacher(){
   var og = orgOf(ui.tTeam), mem = S.roster.filter(function(c){ return c.team === ui.tTeam; }).sort(function(a, b){ return a.no - b.no; });
   if(((S.modes || {})[clsOf(ui.tTeam)] || {}).orgMode === 'off') h += '<div class="filters"><b>整理モード：切</b>（' + clsOf(ui.tTeam) + '組は 班の だれでも 付箋を 動かせます）</div>';
   else h += '<div class="srow" style="max-width:640px"><span class="slab">整理役（付箋を 動かせる 人）</span>' + (og ? '<span class="mdesc">のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span></span>' : '') + '<select class="ssel" data-chg="orgset:' + ui.tTeam + '" aria-label="整理役を 決める">' + [[0, og ? 'はずす' : 'いない']].concat(mem.map(function(c){ return [c.no, c.no + 'ばん']; })).map(function(o){ return '<option value="' + o[0] + '"' + ((og ? og.no : 0) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
-    return h + '</div>' + boardHTML(ui.tTeam, ui.face);
+    h += swRow('tedit', '付箋を 編集する', !!ui.tEdit, 'data-act="tedit"', '入にすると、この 班の 付箋・わくを 書く・直す・動かす・重ねる・消すが できます（整理役でなくても 動かせます）。ふだんは 切（見るだけ）');
+    if(!tEditing() || ui.face === 'trash') return h + '</div>' + boardHTML(ui.tTeam, ui.face);
+    var tb = '<div class="tbar">'
+      + '<button class="tbtn' + (ui.tool === 'arrow' ? ' on' : '') + '" data-act="tool" data-t="arrow"><span class="i">→</span>やじるし</button>'
+      + '<button class="tbtn" data-act="frame"><span class="i">▢</span>わく</button>'
+      + '<button class="tbtn" data-act="undo"><span class="i">↶</span>もどす</button></div>';
+    if(ui.tool === 'arrow') h += '<div class="banner">' + (ui.arrowFrom ? 'つなぐ 先の 付箋を タップ' : 'はじめの 付箋を タップ') + '</div>';
+    return h + '</div><div class="main">' + tb + boardHTML(ui.tTeam, ui.face) + '</div><button class="fab" data-act="add" aria-label="付箋を 書く" title="付箋を 書く">＋</button>';
   }
   if(tab === 'list'){
   var rows = opinionRows();
@@ -1786,8 +1796,8 @@ document.addEventListener('click', function(e){
       commit(function(){ S.items.push({id:nid(), kind:'note', team:to, face:'gift', x:p.x, y:p.y, text:text, author:me, fromTeam:myTeam(), t:Date.now()}); });
       toast(teamLabel(to) + 'へ おくりました'); return;
     }
-    var q = freeSpot(myTeam(), ui.face);
-    commit(function(){ S.items.push({id:nid(), kind:'note', team:myTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me, t:Date.now()}); });
+    var q = freeSpot(editTeam(), ui.face);
+    commit(function(){ S.items.push({id:nid(), kind:'note', team:editTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me, t:Date.now()}); });
     return;
   }
   if(act === 'undo'){ undo(); return; }
@@ -1795,7 +1805,7 @@ document.addEventListener('click', function(e){
   if(act === 'frame'){
     if(!canArrange()){ toast(orgHint()); return; }
     var sc = $q('.wrap');
-    commit(function(){ S.items.push({id:nid(), kind:'frame', team:myTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
+    commit(function(){ S.items.push({id:nid(), kind:'frame', team:editTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
     return;
   }
   if(act === 'f-sug'){ var fi = $id('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
@@ -1929,6 +1939,7 @@ document.addEventListener('click', function(e){
     Platform.org('set', {team:ot, no:on}, function(r){ toast(on ? (r && r.ok ? on + 'ばんを 整理役に しました（' + orgMs(ot) / 60000 + '分）' : '決められませんでした') : '整理役を はずしました'); render(); });
     return;
   }
+  if(act === 'tedit'){ ui.tEdit = !ui.tEdit; ui.tool = null; ui.arrowFrom = null; render(); return; }
   if(act === 'tbfold'){ ui.tbOpen = !ui.tbOpen; render(); return; }
   if(act === 'ttab'){ ui.ttab = b.getAttribute('data-k'); if(ui.ttab === 'tally') ui.tRound = 0; render(); window.scrollTo(0, 0); return; }
   if(act === 'modes-off'){

@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 15;
+var API_VER = 16;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes', kigou:'記号'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号', '名前（姓 名・なくてもよい）', 'よみ（せい めい・なくてもよい）'],
@@ -419,14 +419,14 @@ function apply(ops){
     var KEEP = ['id', 'team', 'author', 'fromTeam'];  // 変わった 項目として 送られても 変えない
     var ARRANGE = ['x', 'y', 'w', 'h', 'stackOf', 'lp'], orgOk = null;
     // 整理モードが 切の 組では 班の だれでも 動かせる
-    function canArrange(){ if(orgOk === null) orgOk = u.role === 'child' && ((modes[u.cls] || {}).orgMode === 'off' || isOrg_(u)); return orgOk; }
+    function canArrange(){ if(orgOk === null) orgOk = u.role === 'teacher' || u.role === 'child' && ((modes[u.cls] || {}).orgMode === 'off' || isOrg_(u)); return orgOk; }
     (ops.up || []).forEach(guard_(rejected, function(x){ return String(x && x.id || ''); }, function(x){
       var id = String(x && x.id || '');
       if(x && x.p && typeof x.p === 'object'){
         // 変わった 項目だけ：いまの 付箋に 重ねる（ほかの 項目は さわらない）
         var ri = index[id], er = ri !== undefined && ri >= 0 ? irows[ri] : null;
-        // 先生は 文（おもて・うら）だけ 直せる（ふさわしくない ことば・誤字の 手当て）
-        var tEdit = u.role === 'teacher' && !(x.u || []).length && Object.keys(x.p).length && Object.keys(x.p).every(function(k){ return k === 'text' || k === 'ans'; });
+        // 先生は どの 班の 付箋も 直せる（先生画面の「付箋を 編集する」）
+        var tEdit = u.role === 'teacher';
         if(!er || er[5] || (!tEdit && (u.role !== 'child' || String(er[1]) !== u.team))){ rejected.push(id); return; }
         var cur = null; try{ cur = JSON.parse(er[3]); }catch(e){}
         if(!cur){ rejected.push(id); return; }
@@ -440,9 +440,18 @@ function apply(ops){
         writeRow(id, [id, cur.team, cur.face, cleanItem_(cur), v, false, u.id, now]);
         return;
       }
-      if(!id || u.role !== 'child' || KINDS.indexOf(x.kind) < 0 || FACE_KEYS.indexOf(x.face) < 0){ rejected.push(id); return; }
+      if(!id || (u.role !== 'child' && u.role !== 'teacher') || KINDS.indexOf(x.kind) < 0 || FACE_KEYS.indexOf(x.face) < 0){ rejected.push(id); return; }
       var ex = index[id] !== undefined && index[id] >= 0 ? irows[index[id]] : null;
       var old = null; if(ex){ try{ old = JSON.parse(ex[3]); }catch(e){} }
+      if(u.role === 'teacher'){
+        // 先生：どの 班にも 書ける。ほかの 班へ 移すことと、完全に 消した ものを もどすことは できない
+        if(!spots_().some(function(sp){ return sp.team === String(x.team); }) || (ex && (String(ex[1]) !== x.team || (ex[5] && old && old.purged)))){ rejected.push(id); return; }
+        x.author = old && old.author || u.id;
+        if(old && old.fromTeam) x.fromTeam = old.fromTeam; else delete x.fromTeam;
+        if(tooManyShow(id, x.team, x, old)){ rejected.push(id); return; }
+        writeRow(id, [id, x.team, x.face, cleanItem_(x), v, false, u.id, now]);
+        return;
+      }
       if(ex && !ex[5]){
         // 自分の班の物だけ 直せる。ほかの班へ 移すことは できない
         if(String(ex[1]) !== u.team || x.team !== u.team){ rejected.push(id); return; }
@@ -469,7 +478,7 @@ function apply(ops){
     (ops.del || []).forEach(guard_(rejected, function(x){ return String(x); }, function(id){
       id = String(id);
       var i = index[id];
-      if(i === undefined || i < 0 || u.role !== 'child' || String(irows[i][1]) !== u.team){ rejected.push(id); return; }
+      if(i === undefined || i < 0 || (u.role !== 'teacher' && (u.role !== 'child' || String(irows[i][1]) !== u.team))){ rejected.push(id); return; }
       if(String(irows[i][3]).indexOf('"kind":"frame"') >= 0 && !canArrange()){ rejected.push(id); return; }
       var r = irows[i].slice(); r[4] = v; r[5] = true; r[6] = u.id; r[7] = now;
       writeRow(id, r);

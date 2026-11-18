@@ -703,6 +703,18 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.keyboard.press('Escape');
   // 先生の 見合い会：コメントの 書いた人（title）と 消す
   ok(await page.evaluate(() => { var n = S.items.filter(function(x){ return x.kind === 'note'; })[0], r = S.roster[0]; S.comments.push({noteId:n.id, viewer:r.id, text:'テストの コメント'}); var h = cmTeacherRow(n, {noteId:n.id, viewer:r.id, text:'テストの コメント'}); S.comments.pop(); return h.indexOf('title="' + teamLabel(r.team)) > 0 && h.indexOf('data-act="cmt-purge"') > 0; }), '先生の 見合い会：コメントに 書いた人と 消す が ある');
+  // 先生の 付箋を 編集する
+  await who('teacher'); await page.click('[data-act=ttab][data-k=board]');
+  ok(!(await page.isVisible('.fab')), '先生の 班の ボード：ふだんは 見るだけ（＋ が ない）');
+  await page.click('[data-act=tedit]');
+  ok(await page.isVisible('.fab') && await page.isVisible('.tbar [data-act=frame]'), '「付箋を 編集する」を 入にすると ＋・わく・やじるし が 出る');
+  { const n0 = await page.evaluate(() => S.items.filter(x => x.team === ui.tTeam).length);
+    await page.click('.fab'); await page.fill('#w-text', '先生の 付箋'); await page.click('[data-act=w-save]');
+    ok(await page.evaluate(n0 => S.items.filter(x => x.team === ui.tTeam).length === n0 + 1 && S.items.some(x => x.team === ui.tTeam && x.text === '先生の 付箋'), n0), '先生が 開いている 班に 付箋を 書ける');
+    ok(await page.evaluate(() => canArrange() && canEdit()), '先生は 整理役で なくても 動かせる'); }
+  await page.click('[data-act=tedit]');
+  ok(await page.evaluate(() => !canEdit()), '切に もどすと 見るだけ');
+  await page.evaluate(() => { S.items = S.items.filter(x => x.text !== '先生の 付箋'); }); await who('A01'); await page.click('.face[data-face=front]');
   // 見合い会の 一時停止：児童の 画面は ストップ画面
   ok(await page.evaluate(() => { var m = S.modes[myCls()] = S.modes[myCls()] || {}, keep = m.rot, ko = m.starOut; m.starOut = 'all'; m.rot = {min:4, start:nowMs() - 1000, paused:1000}; render(); var on = !!document.querySelector('.pausewall') && !document.querySelector('.gnotes'); m.rot = keep; m.starOut = ko; render(); return on; }), '見合い会の 一時停止中は 児童の 画面が ストップ画面');
   // さがす：見てほしい で しぼる
