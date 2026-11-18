@@ -225,7 +225,7 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.isVisible('#board'), '先生が 切ると ボードに もどる');
   const nb = await page.locator(`#board .note[data-id="${c}"]`).boundingBox(), sb = await page.locator(`[data-stars="${c}"]`).boundingBox();
   const sStar = await page.locator(`[data-stars="${c}"] [data-kind=star]`).boundingBox(), sCirc = await page.locator(`[data-stars="${c}"] [data-kind=shoot]`).boundingBox();
-  ok(Math.abs(sStar.y - sCirc.y) < 6 && sStar.x < sCirc.x && sStar.x < nb.x + nb.width / 3 && sStar.y + sStar.height <= nb.y + nb.height + 2, 'シールは 種類ごとに 決まった 位置（★は 最下段の 左、つるはしは その右）で 付箋の 中に 貼られる');
+  ok(Math.abs(sStar.y - sCirc.y) < 6 && sStar.x < sCirc.x && sCirc.x + sCirc.width > nb.x + nb.width * 2 / 3 && sStar.y + sStar.height <= nb.y + nb.height + 2, 'シールは 右下寄せ（★の 右に 流れ星、いちばん 右は 付箋の 右端の 近く）で 付箋の 中に 貼られる');
   const textBox = await page.$eval(`#board .note[data-id="${c}"]`, el => { const r = document.createRange(); r.selectNodeContents(el.firstChild.nodeType === 3 ? el.firstChild : el.childNodes[[...el.childNodes].findIndex(n => n.nodeType === 3)]); return r.getBoundingClientRect().bottom; });
   ok(sCirc.y >= textBox - 2, 'シールは 文字に かからない');
   const cb = await page.locator(`[data-stars="${c}"] [data-kind=star] .cnt`).boundingBox(), ib = await page.locator(`[data-stars="${c}"] [data-kind=star] img`).boundingBox();
@@ -715,6 +715,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('[data-act=tedit]');
   ok(await page.evaluate(() => !canEdit()), '切に もどすと 見るだけ');
   await page.evaluate(() => { S.items = S.items.filter(x => x.text !== '先生の 付箋'); }); await who('A01'); await page.click('.face[data-face=front]');
+  // シール：ふだんは 右下寄せ・拡大でも 見える
+  ok(await page.evaluate(() => { var n = S.items.filter(x => x.kind === 'note' && starsOf(x.id).length && showCount(x))[0]; if(!n) return 'skip'; var h = noteHTML(n), b = bigSeals(n); return /right:\d+px/.test(h) && b.indexOf('bigseals') > 0; }) !== false, 'シールは 右下寄せ・拡大した 付箋にも 出る');
   // 見合い会の 一時停止：児童の 画面は ストップ画面
   ok(await page.evaluate(() => { var m = S.modes[myCls()] = S.modes[myCls()] || {}, keep = m.rot, ko = m.starOut; m.starOut = 'all'; m.rot = {min:4, start:nowMs() - 1000, paused:1000}; render(); var on = !!document.querySelector('.pausewall') && !document.querySelector('.gnotes'); m.rot = keep; m.starOut = ko; render(); return on; }), '見合い会の 一時停止中は 児童の 画面が ストップ画面');
   // さがす：見てほしい で しぼる
