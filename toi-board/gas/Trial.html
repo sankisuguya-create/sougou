@@ -71,6 +71,8 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .item{position:absolute;touch-action:none;user-select:none;-webkit-user-select:none}
 .note.has-seal{padding-bottom:76px}
 .note.has-seal.one{padding-bottom:44px}
+/* もう知ってる と シールが ある 時は、もう知ってる を シールの 段の 上に */
+.note.done.has-seal{padding-bottom:94px}.note.done.has-seal .donemark{bottom:72px}.note.done.has-seal.one{padding-bottom:62px}.note.done.has-seal.one .donemark{bottom:40px}
 .note{z-index:1;width:168px;min-height:120px;padding:14px 12px 22px;background:var(--fill-b);box-shadow:0 2px 4px rgba(0,0,0,.15);font-size:18px;font-weight:700;line-height:1.45;word-break:break-all;border-radius:2px}
 .note::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:16px;margin-left:-35px;background:rgba(255,255,255,.65);box-shadow:0 0 1px rgba(0,0,0,.2)}
 .note.gift::before{content:"頂き物";background:#9C6B3C;color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;letter-spacing:.1em}
@@ -95,8 +97,10 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .pick{position:absolute;left:-12px;top:-12px;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:16px;display:grid;place-items:center}
 .stars{position:absolute;left:6px;right:6px;bottom:2px;height:66px;pointer-events:none}
 .stars.one{height:34px}
+.bignote:has(.bigseals){padding-bottom:72px}
+.bigseals{position:absolute;right:12px;bottom:10px;display:flex;gap:10px;align-items:center;pointer-events:none}.bigseals .bs{display:flex;align-items:center;gap:2px}.bigseals img{filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}.bigseals b{font-size:20px}
 .stars img{width:30px;height:30px;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
-.stars .slot{position:absolute;transform:translateX(-50%)}
+.stars .slot{position:absolute}
 .stars .rot{display:block;transform:rotate(var(--r,0deg))}
 .stars .slot,.hit .sc{display:flex;align-items:center}
 .hit .sc{position:relative}
@@ -361,7 +365,7 @@ table.tally th{text-align:center;font-size:12px}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
 .note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
-<div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中…<br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
+<style>.ldots{display:inline-block;width:2.2em;text-align:left}.ldots::after{content:"";animation:ldots 2s steps(1) infinite}@keyframes ldots{0%{content:""}25%{content:"・"}50%{content:"・・"}75%{content:"・・・"}}</style><div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
 <div id="net" class="net"></div>
 <script>window.TOI_TRIAL = true;</script>
 <script>
@@ -831,6 +835,14 @@ function jit(key, px, deg){
   return {x:((h & 255) / 255 * 2 - 1) * px, y:(((h >>> 8) & 255) / 255 * 2 - 1) * px, r:Math.round((((h >>> 16) & 255) / 255 * 2 - 1) * deg)};
 }
 function jitStyle(key, px, deg){ var j = jit(key, px, deg); return 'transform:translate(' + j.x.toFixed(1) + 'px,' + j.y.toFixed(1) + 'px) rotate(' + j.r + 'deg)'; }
+/* 拡大した 付箋の 右下に シール（ふだんの 表示と 同じ 見せ方：自分の班と 先生は 数も、ほかの 班は 自分が 貼った ものだけ） */
+function bigSeals(n){
+  var st = starsOf(n.id), all = showCount(n);
+  if(!all) st = st.filter(function(s){ return s.viewer === me; });
+  var used = KINDS.filter(function(K){ return K.k !== 'thumb' && st.some(function(x){ return kindOf(x) === K.k; }); });
+  if(!used.length) return '';
+  return '<div class="bigseals">' + used.map(function(K){ var c = st.filter(function(x){ return kindOf(x) === K.k; }).length; return '<span class="bs" title="' + K.name + '">' + sealImg(K.k, 48) + (all && c >= 2 ? '<b>×' + c + '</b>' : '') + '</span>'; }).join('') + '</div>';
+}
 function slotStyle(K){ var cols = K.row ? 3 : 4, w = 100 / cols; return 'left:' + (w * K.col + w / 2).toFixed(2) + '%;bottom:' + (K.row ? 36 : 4) + 'px'; }
 function sealImg(k, size){ return '<img src="' + SEAL_IMG[k] + '" alt="" width="' + (size || 28) + '" height="' + (size || 28) + '" draggable="false">'; }
 var ICON = {
@@ -855,7 +867,8 @@ function noteHTML(n, opt){
   var oneRow = used.length && used.every(function(K){ return K.row === 0; });
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, j = jit(n.id + K.k), r = j.r;
-      return '<span class="slot" data-kind="' + K.k + '" style="' + slotStyle(K) + ';margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
+      var same = used.filter(function(U){ return U.row === K.row; }), k = same.length - 1 - same.indexOf(K);
+      return '<span class="slot" data-kind="' + K.k + '" style="right:' + (k * 38 + 2) + 'px;bottom:' + (K.row ? 36 : 4) + 'px;margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = shownNow(n) ? '<div class="show">見てほしい</div>' : shownBefore(n) ? '<div class="show old">第' + showRound(n) + '回</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
@@ -1183,7 +1196,7 @@ function viewSheet(){
     } else
     h += '<div class="ngrid"><div class="ncol">' + L + '</div><div class="bignote' + (n.done ? ' done' : '') + (n.fromTeam ? ' gift' : '') + '">'
       + (txt ? '<textarea id="w-text" maxlength="200">' + esc(s.text) + '</textarea>' : '<div class="txt">' + esc(n.text) + '</div>')
-      + (n.done ? '<span class="donemark">✓ もう知ってる' + (n.doneBy ? '（' + esc(n.doneBy) + '）' : '') + '</span>' : '') + '</div><div class="ncol r">' + R + '</div></div>';
+      + (n.done ? '<span class="donemark">✓ もう知ってる' + (n.doneBy ? '（' + esc(n.doneBy) + '）' : '') + '</span>' : '') + bigSeals(n) + '</div><div class="ncol r">' + R + '</div></div>';
     if(isTeacher() && !back) h += '<div class="row" style="justify-content:center;margin-top:12px">' + confirmBtn('purge', 'purge', 'data-id="' + n.id + '"', 'この 付箋を 完全に 消す', 'もう一度 押すと 完全に 消えます（もどせません）', 'シール・コメントも 消えます。重なっていた 付箋は ばらばらに なります') + '</div>';
     h += '<div class="row" style="justify-content:center"><button class="btn primary" data-act="note-close">とじる</button>' + (txt && !back ? '<button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button>' : '') + '</div>';
     /* 重なりは 別の 小窓で（シートの 形を くずさない） */
