@@ -701,6 +701,8 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('.fab');
   ok(await page.getAttribute('#w-text', 'maxlength') === '200', '付箋の 文は 200字で 入力が 止まる');
   await page.keyboard.press('Escape');
+  // 先生の 見合い会：コメントの 書いた人（title）と 消す
+  ok(await page.evaluate(() => { var n = S.items.filter(function(x){ return x.kind === 'note'; })[0], r = S.roster[0]; S.comments.push({noteId:n.id, viewer:r.id, text:'テストの コメント'}); var h = cmTeacherRow(n, {noteId:n.id, viewer:r.id, text:'テストの コメント'}); S.comments.pop(); return h.indexOf('title="' + teamLabel(r.team)) > 0 && h.indexOf('data-act="cmt-purge"') > 0; }), '先生の 見合い会：コメントに 書いた人と 消す が ある');
   // 見合い会の 一時停止：児童の 画面は ストップ画面
   ok(await page.evaluate(() => { var m = S.modes[myCls()] = S.modes[myCls()] || {}, keep = m.rot, ko = m.starOut; m.starOut = 'all'; m.rot = {min:4, start:nowMs() - 1000, paused:1000}; render(); var on = !!document.querySelector('.pausewall') && !document.querySelector('.gnotes'); m.rot = keep; m.starOut = ko; render(); return on; }), '見合い会の 一時停止中は 児童の 画面が ストップ画面');
   // さがす：見てほしい で しぼる

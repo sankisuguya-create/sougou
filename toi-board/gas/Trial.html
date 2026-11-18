@@ -184,6 +184,7 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .stnote .cm .tip{display:none;position:absolute;left:0;top:100%;z-index:30;width:240px;background:#fff;border:2px solid var(--cat-1);border-radius:10px;padding:6px 10px;box-shadow:0 4px 12px rgba(0,0,0,.2);color:var(--ink);font-weight:400}
 .stnote .cm:hover .tip,.stnote .cm:focus .tip{display:block}
 .stnote .cm .tip p{margin:4px 0}
+.stnote .cm .tip.t{width:320px}.tcm{border-bottom:1px solid var(--line);padding:4px 0}.tcm:last-child{border-bottom:0}.tcm .who{font-size:13px;color:#55585E;visibility:hidden}.tcm:hover .who,.tcm:focus-within .who{visibility:visible}.cmopen.t .tcm{background:#fff;border-radius:8px;padding:4px 8px;border:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.cmopen.t .tcm p{flex:1 1 60%;background:none;padding:0}.cmopen.t .who{order:3;flex-basis:100%}.tcm .tcmdel{min-height:36px;font-size:14px}
 .gal.wait .order{font-size:22px;line-height:1.9}.gal.wait .order li.me{font-weight:700;color:var(--cat-1)}
 .rotpanel{border:2px solid var(--line);border-radius:14px;padding:6px 12px;margin:8px 0;background:#fff}
 .facil .facilhead{display:flex;align-items:center;gap:12px}.facil .facilhead h3{margin:10px 0 4px;flex:1}
@@ -1042,10 +1043,16 @@ function stageHTML(team, st, open){
     var ss = starsOf(n.id).sort(function(a, b){ return (a.v || 0) - (b.v || 0) || String(a.viewer).localeCompare(String(b.viewer)); }), cm = commentsOf(n.id);
     h += '<div class="stnote" data-id="' + n.id + '"><div class="t">' + esc(n.text) + '</div><div class="seals">'
       + ss.map(function(x){ return '<span class="s" data-kind="' + kindOf(x) + '" style="' + jitStyle(n.id + x.viewer + kindOf(x), 2, 12) + '">' + sealImg(kindOf(x), 40) + '</span>'; }).join('') + '</div>'
-      + (cm.length ? (open ? '<div class="cmopen">' + cm.map(function(c){ return '<p>💬 ' + esc(c.text) + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip">' + cm.map(function(c){ return '<p>' + esc(c.text) + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
+      + (cm.length ? (open ? '<div class="cmopen' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>💬 ' + esc(c.text) + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>' + esc(c.text) + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
   });
   if(!notes.length) h += '<p class="hint" style="font-size:18px">見てほしい付箋が ありません</p>';
   return h + '</div>';
+}
+/* 先生だけ：コメントの 書いた人（指を のせると 出る）と 消す。名前は 名簿に ある 時だけ */
+function cmTeacherRow(n, c){
+  var w = child(c.viewer), who = w ? teamLabel(w.team) + ' ' + w.no + 'ばん' + (w.name ? ' ' + w.name : '') : '（名簿に ない 人）';
+  return '<div class="tcm" title="' + esc(who) + '"><p>💬 ' + esc(c.text) + '</p><div class="who">' + esc(who) + '</div>'
+    + confirmBtn('cmt:' + n.id + ':' + c.viewer, 'cmt-purge', 'data-id="' + n.id + '" data-v="' + esc(c.viewer) + '"', '消す', 'もう一度 押すと 消えます', '', 'danger tcmdel') + '</div>';
 }
 function viewStage(st){
   return '<div class="gal">' + rotHead(st) + '<p class="hint" style="font-size:18px;margin:4px 0 0">いまは 見るだけ。ほかの 班の 友だちが シールと コメントを くれています（💬 に 指を のせると 読めます）</p>' + stageHTML(myTeam(), st) + '</div>';
