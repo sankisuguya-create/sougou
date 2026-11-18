@@ -1107,11 +1107,12 @@ function viewSheet(){
       + '<div class="ncol r"></div></div>'
       + '<div class="row" style="justify-content:center"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
-    var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return !s.face || n.face === s.face; }), s.sort || 'new');
+    var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return (!s.face || n.face === s.face) && (!s.show || shownNow(n)); }), s.sort || 'new');
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">じぶんの 班の 付箋を さがす（' + hits.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<input id="s-text" class="sbox" placeholder="ことばで さがす（なくてもよい）" value="' + esc(s.q || '') + '">'
       + '<div class="sortbar">ならびかえ：<span class="seg">' + SORTS.map(function(o){ return '<button class="' + ((s.sort || 'new') === o.k ? 'on' : '') + '" data-act="s-sort" data-k="' + o.k + '">' + o.label + '</button>'; }).join('') + '</span>'
       + '面：<span class="seg">' + [{k:'', label:'ぜんぶ'}].concat(FACES).map(function(f){ return '<button class="' + ((s.face || '') === f.k ? 'on' : '') + '" data-act="s-face" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span></div>'
+      + '<div class="sortbar">しるし：<span class="seg"><button class="' + (s.show ? '' : 'on') + '" data-act="s-show" data-v="">しぼらない</button><button class="' + (s.show ? 'on' : '') + '" data-act="s-show" data-v="1">見てほしい</button></span></div>'
       + '<div class="sortbar">シールで しぼる：' + kindButtons('s-kind', s.kind) + '</div>'
       + '<div class="hits">' + (hits.length ? hits.map(function(n){
           var cs = kindCounts(n), lk = likesOf(n.id).length;
@@ -1876,6 +1877,7 @@ document.addEventListener('click', function(e){
   }
   if(act === 'search'){ ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = $id('s-text'); if(t) t.focus(); }, 0); return; }
   if(act === 's-sort'){ ui.sheet.sort = b.getAttribute('data-k'); render(); return; }
+  if(act === 's-show'){ ui.sheet.show = !!b.getAttribute('data-v'); render(); return; }
   if(act === 's-face'){ ui.sheet.face = b.getAttribute('data-f'); render(); return; }
   if(act === 's-kind'){ ui.sheet.kind = b.getAttribute('data-k'); render(); return; }
   if(act === 'goto'){ gotoNote(id); return; }

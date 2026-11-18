@@ -701,6 +701,11 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   await page.click('.fab');
   ok(await page.getAttribute('#w-text', 'maxlength') === '200', '付箋の 文は 200字で 入力が 止まる');
   await page.keyboard.press('Escape');
+  // さがす：見てほしい で しぼる
+  await page.evaluate(() => { ui.sheet = {type:'search'}; render(); });
+  await page.click('[data-act=s-show][data-v="1"]');
+  ok(await page.evaluate(() => { var h = sortHits(searchHits(myTeam(), '', ''), 'new').filter(function(n){ return shownNow(n); }).length; return document.querySelectorAll('.hits .hcard').length === h; }), 'さがす：見てほしい で しぼれる');
+  await page.evaluate(() => { ui.sheet = null; render(); });
   // 見てほしい付箋は SHOW_PER_TEAM（8）まいまで
   const LIM = await page.evaluate(() => SHOW_PER_TEAM);
   await page.evaluate(n => commit(() => { for (let i = 0; i <= n; i++) S.items.push({ id: nid(), kind: 'note', team: 'A-1', face: 'front', x: 1 + (i % 6) * 8, y: 60 + Math.floor(i / 6) * 7, text: 'え' + i, author: me }); }), LIM);
