@@ -361,7 +361,7 @@ table.tally th{text-align:center;font-size:12px}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
 .note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
-<div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中…<br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
+<style>.ldots{display:inline-block;width:2.2em;text-align:left}.ldots::after{content:"";animation:ldots 2s steps(1) infinite}@keyframes ldots{0%{content:""}25%{content:"・"}50%{content:"・・"}75%{content:"・・・"}}</style><div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
@@ -570,7 +570,7 @@ var Platform = (function(){
           + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
         net('');
       }
-      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中…<br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
+      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
       (function boot(){
         run('boot', [], function(r){
           clearTimeout(slow);
