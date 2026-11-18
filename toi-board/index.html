@@ -287,6 +287,7 @@ table.tally .none{color:#B8BCC2}
 .helptxt{font-size:14px;color:var(--ink);background:#F4F7FB;border-radius:8px;padding:6px 10px;margin:0 0 8px}
 details.more{margin-top:4px}details.more summary{cursor:pointer;color:var(--cat-1);font-weight:700;padding:8px 0;list-style:none}
 details.more summary::after{content:" ▼"}details.more[open] summary::after{content:" ▲"}
+.pausewall{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center}.pw-i{font-size:72px;line-height:1}.pw-t{font-size:40px;font-weight:700;margin:12px 0 4px}.pw-s{font-size:24px;color:#55585E;margin:0}
 .fsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:2px solid var(--line);border-radius:12px;padding:6px 10px;margin:6px 0}
 .chip.on2{background:#EEF3F9;border-color:#EEF3F9;color:var(--ink);font-weight:700}
 .fpanel{border:2px solid var(--line);border-radius:12px;padding:4px 10px;margin:0 0 6px;background:#fff}
@@ -1056,6 +1057,7 @@ function viewWait(){
 function viewChild(){
   var rs = rotState(myCls());
   if(rs.phase === 'wait') return viewWait();
+  if(rs.phase === 'pause'){ ui.sheet = null; ui.selSeal = null; return '<div class="gal pausewall"><div class="pw-i">⏸</div><p class="pw-t">ちょっと ストップ</p><p class="pw-s">先生の 話を 聞こう</p></div>'; }
   if(running(rs)) return rs.team === myTeam() ? viewStage(rs) : viewGallery(rs);
   var team = boardTeam(), sp = spot(team), mine = isMine(), m = M();
   var faces = visibleFaces();
