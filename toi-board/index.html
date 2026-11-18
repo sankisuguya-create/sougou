@@ -71,8 +71,8 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .item{position:absolute;touch-action:none;user-select:none;-webkit-user-select:none}
 .note.has-seal{padding-bottom:76px}
 .note.has-seal.one{padding-bottom:44px}
-/* もう知ってる と シールが ある 時は、もう知ってる を シールの 段の 上に */
-.note.done.has-seal{padding-bottom:94px}.note.done.has-seal .donemark{bottom:72px}.note.done.has-seal.one{padding-bottom:62px}.note.done.has-seal.one .donemark{bottom:40px}
+/* もう知ってる と シールが ある 時は、もう知ってる を 小さく して 最下段の 左に（シールは 右下） */
+.note.done.has-seal .donemark{left:3px;font-size:9px;padding:0 3px;letter-spacing:-.04em}
 .note{z-index:1;width:168px;min-height:120px;padding:14px 12px 22px;background:var(--fill-b);box-shadow:0 2px 4px rgba(0,0,0,.15);font-size:18px;font-weight:700;line-height:1.45;word-break:break-all;border-radius:2px}
 .note::before{content:"";position:absolute;top:-8px;left:50%;width:70px;height:16px;margin-left:-35px;background:rgba(255,255,255,.65);box-shadow:0 0 1px rgba(0,0,0,.2)}
 .note.gift::before{content:"頂き物";background:#9C6B3C;color:#fff;font-size:11px;font-weight:700;line-height:16px;text-align:center;letter-spacing:.1em}
@@ -867,7 +867,7 @@ function noteHTML(n, opt){
   if(used.length) stars = '<div class="stars' + (oneRow ? ' one' : '') + (ui.pop === n.id ? ' pop' : '') + '" data-stars="' + n.id + '">' + used.map(function(K){
       var c = st.filter(function(x){ return kindOf(x) === K.k; }).length, j = jit(n.id + K.k), r = j.r;
       var same = used.filter(function(U){ return U.row === K.row; }), k = same.length - 1 - same.indexOf(K);
-      return '<span class="slot" data-kind="' + K.k + '" style="right:' + (k * 38 + 2) + 'px;bottom:' + (K.row ? 36 : 4) + 'px;margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
+      return '<span class="slot" data-kind="' + K.k + '" style="right:' + (k * 34 + 2) + 'px;bottom:' + (K.row ? 36 : 4) + 'px;margin:' + j.y + 'px 0 0 ' + j.x + 'px;--r:' + r + 'deg"><span class="rot">' + sealImg(K.k, 30) + '</span>' + (all && c >= 2 ? '<b class="cnt">' + c + '</b>' : '') + '</span>';
     }).join('') + '</div>';
   var show = shownNow(n) ? '<div class="show">見てほしい</div>' : shownBefore(n) ? '<div class="show old">第' + showRound(n) + '回</div>' : '';
   var from = n.fromTeam ? '<div class="from">' + teamLabel(n.fromTeam) + 'から</div>' : '';
