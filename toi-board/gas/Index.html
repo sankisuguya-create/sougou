@@ -359,7 +359,7 @@ table.tally th{text-align:center;font-size:12px}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
 .note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
-<div id="app"></div>
+<div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中…<br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
@@ -562,14 +562,23 @@ var Platform = (function(){
     kick:function(){ pull(); },
     start:function(cb){
       var tries = 0;
+      function showFail(msg){
+        document.getElementById('app').innerHTML = '<div style="padding:24px;font-size:18px;line-height:1.7"><p style="font-size:22px;font-weight:700">ひらけません</p>'
+          + '<p>理由：<b>' + String(msg).replace(/[<>&]/g, '') + '</b></p>'
+          + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
+        net('');
+      }
+      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中…<br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
       (function boot(){
         run('boot', [], function(r){
+          clearTimeout(slow);
           if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
           window.__bootOrg = r.org || {};
           if(r.now && typeof setNow === 'function') setNow(r.now);
-          cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+          try{ cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me); }
+          catch(err){ showFail('画面を つくれませんでした：' + String(err && err.message || err)); return; }
           loop();
           // 前に 送れなかった 変更が 端末に あれば 送り直す
           keepKey = 'toiboard.unsent.' + r.me.id;
@@ -586,11 +595,7 @@ var Platform = (function(){
           // 混雑・通信の エラーだけ やり直す。それ以外（設定の まちがい など）は やり直しても 直らないので すぐ 理由を 出す
           var busyErr = /too many|invoked|timed? ?out|timeout|lock|rate|quota|network|failed to fetch|unavailable|503|429|サーバー|混雑/i.test(msg);
           if(!busyErr || ++tries > 8){
-            document.getElementById('app').innerHTML = '<div style="padding:24px;font-size:18px;line-height:1.7"><p style="font-size:22px;font-weight:700">ひらけません</p>'
-              + '<p>理由：<b>' + msg.replace(/[<>&]/g, '') + '</b></p>'
-              + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
-            net('');
-            return;
+            showFail(msg); return;
           }
           net('つながるのを まっています（' + tries + '）：' + msg.slice(0, 60));
           setTimeout(boot, backoff() * Math.min(tries, 3));
