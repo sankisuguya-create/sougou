@@ -184,6 +184,7 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .stnote .cm .tip{display:none;position:absolute;left:0;top:100%;z-index:30;width:240px;background:#fff;border:2px solid var(--cat-1);border-radius:10px;padding:6px 10px;box-shadow:0 4px 12px rgba(0,0,0,.2);color:var(--ink);font-weight:400}
 .stnote .cm:hover .tip,.stnote .cm:focus .tip{display:block}
 .stnote .cm .tip p{margin:4px 0}
+.stnote .cm .tip.t{width:320px}.tcm{border-bottom:1px solid var(--line);padding:4px 0}.tcm:last-child{border-bottom:0}.tcm .who{font-size:13px;color:#55585E;visibility:hidden}.tcm:hover .who,.tcm:focus-within .who{visibility:visible}.cmopen.t .tcm{background:#fff;border-radius:8px;padding:4px 8px;border:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.cmopen.t .tcm p{flex:1 1 60%;background:none;padding:0}.cmopen.t .who{order:3;flex-basis:100%}.tcm .tcmdel{min-height:36px;font-size:14px}
 .gal.wait .order{font-size:22px;line-height:1.9}.gal.wait .order li.me{font-weight:700;color:var(--cat-1)}
 .rotpanel{border:2px solid var(--line);border-radius:14px;padding:6px 12px;margin:8px 0;background:#fff}
 .facil .facilhead{display:flex;align-items:center;gap:12px}.facil .facilhead h3{margin:10px 0 4px;flex:1}
@@ -287,6 +288,7 @@ table.tally .none{color:#B8BCC2}
 .helptxt{font-size:14px;color:var(--ink);background:#F4F7FB;border-radius:8px;padding:6px 10px;margin:0 0 8px}
 details.more{margin-top:4px}details.more summary{cursor:pointer;color:var(--cat-1);font-weight:700;padding:8px 0;list-style:none}
 details.more summary::after{content:" ▼"}details.more[open] summary::after{content:" ▲"}
+.pausewall{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center}.pw-i{font-size:72px;line-height:1}.pw-t{font-size:40px;font-weight:700;margin:12px 0 4px}.pw-s{font-size:24px;color:#55585E;margin:0}
 .fsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:2px solid var(--line);border-radius:12px;padding:6px 10px;margin:6px 0}
 .chip.on2{background:#EEF3F9;border-color:#EEF3F9;color:var(--ink);font-weight:700}
 .fpanel{border:2px solid var(--line);border-radius:12px;padding:4px 10px;margin:0 0 6px;background:#fff}
@@ -359,11 +361,11 @@ table.tally th{text-align:center;font-size:12px}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
 .note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
-<div id="app"></div>
+<div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中…<br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 15, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 16, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -562,14 +564,23 @@ var Platform = (function(){
     kick:function(){ pull(); },
     start:function(cb){
       var tries = 0;
+      function showFail(msg){
+        document.getElementById('app').innerHTML = '<div style="padding:24px;font-size:18px;line-height:1.7"><p style="font-size:22px;font-weight:700">ひらけません</p>'
+          + '<p>理由：<b>' + String(msg).replace(/[<>&]/g, '') + '</b></p>'
+          + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
+        net('');
+      }
+      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中…<br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
       (function boot(){
         run('boot', [], function(r){
+          clearTimeout(slow);
           if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
           window.__bootOrg = r.org || {};
           if(r.now && typeof setNow === 'function') setNow(r.now);
-          cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me);
+          try{ cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me); }
+          catch(err){ showFail('画面を つくれませんでした：' + String(err && err.message || err)); return; }
           loop();
           // 前に 送れなかった 変更が 端末に あれば 送り直す
           keepKey = 'toiboard.unsent.' + r.me.id;
@@ -586,11 +597,7 @@ var Platform = (function(){
           // 混雑・通信の エラーだけ やり直す。それ以外（設定の まちがい など）は やり直しても 直らないので すぐ 理由を 出す
           var busyErr = /too many|invoked|timed? ?out|timeout|lock|rate|quota|network|failed to fetch|unavailable|503|429|サーバー|混雑/i.test(msg);
           if(!busyErr || ++tries > 8){
-            document.getElementById('app').innerHTML = '<div style="padding:24px;font-size:18px;line-height:1.7"><p style="font-size:22px;font-weight:700">ひらけません</p>'
-              + '<p>理由：<b>' + msg.replace(/[<>&]/g, '') + '</b></p>'
-              + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
-            net('');
-            return;
+            showFail(msg); return;
           }
           net('つながるのを まっています（' + tries + '）：' + msg.slice(0, 60));
           setTimeout(boot, backoff() * Math.min(tries, 3));
@@ -649,7 +656,10 @@ function myTeam(){ var c = child(me); return c ? c.team : ''; }
 function myCls(){ var c = child(me); return c ? c.cls : ui.tCls; }
 function clsOf(team){ return String(team).split('-')[0]; }
 function boardTeam(){ return isTeacher() ? ui.tTeam : (ui.viewTeam || myTeam()); }
-function isMine(){ return !isTeacher() && boardTeam() === myTeam(); }
+function tEditing(){ return isTeacher() && !!ui.tEdit && (ui.ttab || 'mode') === 'board' && !!ui.tTeam; }
+/* 書きこむ 班：児童は 自分の班、先生は「編集する」が 入の 時に 開いている 班 */
+function editTeam(){ return isTeacher() ? (tEditing() ? ui.tTeam : '') : myTeam(); }
+function isMine(){ return isTeacher() ? tEditing() : boardTeam() === myTeam(); }
 function spot(t){ return SPOTS.filter(function(s){ return s.team === t; })[0] || {team:t, cls:clsOf(t), no:String(t).split('-')[1], name:t}; }
 /* 同じ組なら「3はん」、ほかの組なら「B組3はん」 */
 function teamLabel(t){ var s = spot(t); return (isTeacher() || s.cls !== myCls() ? s.cls + '組' : '') + s.no + 'はん'; }
@@ -924,7 +934,7 @@ function orgOf(team){
 }
 /* 整理モード（組ごと・はじめは 入）：入なら 動かせるのは 整理役 1人、切なら 班の だれでも */
 function orgModeOn(){ return M().orgMode !== 'off'; }
-function canArrange(){ if(!isMine() || ui.face === 'trash') return false; if(!orgModeOn()) return true; var o = orgOf(myTeam()); return !!o && o.mine; }
+function canArrange(){ if(!isMine() || ui.face === 'trash') return false; if(isTeacher() || !orgModeOn()) return true; var o = orgOf(myTeam()); return !!o && o.mine; }
 function mmss(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
 function orgButton(){
   if(!orgModeOn()) return '';
@@ -1197,10 +1207,16 @@ function stageHTML(team, st, open){
     var ss = starsOf(n.id).sort(function(a, b){ return (a.v || 0) - (b.v || 0) || String(a.viewer).localeCompare(String(b.viewer)); }), cm = commentsOf(n.id);
     h += '<div class="stnote" data-id="' + n.id + '"><div class="t">' + esc(n.text) + '</div><div class="seals">'
       + ss.map(function(x){ return '<span class="s" data-kind="' + kindOf(x) + '" style="' + jitStyle(n.id + x.viewer + kindOf(x), 2, 12) + '">' + sealImg(kindOf(x), 40) + '</span>'; }).join('') + '</div>'
-      + (cm.length ? (open ? '<div class="cmopen">' + cm.map(function(c){ return '<p>💬 ' + esc(c.text) + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip">' + cm.map(function(c){ return '<p>' + esc(c.text) + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
+      + (cm.length ? (open ? '<div class="cmopen' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>💬 ' + esc(c.text) + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>' + esc(c.text) + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
   });
   if(!notes.length) h += '<p class="hint" style="font-size:18px">見てほしい付箋が ありません</p>';
   return h + '</div>';
+}
+/* 先生だけ：コメントの 書いた人（指を のせると 出る）と 消す。名前は 名簿に ある 時だけ */
+function cmTeacherRow(n, c){
+  var w = child(c.viewer), who = w ? teamLabel(w.team) + ' ' + w.no + 'ばん' + (w.name ? ' ' + w.name : '') : '（名簿に ない 人）';
+  return '<div class="tcm" title="' + esc(who) + '"><p>💬 ' + esc(c.text) + '</p><div class="who">' + esc(who) + '</div>'
+    + confirmBtn('cmt:' + n.id + ':' + c.viewer, 'cmt-purge', 'data-id="' + n.id + '" data-v="' + esc(c.viewer) + '"', '消す', 'もう一度 押すと 消えます', '', 'danger tcmdel') + '</div>';
 }
 function viewStage(st){
   return '<div class="gal">' + rotHead(st) + '<p class="hint" style="font-size:18px;margin:4px 0 0">いまは 見るだけ。ほかの 班の 友だちが シールと コメントを くれています（💬 に 指を のせると 読めます）</p>' + stageHTML(myTeam(), st) + '</div>';
@@ -1213,6 +1229,7 @@ function viewWait(){
 function viewChild(){
   var rs = rotState(myCls());
   if(rs.phase === 'wait') return viewWait();
+  if(rs.phase === 'pause'){ ui.sheet = null; ui.selSeal = null; return '<div class="gal pausewall"><div class="pw-i">⏸</div><p class="pw-t">ちょっと ストップ</p><p class="pw-s">先生の 話を 聞こう</p></div>'; }
   if(running(rs)) return rs.team === myTeam() ? viewStage(rs) : viewGallery(rs);
   var team = boardTeam(), sp = spot(team), mine = isMine(), m = M();
   var faces = visibleFaces();
@@ -1263,11 +1280,12 @@ function viewSheet(){
       + '<div class="ncol r"></div></div>'
       + '<div class="row" style="justify-content:center"><button class="btn primary" data-act="w-save">' + (s.gift ? 'おくる' : 'はる') + '</button><button class="seedbtn' + (s.seeds ? ' on' : '') + '" data-act="tanes">？のたね</button><button class="btn" data-act="close">やめる</button></div>';
   } else if(s.type === 'search'){
-    var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return !s.face || n.face === s.face; }), s.sort || 'new');
+    var hits = sortHits(searchHits(myTeam(), s.q, s.kind).filter(function(n){ return (!s.face || n.face === s.face) && (!s.show || shownNow(n)); }), s.sort || 'new');
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">じぶんの 班の 付箋を さがす（' + hits.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<input id="s-text" class="sbox" placeholder="ことばで さがす（なくてもよい）" value="' + esc(s.q || '') + '">'
       + '<div class="sortbar">ならびかえ：<span class="seg">' + SORTS.map(function(o){ return '<button class="' + ((s.sort || 'new') === o.k ? 'on' : '') + '" data-act="s-sort" data-k="' + o.k + '">' + o.label + '</button>'; }).join('') + '</span>'
       + '面：<span class="seg">' + [{k:'', label:'ぜんぶ'}].concat(FACES).map(function(f){ return '<button class="' + ((s.face || '') === f.k ? 'on' : '') + '" data-act="s-face" data-f="' + f.k + '">' + f.label + '</button>'; }).join('') + '</span></div>'
+      + '<div class="sortbar">しるし：<span class="seg"><button class="' + (s.show ? '' : 'on') + '" data-act="s-show" data-v="">しぼらない</button><button class="' + (s.show ? 'on' : '') + '" data-act="s-show" data-v="1">見てほしい</button></span></div>'
       + '<div class="sortbar">シールで しぼる：' + kindButtons('s-kind', s.kind) + '</div>'
       + '<div class="hits">' + (hits.length ? hits.map(function(n){
           var cs = kindCounts(n), lk = likesOf(n.id).length;
@@ -1280,7 +1298,7 @@ function viewSheet(){
     var kl = kbOf(s.team).filter(function(n){ return n.face !== 'trash'; }), own = s.team === myTeam() || isTeacher();
     h += '<div class="row" style="align-items:center;margin-top:0"><h2 style="margin:0">' + FOLDER_SVG + ' ' + teamLabel(s.team) + '「' + esc(spot(s.team).name) + '」の みんなに 知っていて ほしいこと（' + kl.length + 'まい）</h2><button class="btn" data-act="close" style="margin-left:auto">とじる</button></div>'
       + '<div class="hits kbhits">' + (kl.length ? kl.map(function(n){
-          var del = s.team === myTeam() && !isTeacher() ? '<span class="kbops"><button class="btn kbout" data-act="kbout" data-id="' + n.id + '">とりだす</button><button class="kbdel" data-act="toface" data-f="trash" data-id="' + n.id + '" aria-label="ゴミばこへ" title="ゴミばこへ">🗑️</button></span>' : '';
+          var del = s.team === editTeam() ? '<span class="kbops"><button class="btn kbout" data-act="kbout" data-id="' + n.id + '">とりだす</button><button class="kbdel" data-act="toface" data-f="trash" data-id="' + n.id + '" aria-label="ゴミばこへ" title="ゴミばこへ">🗑️</button></span>' : '';
           return '<div class="kbwrap"><button class="kbcard" ' + (own && !isTeacher() || isTeacher() ? 'data-act="kbopen" data-id="' + n.id + '"' : 'disabled') + '><span class="q">' + esc(n.text) + '</span><span class="a">' + (n.ans ? esc(n.ans) : '<i>うらは まだ 書いて いません</i>') + '</span>' + (n.done ? '<span class="donemark" style="position:static">✓ もう知ってる</span>' : '') + '</button>' + del + '</div>';
         }).join('') : '<p>まだ ありません</p>') + '</div>';
   } else if(s.type === 'teams'){
@@ -1728,7 +1746,14 @@ function viewTeacher(){
   var og = orgOf(ui.tTeam), mem = S.roster.filter(function(c){ return c.team === ui.tTeam; }).sort(function(a, b){ return a.no - b.no; });
   if(((S.modes || {})[clsOf(ui.tTeam)] || {}).orgMode === 'off') h += '<div class="filters"><b>整理モード：切</b>（' + clsOf(ui.tTeam) + '組は 班の だれでも 付箋を 動かせます）</div>';
   else h += '<div class="srow" style="max-width:640px"><span class="slab">整理役（付箋を 動かせる 人）</span>' + (og ? '<span class="mdesc">のこり <span class="orgleft" data-t="' + ui.tTeam + '">' + mmss(og.end - Date.now()) + '</span></span>' : '') + '<select class="ssel" data-chg="orgset:' + ui.tTeam + '" aria-label="整理役を 決める">' + [[0, og ? 'はずす' : 'いない']].concat(mem.map(function(c){ return [c.no, c.no + 'ばん']; })).map(function(o){ return '<option value="' + o[0] + '"' + ((og ? og.no : 0) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
-    return h + '</div>' + boardHTML(ui.tTeam, ui.face);
+    h += swRow('tedit', '付箋を 編集する', !!ui.tEdit, 'data-act="tedit"', '入にすると、この 班の 付箋・わくを 書く・直す・動かす・重ねる・消すが できます（整理役でなくても 動かせます）。ふだんは 切（見るだけ）');
+    if(!tEditing() || ui.face === 'trash') return h + '</div>' + boardHTML(ui.tTeam, ui.face);
+    var tb = '<div class="tbar">'
+      + '<button class="tbtn' + (ui.tool === 'arrow' ? ' on' : '') + '" data-act="tool" data-t="arrow"><span class="i">→</span>やじるし</button>'
+      + '<button class="tbtn" data-act="frame"><span class="i">▢</span>わく</button>'
+      + '<button class="tbtn" data-act="undo"><span class="i">↶</span>もどす</button></div>';
+    if(ui.tool === 'arrow') h += '<div class="banner">' + (ui.arrowFrom ? 'つなぐ 先の 付箋を タップ' : 'はじめの 付箋を タップ') + '</div>';
+    return h + '</div><div class="main">' + tb + boardHTML(ui.tTeam, ui.face) + '</div><button class="fab" data-act="add" aria-label="付箋を 書く" title="付箋を 書く">＋</button>';
   }
   if(tab === 'list'){
   var rows = opinionRows();
@@ -1933,8 +1958,8 @@ document.addEventListener('click', function(e){
       commit(function(){ S.items.push({id:nid(), kind:'note', team:to, face:'gift', x:p.x, y:p.y, text:text, author:me, fromTeam:myTeam(), t:Date.now()}); });
       toast(teamLabel(to) + 'へ おくりました'); return;
     }
-    var q = freeSpot(myTeam(), ui.face);
-    commit(function(){ S.items.push({id:nid(), kind:'note', team:myTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me, t:Date.now()}); });
+    var q = freeSpot(editTeam(), ui.face);
+    commit(function(){ S.items.push({id:nid(), kind:'note', team:editTeam(), face:ui.face, x:q.x, y:q.y, text:text, author:me, t:Date.now()}); });
     return;
   }
   if(act === 'undo'){ undo(); return; }
@@ -1942,7 +1967,7 @@ document.addEventListener('click', function(e){
   if(act === 'frame'){
     if(!canArrange()){ toast(orgHint()); return; }
     var sc = $q('.wrap');
-    commit(function(){ S.items.push({id:nid(), kind:'frame', team:myTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
+    commit(function(){ S.items.push({id:nid(), kind:'frame', team:editTeam(), face:ui.face, x:Math.round(sc.scrollLeft/GRID) + 2, y:Math.round(sc.scrollTop/GRID) + 2, w:16, h:10, text:''}); });
     return;
   }
   if(act === 'f-sug'){ var fi = $id('f-text'); if(fi){ fi.value = b.getAttribute('data-t'); fi.focus(); } return; }
@@ -2032,6 +2057,7 @@ document.addEventListener('click', function(e){
   }
   if(act === 'search'){ ui.sheet = {type:'search', q:'', kind:''}; render(); setTimeout(function(){ var t = $id('s-text'); if(t) t.focus(); }, 0); return; }
   if(act === 's-sort'){ ui.sheet.sort = b.getAttribute('data-k'); render(); return; }
+  if(act === 's-show'){ ui.sheet.show = !!b.getAttribute('data-v'); render(); return; }
   if(act === 's-face'){ ui.sheet.face = b.getAttribute('data-f'); render(); return; }
   if(act === 's-kind'){ ui.sheet.kind = b.getAttribute('data-k'); render(); return; }
   if(act === 'goto'){ gotoNote(id); return; }
@@ -2075,6 +2101,7 @@ document.addEventListener('click', function(e){
     Platform.org('set', {team:ot, no:on}, function(r){ toast(on ? (r && r.ok ? on + 'ばんを 整理役に しました（' + orgMs(ot) / 60000 + '分）' : '決められませんでした') : '整理役を はずしました'); render(); });
     return;
   }
+  if(act === 'tedit'){ ui.tEdit = !ui.tEdit; ui.tool = null; ui.arrowFrom = null; render(); return; }
   if(act === 'tbfold'){ ui.tbOpen = !ui.tbOpen; render(); return; }
   if(act === 'ttab'){ ui.ttab = b.getAttribute('data-k'); if(ui.ttab === 'tally') ui.tRound = 0; render(); window.scrollTo(0, 0); return; }
   if(act === 'modes-off'){

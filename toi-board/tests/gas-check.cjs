@@ -307,9 +307,16 @@ function makeGas() {
   r = G.as('a01' + D, 'apply', [{ up: [], del: [], star: [], purge: [nid2] }]);
   ok(r.rejected.length === 1, '児童は 完全削除できない');
   const vp = G.props.ver;
-  { const te = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { text: '先生が なおした' }, u: [] }, { id: nid2, team: 'A-1', p: { face: 'trash' }, u: [] }], del: [], star: [] }]);
-    const trow = G.sheets.items.data.find(x => x[0] === nid2);
-    ok(te.rejected.length === 1 && JSON.parse(trow[3]).text === '先生が なおした' && JSON.parse(trow[3]).face !== 'trash', '先生は 児童の 付箋の 文だけ 直せる（ほかの 項目は はねる）'); }
+  { const te = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [{ id: nid2, team: 'A-1', p: { text: '先生が なおした', x: 9, y: 7 }, u: [] }], del: [], star: [] }]);
+    const trow = G.sheets.items.data.find(x => x[0] === nid2), tj = JSON.parse(trow[3]);
+    ok(te.rejected.length === 0 && tj.text === '先生が なおした' && tj.x === 9 && tj.y === 7 && tj.author, '先生は 児童の 付箋の 文も 位置も 直せる（書いた人は のこる）'); }
+  { const tn = 'tnew' + Date.now(), te = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [{ id: tn, kind: 'note', team: 'A-2', face: 'front', x: 1, y: 1, text: '先生が 書いた' }], del: [], star: [] }]);
+    const row = G.sheets.items.data.find(x => x[0] === tn);
+    ok(te.rejected.length === 0 && row && row[1] === 'A-2', '先生は どの 班にも 付箋を 書ける');
+    const mv = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [{ id: tn, kind: 'note', team: 'A-1', face: 'front', x: 1, y: 1, text: '先生が 書いた' }], del: [], star: [] }]);
+    ok(mv.rejected.includes(tn), '先生でも ほかの 班へ 移すことは できない');
+    const dl = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [tn], star: [] }]);
+    ok(dl.rejected.length === 0 && G.sheets.items.data.find(x => x[0] === tn)[5] === true, '先生は 付箋を 消せる（ゴミばこ扱いの 削除）'); }
   r = G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], purge: [nid2] }]);
   const prow = G.sheets.items.data.find(x => x[0] === nid2), kid = JSON.parse(G.sheets.items.data.find(x => x[0] === 'kid1')[3]);
   ok(r.rejected.length === 0 && prow[5] === true && !prow[3].includes('もどした') && JSON.parse(prow[3]).purged && kid.stackOf === undefined && G.sheets.items.data.find(x => x[0] === 'arw1')[5] === true, '先生は 付箋を 完全に 消せる（文は のこらない・重なりは 単独に・矢印も 消える）');
