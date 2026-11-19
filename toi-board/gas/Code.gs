@@ -2,7 +2,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
 
-var API_VER = 16;
+var API_VER = 17;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes', kigou:'記号'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号', '名前（姓 名・なくてもよい）', 'よみ（せい めい・なくてもよい）'],
@@ -168,7 +168,7 @@ function slots_(){
   cache_().put('slots', JSON.stringify(m), 21600);
   return m;
 }
-function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, research:'off'}; }
+function blankModes_(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, research:'off', cmtNo:'off'}; }
 function roundOf_(modes, team){ return Number((modes[clsOf_(team)] || {}).round) || 1; }
 function modes_(){
   var c = cache_().get('modes');
@@ -383,7 +383,10 @@ function pull_(u, spec){
     var ver = Number(r[6]), team = String(r[2]), viewer = low_(r[3]), since = sinceOf(team);
     if(!r[0] || since === null || ver <= since) return;
     if(!(u.role === 'teacher' || viewer === u.id || team === u.team)) return;
-    comments.push({noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), text:String(r[4] || ''), on:!!r[5]});
+    var co = {noteId:String(r[1]), viewer:(u.role === 'teacher' || viewer === u.id) ? viewer : anon_(viewer), text:String(r[4] || ''), on:!!r[5]};
+    // 先生が「コメントに 出席番号を 出す」を 入に した 組だけ、児童にも 書いた 人の 番号（と 組）を わたす。名前・メールは わたさない
+    if(u.role !== 'teacher' && viewer !== u.id && (modes[clsOf_(team)] || {}).cmtNo === 'on'){ var sv = slots_()[viewer]; if(sv){ co.no = sv.no; co.cls = clsOf_(sv.team); } }
+    comments.push(co);
   });
   return {full:spec === 0, fullTeams:fullTeams, items:items, stars:stars, comments:comments};
 }
@@ -588,7 +591,8 @@ function apply(ops){
           orgMin:ORG_MINS.indexOf(Number(m.orgMin)) >= 0 ? Number(m.orgMin) : 5,
           rotMin:ROT_MINS.indexOf(Number(m.rotMin)) >= 0 ? Number(m.rotMin) : 4,
           orgMode:m.orgMode === 'off' ? 'off' : 'on',
-          research:m.research === 'on' ? 'on' : 'off'
+          research:m.research === 'on' ? 'on' : 'off',
+          cmtNo:m.cmtNo === 'on' ? 'on' : 'off'
         };
         // 見合い会の 順番：時刻は サーバーが 決める（先生の 端末の 時計は 使わない）
         var rot = (modes[cls] || {}).rot || null, act = String(m.rotAct || ''), t0 = Date.now();

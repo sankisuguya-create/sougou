@@ -11,7 +11,8 @@
 var Platform = (function(){
   var POLL = window.TOI_POLL_MS || 10000, JIT = window.TOI_POLL_JIT == null ? 3000 : window.TOI_POLL_JIT;
   var SEAL_WAIT = window.TOI_SEAL_WAIT == null ? 1500 : window.TOI_SEAL_WAIT;
-  var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '';
+  var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '', lastCN = null;
+  function cnOf(modes){ return !!own && ((modes || {})[own.split('-')[0]] || {}).cmtNo === 'on'; }
   var pend = {}, q = blank(), timer = null, due = 0, busy = false, pollT = null, errs = 0, polling = false, again = false;
   function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, purge:{}, cmtDel:{}, modes:null}; }
   function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !Object.keys(x.purge).length && !Object.keys(x.cmtDel).length && !x.modes; }
@@ -107,6 +108,8 @@ var Platform = (function(){
         if(r.tv) Object.keys(r.tv).forEach(function(t){ tv[t] = r.tv[t]; got[t] = 1; });
         if(r.all) all = r.all;
         mergeRemote(r, pend);
+        // 出席番号の 切りかえ：コメントを 取り直す（番号は サーバーが 入の 時だけ つける）
+        if(role !== 'teacher' && r.modes){ var cn = cnOf(r.modes); if(lastCN !== null && cn !== lastCN){ if(own) tv[own] = 0; if(watching) tv[watching] = 0; again = true; } lastCN = cn; }
         // モードが 変わって シール貼りの 班が ふえたら、すぐ 取りに行く
         if(gotModes && typeof galleryTeams === 'function' && galleryTeams().some(function(g){ return !got[g]; })) again = true;
       }
@@ -139,6 +142,7 @@ var Platform = (function(){
           if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
+          lastCN = cnOf(r.modes);
           window.__bootOrg = r.org || {};
           if(r.now && typeof setNow === 'function') setNow(r.now);
           try{ cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me); }
