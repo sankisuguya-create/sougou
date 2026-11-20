@@ -2,7 +2,7 @@
    実行: NODE_PATH=$(npm root -g) node tests/check.cjs */
 const path = require('path'), fs = require('fs');
 const { chromium } = require('playwright');
-const FILE = 'file://' + path.resolve(__dirname, '..', 'index.html');
+const FILE = 'file://' + path.resolve(__dirname, '..', 'src', 'index.html');
 const SHOTS = path.resolve(__dirname, 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 let failed = 0;
 const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed++; };

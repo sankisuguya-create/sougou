@@ -1,5 +1,5 @@
 'PLATFORM_BEGIN';
-/* GAS版の 保存。build.cjs が ../index.html の PLATFORM 区間を これに 差し替える。
+/* GAS版の 保存。tools/build.cjs が src/index.html の PLATFORM 区間を これに 差し替える。
    約90人が 同時に つかう 前提で 軽くする：
    ・モード・回は ふだんの 確認で 届く（版が 変わった 時だけ）。ページの 開き直しは いらない
      （全員が 一斉に 開き直すと、同時に 動かせる 処理の 上限（約30）を こえるため）。
