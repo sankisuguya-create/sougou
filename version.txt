@@ -1,14 +1,14 @@
-更新日時: 2026-11-18 18:11 (日本時間)
-版: v2026.1118.181143
-コミット: 80c1046d407be0cae2068839b49d852ce231a4ef
-内容: Merge pull request #26 from sankisuguya-create/toi-board-donemark
+更新日時: 2026-11-20 10:52 (日本時間)
+版: v2026.1120.105207
+コミット: e78b9697bdad47763ceb88a476ea95a783c40395
+内容: Merge pull request #27 from sankisuguya-create/toi-board-cmtno
 
 貼るファイル（この版に固定。古くならない。3つとも同じ版から貼る）:
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1118.181143/toi-board/gas/Code.gs
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1118.181143/toi-board/gas/Index.html
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1118.181143/toi-board/gas/Trial.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1120.105207/toi-board/gas/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1120.105207/toi-board/gas/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1120.105207/toi-board/gas/Trial.html
 
 タグで開けない時（コミット番号で固定）:
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@80c1046d407be0cae2068839b49d852ce231a4ef/toi-board/gas/Code.gs
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@80c1046d407be0cae2068839b49d852ce231a4ef/toi-board/gas/Index.html
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@80c1046d407be0cae2068839b49d852ce231a4ef/toi-board/gas/Trial.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@e78b9697bdad47763ceb88a476ea95a783c40395/toi-board/gas/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@e78b9697bdad47763ceb88a476ea95a783c40395/toi-board/gas/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@e78b9697bdad47763ceb88a476ea95a783c40395/toi-board/gas/Trial.html
