@@ -89,6 +89,8 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .from{display:block;margin-top:4px;font-size:12px;color:var(--cat-3)}
 /* コメントの しるし（付箋の 右上） */
 .cicon::after{content:"";position:absolute;inset:-8px}
+.cicon .ctip{display:none;position:absolute;left:-8px;top:calc(100% + 6px);z-index:40;width:220px;background:#fff;border:2px solid var(--cat-1);border-radius:10px;padding:4px 10px;box-shadow:0 4px 12px rgba(0,0,0,.2);color:var(--ink);font-weight:400;font-size:14px;text-align:left;pointer-events:none;white-space:normal}
+.note:has(.cicon:hover){z-index:45}.cicon:hover .ctip{display:block}.cicon .ctip p{margin:4px 0;word-break:break-all}.cicon .ctip small{display:block;font-size:12px;color:#55585E}
 .cicon{position:absolute;right:-12px;top:-12px;min-width:38px;height:34px;padding:0 6px;border-radius:99px;background:#fff;border:2px solid var(--cat-1);color:var(--cat-1);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:2px;box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;z-index:3}
 .cbtn{position:absolute;right:6px;bottom:6px;width:44px;height:44px;border-radius:50%;border:2px solid var(--cat-1);background:#fff;font-size:20px;display:grid;place-items:center;z-index:4}
 .cbtn.on{background:var(--fill-a)}
@@ -868,7 +870,11 @@ function noteHTML(n, opt){
   var cm = commentsOf(n.id); if(!isTeacher() && n.team !== myTeam()) cm = cm.filter(function(c){ return c.viewer === me; });
   var lk = likesOf(n.id).slice().sort(function(a, b){ return slotOf(a, n.team) - slotOf(b, n.team); }), likes = lk.length && (isTeacher() || n.team === myTeam()) ? '<div class="likes" data-likes="' + n.id + '">' + lk.map(function(x){ var m = MEMBER[slotOf(x, n.team) % MEMBER.length]; return '<span class="lk" data-m="' + m + '" title="' + esc(mateLabel(x, n.team)) + '" style="' + jitStyle(n.id + x.viewer, 1.5, 12) + '">' + sealImg(m, 15) + '</span>'; }).join('') + '</div>' : '';
   var curl = n.kind === 'note' && !opt.inline && researchOn(n.team) && n.face !== 'trash' ? '<div class="curl' + (n.ans ? ' has' : '') + '" data-curl="' + n.id + '" title="' + (n.ans ? 'うらを 見る（書いて あります）' : 'うらを 見る') + '"></div>' : '';
-  var cicon = cm.length && !opt.inline ? '<div class="cicon" data-cmts="' + n.id + '" title="コメントを 見る">💬' + (cm.length >= 2 ? cm.length : '') + '</div>' : '';
+  /* 💬 に 指を のせると コメント（と 書いた 人：先生は 組・班・番号、児童は 先生が 入に した 時の 出席番号）が 出る。タップで 一覧 */
+  var cicon = cm.length && !opt.inline ? '<div class="cicon" data-cmts="' + n.id + '">💬' + (cm.length >= 2 ? cm.length : '') + '<div class="ctip">' + cm.map(function(c){
+      var w = isTeacher() ? child(c.viewer) : null, lab = w ? teamLabel(w.team) + ' ' + w.no + 'ばん' : c.viewer === me ? 'じぶん' : cmtNoLabel(c, n);
+      return '<p>' + esc(c.text) + (lab ? '<small>' + esc(lab) + '</small>' : '') + '</p>';
+    }).join('') + '</div></div>' : '';
   /* 自分の班（と先生）は 種類ごとに「×N」。ほかの班では 自分が 貼った 種類だけ（数は 出さない） */
   var st = starsOf(n.id), all = showCount(n), stars = '';
   if(!all) st = st.filter(function(s){ return s.viewer === me; });
