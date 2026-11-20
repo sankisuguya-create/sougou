@@ -219,6 +219,11 @@ function makeGas() {
   ok(r.rejected.length >= 1, '自分の班の 付箋には 書けない（見られている 間は 見るだけ）');
   r = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]);
   ok(r.comments.length === 1 && r.comments[0].text === 'ホームは いくつ？' && /^o[0-9a-f]+$/.test(r.comments[0].viewer), '書かれた 班には コメントが 届き、書いた人は 記号');
+  { const setCN = v => G.as('ta@edu.nishi.or.jp', 'apply', [{ up: [], del: [], star: [], modes: { cls: 'A', m: Object.assign({}, JSON.parse((G.sheets.modes.data.find(r => r[0] === 'A') || [0, '{}'])[1]), { cmtNo: v }) } }]);
+    setCN('on'); const on = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]).comments[0];
+    ok(on && on.no === 6 && on.cls === 'A' && /^o[0-9a-f]+$/.test(on.viewer) && !JSON.stringify(on).includes('@'), '「コメントに 出席番号を 出す」入：児童にも 番号（と 組）だけ 届く（メールは 届かない）');
+    setCN('off'); const off = G.as('a01' + D, 'poll', [{ teams: { 'A-1': 0 } }]).comments[0];
+    ok(off && off.no === undefined, '切：児童には 番号が 届かない'); }
   await sleep(600); await settle();
   ok(await a01.isVisible(`.stnote[data-id="${ids[0]}"] .cm`) && (await a01.textContent(`.stnote[data-id="${ids[0]}"] .cm .tip`)).includes('ホームは いくつ？'), '見られている 班に コメントが 届く（💬 に 指を のせると 読める）');
   r = G.as('a06' + D, 'apply', [{ up: [], del: [], star: [], cmt: [{ noteId: ids[0], on: false }] }]);

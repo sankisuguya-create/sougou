@@ -188,6 +188,7 @@ svg.arrows line.hit{stroke:transparent;stroke-width:28}
 .stnote .cm .tip{display:none;position:absolute;left:0;top:100%;z-index:30;width:240px;background:#fff;border:2px solid var(--cat-1);border-radius:10px;padding:6px 10px;box-shadow:0 4px 12px rgba(0,0,0,.2);color:var(--ink);font-weight:400}
 .stnote .cm:hover .tip,.stnote .cm:focus .tip{display:block}
 .stnote .cm .tip p{margin:4px 0}
+.cno{display:block;font-size:12px;color:#55585E;margin-top:2px}
 .stnote .cm .tip.t{width:320px}.tcm{border-bottom:1px solid var(--line);padding:4px 0}.tcm:last-child{border-bottom:0}.tcm .who{font-size:13px;color:#55585E;visibility:hidden}.tcm:hover .who,.tcm:focus-within .who{visibility:visible}.cmopen.t .tcm{background:#fff;border-radius:8px;padding:4px 8px;border:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.cmopen.t .tcm p{flex:1 1 60%;background:none;padding:0}.cmopen.t .who{order:3;flex-basis:100%}.tcm .tcmdel{min-height:36px;font-size:14px}
 .gal.wait .order{font-size:22px;line-height:1.9}.gal.wait .order li.me{font-weight:700;color:var(--cat-1)}
 .rotpanel{border:2px solid var(--line);border-radius:14px;padding:6px 12px;margin:8px 0;background:#fff}
@@ -369,7 +370,7 @@ table.tally th{text-align:center;font-size:12px}
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
-var VER = 3, API_WANT = 16, GRID = 24, NOTE_W = 7, NOTE_H = 5;
+var VER = 3, API_WANT = 17, GRID = 24, NOTE_W = 7, NOTE_H = 5;
 var FACES = [
   {k:'front', label:'表がわ'},
   {k:'back',  label:'うらがわ'},
@@ -392,7 +393,7 @@ var MODES = [
   {k:'propose', label:'アイデア提案',      desc:'ほかの班の「いただきもの」に 付箋を 貼れる',   scoped:true},
   {k:'starOut', label:'見合い会の 画面',  desc:'入れると、この 組の 児童の 画面が 見合い会の 待ち画面に なる', scoped:true}
 ];
-function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, rotMin:4, rot:null, research:'off', orgMode:'on'}; }
+function blankModes(){ return {view:'off', propose:'off', starIn:false, starOut:'off', round:1, orgMin:5, rotMin:4, rot:null, research:'off', orgMode:'on', cmtNo:'off'}; }
 /* 調べモード：組ごと。入れると 付箋の 右下に めくれが 出て、うらに しらべて わかった ことを 書ける */
 /* 知っててほしい（基本情報）：アピールしたい 問いの 前提に なる 付箋。青く なり、班の 面ごとに 1つの 山（表には「知っててほしいこと」）に まとまる */
 function kbOf(team, face){ return S.items.filter(function(x){ return x.kind === 'note' && x.kb && x.team === team && (!face || x.face === face); }).sort(function(a, b){ return (a.kbAt || 0) - (b.kbAt || 0) || String(a.id).localeCompare(String(b.id)); }); }
@@ -453,7 +454,8 @@ var TRIAL = !!window.TOI_TRIAL || /[?&#]trial/.test(location.search + location.h
 var Platform = (function(){
   var POLL = window.TOI_POLL_MS || 10000, JIT = window.TOI_POLL_JIT == null ? 3000 : window.TOI_POLL_JIT;
   var SEAL_WAIT = window.TOI_SEAL_WAIT == null ? 1500 : window.TOI_SEAL_WAIT;
-  var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '';
+  var role = '', own = '', watching = null, tv = {}, all = 0, got = {}, mver = '', lastCN = null;
+  function cnOf(modes){ return !!own && ((modes || {})[own.split('-')[0]] || {}).cmtNo === 'on'; }
   var pend = {}, q = blank(), timer = null, due = 0, busy = false, pollT = null, errs = 0, polling = false, again = false;
   function blank(){ return {up:{}, del:{}, star:{}, cmt:{}, purge:{}, cmtDel:{}, modes:null}; }
   function empty(x){ return !Object.keys(x.up).length && !Object.keys(x.del).length && !Object.keys(x.star).length && !Object.keys(x.cmt).length && !Object.keys(x.purge).length && !Object.keys(x.cmtDel).length && !x.modes; }
@@ -549,6 +551,8 @@ var Platform = (function(){
         if(r.tv) Object.keys(r.tv).forEach(function(t){ tv[t] = r.tv[t]; got[t] = 1; });
         if(r.all) all = r.all;
         mergeRemote(r, pend);
+        // 出席番号の 切りかえ：コメントを 取り直す（番号は サーバーが 入の 時だけ つける）
+        if(role !== 'teacher' && r.modes){ var cn = cnOf(r.modes); if(lastCN !== null && cn !== lastCN){ if(own) tv[own] = 0; if(watching) tv[watching] = 0; again = true; } lastCN = cn; }
         // モードが 変わって シール貼りの 班が ふえたら、すぐ 取りに行く
         if(gotModes && typeof galleryTeams === 'function' && galleryTeams().some(function(g){ return !got[g]; })) again = true;
       }
@@ -581,6 +585,7 @@ var Platform = (function(){
           if(r.api !== API_WANT) net('版が ちがいます（画面 ' + API_WANT + '／サーバー ' + r.api + '）。先生に 伝えてください');
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
+          lastCN = cnOf(r.modes);
           window.__bootOrg = r.org || {};
           if(r.now && typeof setNow === 'function') setNow(r.now);
           try{ cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me); }
@@ -864,7 +869,14 @@ function setOrg(m){
   Object.keys(m || {}).forEach(function(t){ var x = m[t]; o[t] = {mine:!!x.mine, no:x.no, end:now + x.left, by:x.by || ''}; });
   if(isTeacher()) S.org = o; else { S.org = S.org || {}; S.org[myTeam()] = o[myTeam()]; if(!o[myTeam()]) delete S.org[myTeam()]; }
 }
-function cmtOf(c){ return {noteId:c.noteId, viewer:c.viewer, text:String(c.text || '')}; }
+function cmtOf(c){ var o = {noteId:c.noteId, viewer:c.viewer, text:String(c.text || '')}; if(c.no != null){ o.no = c.no; o.cls = c.cls; } return o; }
+/* 児童の 画面：先生が 入に した 組だけ、コメントに 書いた 人の 出席番号（ほかの 組なら 組も） */
+function cmtNoLabel(c, n){
+  if(isTeacher() || !n || c.viewer === me || ((S.modes || {})[clsOf(n.team)] || {}).cmtNo !== 'on') return '';
+  var no = c.no, cl = c.cls;
+  if(no == null){ var w = child(c.viewer); if(w){ no = w.no; cl = clsOf(w.team); } }
+  return no == null ? '' : (cl && cl !== clsOf(n.team) ? cl + '組 ' : '') + no + 'ばん';
+}
 /* 班の メンバーごとの いいねシール（番号順。最大5人）：緑・赤・青・黄・紫（tools/make-stickers.cjs の VARIANT） */
 var MEMBER = ['thumb1', 'thumb2', 'thumb3', 'thumb4', 'thumb5'];
 function matesOf(team){
@@ -1220,7 +1232,7 @@ function stageHTML(team, st, open){
     var ss = starsOf(n.id).sort(function(a, b){ return (a.v || 0) - (b.v || 0) || String(a.viewer).localeCompare(String(b.viewer)); }), cm = commentsOf(n.id);
     h += '<div class="stnote" data-id="' + n.id + '"><div class="t">' + esc(n.text) + '</div><div class="seals">'
       + ss.map(function(x){ return '<span class="s" data-kind="' + kindOf(x) + '" style="' + jitStyle(n.id + x.viewer + kindOf(x), 2, 12) + '">' + sealImg(kindOf(x), 40) + '</span>'; }).join('') + '</div>'
-      + (cm.length ? (open ? '<div class="cmopen' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>💬 ' + esc(c.text) + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>' + esc(c.text) + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
+      + (cm.length ? (open ? '<div class="cmopen' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>💬 ' + esc(c.text) + (cmtNoLabel(c, n) ? '<small class="cno">' + cmtNoLabel(c, n) + '</small>' : '') + '</p>'; }).join('') + '</div>' : '<div class="cm" tabindex="0">💬 ' + cm.length + '<div class="tip' + (isTeacher() ? ' t' : '') + '">' + cm.map(function(c){ return isTeacher() ? cmTeacherRow(n, c) : '<p>' + esc(c.text) + (cmtNoLabel(c, n) ? '<small class="cno">' + cmtNoLabel(c, n) + '</small>' : '') + '</p>'; }).join('') + '</div></div>') : '') + '</div>';
   });
   if(!notes.length) h += '<p class="hint" style="font-size:18px">見てほしい付箋が ありません</p>';
   return h + '</div>';
@@ -1378,7 +1390,7 @@ function viewSheet(){
     if(!isTeacher() && tn.team !== myTeam()) list = list.filter(function(c){ return c.viewer === me; });
     h += '<h2>「' + esc(tn.text) + '」への コメント（' + list.length + '）</h2><div class="clist">' + list.map(function(c){
         var w = isTeacher() ? child(c.viewer) : null;
-        return '<div class="c">' + esc(c.text) + (w ? '<small>' + teamLabel(w.team) + ' ' + w.no + 'ばん</small>' : c.viewer === me ? '<small>じぶん</small>' : '')
+        return '<div class="c">' + esc(c.text) + (w ? '<small>' + teamLabel(w.team) + ' ' + w.no + 'ばん</small>' : c.viewer === me ? '<small>じぶん</small>' : cmtNoLabel(c, tn) ? '<small>' + cmtNoLabel(c, tn) + '</small>' : '')
           + (isTeacher() ? '<div class="row" style="margin:4px 0 0">' + confirmBtn('cmt:' + tn.id + ':' + c.viewer, 'cmt-purge', 'style="min-height:40px" data-id="' + tn.id + '" data-v="' + esc(c.viewer) + '"', 'この コメントを 消す', 'もう一度 押すと 消えます', 'もどせません') + '</div>' : '') + '</div>';
       }).join('') + '</div><div class="row"><button class="btn" data-act="close">とじる</button></div>';
   } else if(s.type === 'done'){
@@ -1737,6 +1749,7 @@ function viewTeacher(){
     var rd = tm.round || 1;
     h += '<section class="tcard"><h3>見合い会</h3>'
       + swRow('starOut', '見合い会の 画面', soOn, 'data-act="mode" data-k="starOut" data-v="' + (soOn ? 'off' : 'class') + '"', '入れると、この 組の 児童の 画面が 見合い会の 待ち画面に なり、先生には 進行の 画面が 出る（1つの 班の 時間・はじめる は そこで）')
+      + swRow('cmtno', 'コメントに 出席番号を 出す', (tm.cmtNo === 'on'), 'data-act="cmtno" data-v="' + (tm.cmtNo === 'on' ? 'off' : 'on') + '"', '入：児童にも、コメントを 書いた 人の 出席番号が 見える（ほかの 組なら 組も）。名前は 出ない。切：先生だけに 見える')
       + '<div class="srow"><span class="slab">いまの 回</span><b class="bignum">第' + rd + '回</b>' + confirmBtn('round', 'round-next', '', '第' + (rd + 1) + '回に すすめる', 'もう一度 押すと 第' + (rd + 1) + '回に なります', '前の 回には もどせません。持ち分と 見てほしい付箋が 新しく なります（前の 回の シールの 数は 一覧に のこります）', '') + '</div>';
     var noShow = SPOTS.filter(function(sp){ return sp.cls === ui.tCls && !S.items.some(function(x){ return x.team === sp.team && x.kind === 'note' && x.face === 'front' && shownNow(x); }); });
     if(noShow.length) h += '<p class="warn">⚠ 第' + rd + '回の 見てほしい付箋が まだ ない 班：' + noShow.map(function(sp){ return sp.no + 'はん'; }).join('・') + '</p>';
@@ -2150,6 +2163,7 @@ document.addEventListener('click', function(e){
     ui.modeNote = ui.tCls; render(); return;
   }
   if(act === 'research'){ var rv = b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.research = rv; }); ui.modeNote = ui.tCls; render(); return; }
+  if(act === 'cmtno'){ var cnv = b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.cmtNo = cnv; }); ui.modeNote = ui.tCls; render(); return; }
   if(act === 'orgmode'){ var omv = b.getAttribute('data-v'); commit(function(){ var mm = S.modes[ui.tCls] = S.modes[ui.tCls] || blankModes(); mm.orgMode = omv; }); ui.modeNote = ui.tCls; render(); return; }
   if(act === 'orgmin'){
     var mn = +b.getAttribute('data-v');
