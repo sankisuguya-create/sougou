@@ -1,11 +1,11 @@
 /* といボード GAS版の 検査：Code.gs を Node で 模擬（スプレッドシート・キャッシュ・ロック）し、
-   gas/Index.html を 複数の アカウントで 同時に 開いて 確かめる。
-   実行: node gas/build.cjs && NODE_PATH=$(npm root -g) node tests/gas-check.cjs
+   dist/Index.html を 複数の アカウントで 同時に 開いて 確かめる。
+   実行: node tools/build.cjs && NODE_PATH=$(npm root -g) node tests/gas-check.cjs
    模擬で 確かめられないこと（実機で 確かめる）：Session のメールが 別ドメインで 読めるか／同時実行の 上限／遅延。 */
 const path = require('path'), fs = require('fs'), vm = require('vm'), crypto = require('crypto');
 const { chromium } = require('playwright');
 const ROOT = path.resolve(__dirname, '..');
-const FILE = 'file://' + path.join(ROOT, 'gas', 'Index.html');
+const FILE = 'file://' + path.join(ROOT, 'dist', 'Index.html');
 const SHOTS = path.join(__dirname, 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 let failed = 0;
 const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed++; };
@@ -55,7 +55,7 @@ function makeGas() {
     JSON, Date, Number, String, Math, Error, Object
   };
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'gas', 'Code.gs'), 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'dist', 'Code.gs'), 'utf8'), ctx);
   return {
     ctx, sheets, props,
     as(email, fn, args) { user = email; return JSON.parse(JSON.stringify(ctx[fn].apply(null, args || []))); },

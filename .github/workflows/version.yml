@@ -17,8 +17,8 @@ permissions:
   contents: write
 
 env:
-  # 貼るファイル（toi-board/gas/README.md の手順2）。増えたらここに足す
-  PASTE_FILES: toi-board/gas/Code.gs toi-board/gas/Index.html toi-board/gas/Trial.html
+  # 貼るファイル（toi-board/setup/README.md の手順2）。dist/ の生成物。増えたらここに足す
+  PASTE_FILES: toi-board/dist/Code.gs toi-board/dist/Index.html toi-board/dist/Trial.html
 
 jobs:
   stamp:

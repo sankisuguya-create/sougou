@@ -66,10 +66,10 @@
 ## 学習が 止まらない ための 決まり
 - 入力は 字数で 止める（付箋 200字・コメント 100字・枠と しらべた人 40字）。あとで サーバーで 切られて 文が 消える ことを 防ぐ。
 - サーバーは 書きこみを 1つずつ 守る：1つが 失敗しても その 1つだけ はね、残りは 保存する（1つの 変な 付箋で ずっと 保存できなくなるのを 防ぐ）。付箋 1まいの 中身は 4000字まで。
-- データが 消えない 決まりは gas/README.md の「書く」。
+- データが 消えない 決まりは setup/README.md の「書く」。
 
 ## GAS版
-gas/README.md。見本 index.html の PLATFORM 区間を gas/platform-gas.js に 差し替えて gas/Index.html を 作る（node gas/build.cjs）。約90人の 同時アクセスに 備える 理由と しくみも gas/README.md。
+setup/README.md。見本 src/index.html の PLATFORM 区間を src/platform-gas.js に 差し替えて dist/Index.html を 作る（node tools/build.cjs）。約90人の 同時アクセスに 備える 理由と しくみも setup/README.md。
 
 ## 個人情報
 docs/privacy.md（どこに あるか・年度末の 消し方）。

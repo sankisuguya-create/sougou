@@ -1,0 +1,34 @@
+# dist/ が src/ から作り直されているか（ビルドし忘れ）と、検査が通るかを確かめる。
+name: 検査
+
+on:
+  push:
+    paths-ignore: [version.txt]
+  pull_request:
+
+jobs:
+  toi-board:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: toi-board
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: dist/ が最新か（ビルドし忘れ）
+        run: |
+          node tools/build.cjs
+          if ! git diff --exit-code -- dist; then
+            echo "::error::dist/ が src/ と合っていません。node tools/build.cjs を実行してコミットしてください。"
+            exit 1
+          fi
+      - name: playwright を入れる
+        run: |
+          npm install -g playwright@1.48.2
+          npx -y playwright@1.48.2 install --with-deps chromium
+      - name: 見本の検査
+        run: NODE_PATH=$(npm root -g) node tests/check.cjs
+      - name: GAS版の検査（模擬）
+        run: NODE_PATH=$(npm root -g) node tests/gas-check.cjs

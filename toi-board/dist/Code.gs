@@ -1,6 +1,7 @@
+/* 生成物：src/Code.gs の 写し。手で 直さない */
 /* といボード GAS版 サーバー
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
-   画面は Index.html（build.cjs で ../index.html から 作る。手で 直さない）。 */
+   画面は dist/Index.html（tools/build.cjs で src/index.html から 作る）。直すのは src/Code.gs。 */
 
 var API_VER = 17;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes', kigou:'記号'};
