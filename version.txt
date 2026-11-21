@@ -1,14 +1,14 @@
-更新日時: 2026-11-21 08:07 (日本時間)
-版: v2026.1121.080711
-コミット: 8d76b0c8b813204ba836ceefd04e1508e608791d
-内容: Merge pull request #28 from sankisuguya-create/claude/youthful-cannon-5u0017
+更新日時: 2026-11-21 20:10 (日本時間)
+版: v2026.1121.201004
+コミット: 58fdc021a57fa5ae2b504e357362bb41feee221e
+内容: Merge pull request #29 from sankisuguya-create/toi-board-cmttip
 
 貼るファイル（この版に固定。古くならない。3つとも同じ版から貼る）:
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.080711/toi-board/dist/Code.gs
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.080711/toi-board/dist/Index.html
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.080711/toi-board/dist/Trial.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.201004/toi-board/dist/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.201004/toi-board/dist/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@v2026.1121.201004/toi-board/dist/Trial.html
 
 タグで開けない時（コミット番号で固定）:
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@8d76b0c8b813204ba836ceefd04e1508e608791d/toi-board/dist/Code.gs
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@8d76b0c8b813204ba836ceefd04e1508e608791d/toi-board/dist/Index.html
-https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@8d76b0c8b813204ba836ceefd04e1508e608791d/toi-board/dist/Trial.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@58fdc021a57fa5ae2b504e357362bb41feee221e/toi-board/dist/Code.gs
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@58fdc021a57fa5ae2b504e357362bb41feee221e/toi-board/dist/Index.html
+https://cdn.jsdelivr.net/gh/sankisuguya-create/sougou@58fdc021a57fa5ae2b504e357362bb41feee221e/toi-board/dist/Trial.html
