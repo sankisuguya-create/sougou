@@ -3,7 +3,7 @@
    学年で 1つの スプレッドシートに 紐づけて 使う（拡張機能 → Apps Script）。
    画面は dist/Index.html（tools/build.cjs で src/index.html から 作る）。直すのは src/Code.gs。 */
 
-var API_VER = 17;
+var API_VER = 18;
 var SH = {roster:'名簿', teachers:'先生', spots:'スポット', items:'items', stars:'stars', comments:'comments', modes:'modes', kigou:'記号'};
 var HEAD = {
   '名簿':['メール', '組', '班', '番号', '名前（姓 名・なくてもよい）', 'よみ（せい めい・なくてもよい）'],
@@ -148,7 +148,8 @@ function who_(){
   if(!u) rows_(SH.roster).forEach(function(r){
     if(!u && low_(r[0]) === email){ var cls = String(r[1]).trim(); u = {id:email, role:'child', cls:cls, team:cls + '-' + Number(r[2]), no:Number(r[3])}; }
   });
-  if(!u && email.slice(-TEACHER_DOMAIN.length) === TEACHER_DOMAIN) u = {id:email, role:'teacher', cls:''};
+  // 「先生」シートに ない 先生の メール：見るだけ（設定・付箋は 変えられない）
+  if(!u && email.slice(-TEACHER_DOMAIN.length) === TEACHER_DOMAIN) u = {id:email, role:'teacher', cls:'', ro:true};
   if(!u) throw new Error('NOT_IN_ROSTER：名簿に ありません（' + email + '）');
   cache_().put(k, JSON.stringify(u), 600);
   return u;
@@ -268,6 +269,7 @@ function orgRelease(){
 var KIGOU_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
 function kigou(){
   var u = who_(); if(u.role !== 'teacher') throw new Error('NOT_TEACHER');
+  if(u.ro) throw new Error('READ_ONLY');
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
   try{
     var sh = sheet_(SH.kigou), have = {}, used = {};
@@ -284,6 +286,7 @@ function kigou(){
 }
 function orgSet(team, no){
   var u = who_(); if(u.role !== 'teacher') throw new Error('NOT_TEACHER');
+  if(u.ro) throw new Error('READ_ONLY');
   team = String(team);
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
   try{
@@ -395,6 +398,7 @@ function pull_(u, spec){
 /* 変更を 書く。ops = {up:[付箋など], del:[id], star:[{noteId,on}], modes:{cls,m}} */
 function apply(ops){
   var u = who_(), lock = LockService.getScriptLock();
+  if(u.ro) return {rejected:['readonly'], ro:true};  // 見るだけの 先生は 何も 書けない
   ensureFormat_();
   lock.waitLock(20000);
   try{

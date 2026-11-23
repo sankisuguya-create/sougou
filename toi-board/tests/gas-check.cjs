@@ -521,6 +521,15 @@ function makeGas() {
   ok(O.as(T, 'boot').roster.some(c => c.name === '架空 たろう') && !JSON.stringify(O.as('p9' + D, 'boot')).includes('架空'), '名前は 先生にだけ 届く（児童には 届かない）');
   let thr = ''; try { O.as('p1' + D, 'orgSet', ['A-1', 1]); } catch (e) { thr = e.message; }
   ok(/NOT_TEACHER/.test(thr), '児童は 先生の 決め方を つかえない');
+  // 「先生」シートに ない 先生の メール：見るだけ
+  { const V = 'zz@edu.nishi.or.jp', bv = O.as(V, 'boot');
+    ok(bv.me.role === 'teacher' && bv.me.ro === true && bv.items.length > 0, '登録の ない 先生は 見られる（見るだけ）');
+    ok(O.as(T, 'boot').me.ro === undefined, '登録した 先生は 見るだけに ならない');
+    const n0 = JSON.stringify(O.sheets.items.data), m0 = JSON.stringify(O.sheets.modes.data);
+    const rv = O.as(V, 'apply', [{ up: [{ id: 's1', team: 'A-1', p: { text: '見るだけの 先生' }, u: [] }], del: [], star: [], modes: { cls: 'A', m: { view: 'grade' } } }]);
+    ok(rv.rejected.includes('readonly') && JSON.stringify(O.sheets.items.data) === n0 && JSON.stringify(O.sheets.modes.data) === m0, '見るだけの 先生は 付箋も 設定も 変えられない（サーバーで はねる）');
+    let e1 = '', e2 = ''; try { O.as(V, 'orgSet', ['A-1', 1]); } catch (e) { e1 = e.message; } try { O.as(V, 'kigou'); } catch (e) { e2 = e.message; }
+    ok(/READ_ONLY/.test(e1) && /READ_ONLY/.test(e2), '見るだけの 先生は 整理役・記号表を 変えられない'); }
   }
 
   // 先生の 一覧

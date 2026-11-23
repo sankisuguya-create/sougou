@@ -143,6 +143,7 @@ var Platform = (function(){
           if(r.trialUrl) window.TOI_TRIAL_URL = r.trialUrl;
           role = r.me.role; own = r.me.team || ''; if(r.tv) tv = r.tv; if(r.all) all = r.all; if(r.mver !== undefined) mver = String(r.mver);
           lastCN = cnOf(r.modes);
+          window.TOI_RO = !!(r.me && r.me.ro);
           window.__bootOrg = r.org || {};
           if(r.now && typeof setNow === 'function') setNow(r.now);
           try{ cb({items:r.items.filter(function(x){ return !x.del; }), stars:r.stars.filter(function(s){ return s.on; }).map(starOf), comments:(r.comments || []).filter(function(c){ return c.on; }).map(cmtOf), modes:r.modes, roster:r.roster}, r.me.id, r.spots, r.me); }
