@@ -721,6 +721,16 @@ const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) failed+
   ok(await page.evaluate(() => { var n = S.items.filter(x => x.kind === 'note' && x.team === myTeam())[0], o = S.roster.filter(c => c.id !== me)[0]; if(!n || !o) return false; var c = {noteId:n.id, viewer:o.id, text:'x'}, m = S.modes[myCls()] = S.modes[myCls()] || blankModes(), k = m.cmtNo; m.cmtNo = 'off'; var a = cmtNoLabel(c, n); m.cmtNo = 'on'; var b = cmtNoLabel(c, n); m.cmtNo = k; return a === '' && /\d+ばん$/.test(b); }), 'コメントの 出席番号：切は 出ない・入は 児童にも 出る');
   // ボードの 💬：指を のせると コメントと 番号（入の 時）
   ok(await page.evaluate(() => { var n = S.items.filter(x => x.kind === 'note' && x.team === myTeam())[0], o = S.roster.filter(c => c.id !== me)[0]; if(!n || !o) return false; var m = S.modes[myCls()] = S.modes[myCls()] || blankModes(), k = m.cmtNo; m.cmtNo = 'on'; S.comments.push({noteId:n.id, viewer:o.id, text:'ためしの コメント'}); var h = noteHTML(n); S.comments.pop(); m.cmtNo = k; return h.indexOf('class="ctip"') > 0 && h.indexOf('ためしの コメント') > 0 && /\d+ばん<\/small>/.test(h); }), 'ボードの 💬 に 指を のせると コメントと 出席番号が 出る');
+  // 見るだけの 先生（見本では ui.ro で ためす）
+  await who('teacher');
+  { const r0 = await page.evaluate(() => { ui.ro = true; ui.ttab = 'mode'; render(); var m = JSON.stringify(S.modes); return m; });
+    ok(await page.isVisible('.viewing.rob'), '見るだけの 先生には「見るだけの 画面」と 出る');
+    await page.click('[data-act=research]');
+    ok(await page.evaluate(m => JSON.stringify(S.modes) === m, r0), '見るだけの 先生は 設定を 変えられない');
+    await page.evaluate(() => { ui.ttab = 'board'; render(); });
+    ok(!(await page.isVisible('[data-act=tedit]')), '見るだけの 先生には「付箋を 編集する」が 出ない');
+    await page.evaluate(() => { ui.ro = false; ui.ttab = 'mode'; render(); }); }
+  await who('A01'); await page.click('.face[data-face=front]');
   // 見合い会の 一時停止：児童の 画面は ストップ画面
   ok(await page.evaluate(() => { var m = S.modes[myCls()] = S.modes[myCls()] || {}, keep = m.rot, ko = m.starOut; m.starOut = 'all'; m.rot = {min:4, start:nowMs() - 1000, paused:1000}; render(); var on = !!document.querySelector('.pausewall') && !document.querySelector('.gnotes'); m.rot = keep; m.starOut = ko; render(); return on; }), '見合い会の 一時停止中は 児童の 画面が ストップ画面');
   // さがす：見てほしい で しぼる
