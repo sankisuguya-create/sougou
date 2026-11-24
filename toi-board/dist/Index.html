@@ -370,7 +370,7 @@ table.tally th{text-align:center;font-size:12px}
 .hit .w{font-size:13px;color:var(--sub);white-space:nowrap}
 .note.flash{outline:5px solid var(--cat-2);outline-offset:6px}
 </style>
-<style>.ldots{display:inline-block;width:2.2em;text-align:left}.ldots::after{content:"";animation:ldots 2s steps(1) infinite}@keyframes ldots{0%{content:""}25%{content:"・"}50%{content:"・・"}75%{content:"・・・"}}</style><div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
+<style>/* 待ちの表示：点を0〜3個で回す（正本は - の skills/ui-layout/SKILL.md「待ちの表示」） */.ldots{display:inline-block;width:1.6em;text-align:left}.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}</style><div id="app"><div id="boot-wait" style="padding:24px;font-size:20px;line-height:1.7">よみこみ中<span class="ldots" aria-hidden="true"></span><br><span style="font-size:15px;color:#55585E">はじめて 開く 時は 10秒ほど かかります</span></div></div>
 <div id="net" class="net"></div>
 <script>
 /* ===== 語彙 ===== */
@@ -582,7 +582,7 @@ var Platform = (function(){
           + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
         net('');
       }
-      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
+      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中<span class="ldots" aria-hidden="true"></span><br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
       (function boot(){
         run('boot', [], function(r){
           clearTimeout(slow);
@@ -1189,7 +1189,7 @@ function boardHTML(team, face){
     h += frames.map(frameHTML).join('') + arrowsSVG(arrows) + notes.filter(function(n){ return !n.kb; }).map(function(n){ return noteHTML(n); }).join('')
       + (an ? deckHTML(an, kbs.length) : '');
   }
-  if(!all.length && Platform.loading && Platform.loading(team)) h += '<div class="empty">よみこんでいます…</div>';
+  if(!all.length && Platform.loading && Platform.loading(team)) h += '<div class="empty">よみこんでいます<span class="ldots" aria-hidden="true"></span></div>';
   else if(!all.length) h += '<div class="empty">' + (face === 'gift' ? 'ほかの班からの 付箋は まだ ありません' : face === 'trash' ? 'すてた 付箋は ここに のこります' : 'まだ 何も ありません') + '</div>';
   return h + '</div></div>';
 }
