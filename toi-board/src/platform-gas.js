@@ -135,7 +135,7 @@ var Platform = (function(){
           + '<p style="color:#55585E">先生へ：スクリプトの エディタで <b>selfCheck</b> を 実行すると、原因が ログに 出ます。</p></div>';
         net('');
       }
-      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中<span class="ldots"></span><br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
+      var slow = setTimeout(function(){ var w = document.getElementById('boot-wait'); if(w) w.innerHTML = 'まだ よみこみ中<span class="ldots" aria-hidden="true"></span><br><span style="font-size:15px;color:#55585E">30秒を こえたら、ページを 読みこみ直してください</span>'; }, 15000);
       (function boot(){
         run('boot', [], function(r){
           clearTimeout(slow);
